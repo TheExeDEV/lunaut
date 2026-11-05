@@ -1,0 +1,196 @@
+#!/bin/sh
+set `# <#` >/dev/null 2>&1
+
+set -eu
+
+repository="${LUNAUT_REPOSITORY:-TheExeDEV/lunaut}"
+script_url="https://raw.githubusercontent.com/$repository/main/installers/install"
+version="${LUNAUT_VERSION:-latest}"
+install_dir="${LUNAUT_INSTALL_DIR:-$HOME/.lunaut/bin}"
+
+case "$(uname -s)" in
+	Linux) system="linux" ;;
+	Darwin) system="osx" ;;
+	MINGW* | MSYS* | CYGWIN*)
+		powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm $script_url | iex"
+		exit $?
+		;;
+	*) echo "lunaut does not support $(uname -s) yet." >&2; exit 1 ;;
+esac
+
+case "$(uname -m)" in
+	x86_64 | amd64) architecture="x64" ;;
+	arm64 | aarch64) architecture="arm64" ;;
+	*) echo "lunaut does not support the $(uname -m) processor yet." >&2; exit 1 ;;
+esac
+
+asset="lunaut-$system-$architecture"
+
+if [ "$version" = "latest" ]; then
+	base_url="https://github.com/$repository/releases/latest/download"
+else
+	base_url="https://github.com/$repository/releases/download/v${version#v}"
+fi
+
+download() {
+	if command -v curl >/dev/null 2>&1; then
+		curl --fail --location --progress-bar --retry 3 --connect-timeout 15 "$1" --output "$2"
+	elif command -v wget >/dev/null 2>&1; then
+		wget --quiet --show-progress --tries=3 --timeout=15 "$1" --output-document="$2"
+	else
+		echo "Install curl or wget first." >&2
+		exit 1
+	fi
+}
+
+mkdir -p "$install_dir"
+target="$install_dir/lunaut.download"
+
+echo "Downloading lunaut for $system $architecture"
+download "$base_url/$asset" "$target"
+
+chmod +x "$target"
+mv "$target" "$install_dir/lunaut"
+
+if [ -z "${LUNAUT_NO_EXTENSION:-}" ] && command -v code >/dev/null 2>&1; then
+	extension="$install_dir/lunaut.vsix"
+
+	echo "Installing the VS Code extension"
+
+	if download "$base_url/lunaut.vsix" "$extension" && code --install-extension "$extension" --force >/dev/null; then
+		echo "Installed the lunaut extension for VS Code"
+	else
+		echo "Could not install the VS Code extension, the server is installed anyway." >&2
+	fi
+
+	rm -f "$extension"
+fi
+
+path_line="export PATH=\"$install_dir:\$PATH\""
+
+add_to_path() {
+	file="$1"
+
+	if [ -f "$file" ] && grep -qF "$install_dir" "$file"; then
+		return
+	fi
+
+	printf '\n# lunaut\n%s\n' "$path_line" >> "$file"
+	echo "Added lunaut to PATH in $file"
+}
+
+case ":$PATH:" in
+	*":$install_dir:"*) ;;
+	*)
+		if [ -z "${LUNAUT_NO_PATH:-}" ]; then
+			shell_name="$(basename "${SHELL:-sh}")"
+
+			if [ -f "$HOME/.bashrc" ] || [ "$shell_name" = "bash" ]; then
+				add_to_path "$HOME/.bashrc"
+			fi
+
+			if [ -f "$HOME/.zshrc" ] || [ "$shell_name" = "zsh" ]; then
+				add_to_path "$HOME/.zshrc"
+			fi
+
+			add_to_path "$HOME/.profile"
+
+			if [ -d "$HOME/.config/fish" ]; then
+				mkdir -p "$HOME/.config/fish/conf.d"
+				echo "fish_add_path $install_dir" > "$HOME/.config/fish/conf.d/lunaut.fish"
+			fi
+
+			echo "Open a new terminal, or run this to use lunaut right now:"
+			echo "  $path_line"
+		fi
+		;;
+esac
+
+"$install_dir/lunaut" --version
+exit 0
+#>
+
+& {
+	$ErrorActionPreference = "Stop"
+	$ProgressPreference = "SilentlyContinue"
+
+	$repository = if ($env:LUNAUT_REPOSITORY) { $env:LUNAUT_REPOSITORY } else { "TheExeDEV/lunaut" }
+	$scriptUrl = "https://raw.githubusercontent.com/$repository/main/installers/install"
+
+	if ($PSVersionTable.PSEdition -eq "Core" -and -not $IsWindows) {
+		& sh -c "curl -fsSL $scriptUrl | sh"
+		return
+	}
+
+	[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+	$version = if ($env:LUNAUT_VERSION) { $env:LUNAUT_VERSION } else { "latest" }
+	$installDir = if ($env:LUNAUT_INSTALL_DIR) { $env:LUNAUT_INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA "lunaut\bin" }
+	$architecture = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64" -or $env:PROCESSOR_ARCHITEW6432 -eq "ARM64") { "arm64" } else { "x64" }
+	$asset = "lunaut-win-$architecture.exe"
+
+	if ($version -eq "latest") {
+		$baseUrl = "https://github.com/$repository/releases/latest/download"
+	} else {
+		$baseUrl = "https://github.com/$repository/releases/download/v$($version.TrimStart('v'))"
+	}
+
+	function Get-File($url, $output) {
+		for ($attempt = 1; $attempt -le 3; $attempt++) {
+			try {
+				Invoke-WebRequest -Uri $url -OutFile $output -UseBasicParsing -TimeoutSec 120
+				return
+			} catch {
+				if ($attempt -eq 3) {
+					throw "Could not download $url. Check your internet connection and try again."
+				}
+
+				Start-Sleep -Seconds (2 * $attempt)
+			}
+		}
+	}
+
+	New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+
+	$target = Join-Path $installDir "lunaut.exe"
+	$download = "$target.download"
+
+	Write-Host "Downloading lunaut for windows $architecture"
+	Get-File "$baseUrl/$asset" $download
+	Move-Item -Path $download -Destination $target -Force
+
+	if (-not $env:LUNAUT_NO_EXTENSION -and (Get-Command code -ErrorAction SilentlyContinue)) {
+		$extension = Join-Path $installDir "lunaut.vsix"
+		Write-Host "Installing the VS Code extension"
+
+		try {
+			Get-File "$baseUrl/lunaut.vsix" $extension
+			& code --install-extension $extension --force | Out-Null
+			Write-Host "Installed the lunaut extension for VS Code"
+		} catch {
+			Write-Host "Could not install the VS Code extension, the server is installed anyway."
+		}
+
+		Remove-Item -LiteralPath $extension -Force -ErrorAction SilentlyContinue
+	}
+
+	if (-not $env:LUNAUT_NO_PATH) {
+		$userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+		$entries = @()
+
+		if ($userPath) {
+			$entries = @($userPath.Split(";") | Where-Object { $_ -ne "" })
+		}
+
+		if ($entries -notcontains $installDir) {
+			[Environment]::SetEnvironmentVariable("Path", (@($entries) + $installDir) -join ";", "User")
+			Write-Host "Added lunaut to PATH. Other open terminals need a restart to see it."
+		}
+
+		if (($env:Path.Split(";")) -notcontains $installDir) {
+			$env:Path = "$env:Path;$installDir"
+		}
+	}
+
+	& $target --version
+}

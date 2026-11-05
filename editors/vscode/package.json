@@ -1,0 +1,1728 @@
+{
+  "name": "lunaut",
+  "displayName": "Lunaut",
+  "description": "Luau language server written in C++: FFlags, prioritized .d.luau definitions and Rojo support",
+  "version": "0.1.0",
+  "publisher": "lunaut",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TheExeDEV/lunaut"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters"
+  ],
+  "keywords": [
+    "luau",
+    "roblox",
+    "rojo",
+    "lsp"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onLanguage:luau",
+    "workspaceContains:**/*.luau",
+    "workspaceContains:default.project.json"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "luau",
+        "aliases": [
+          "Luau",
+          "luau"
+        ],
+        "extensions": [
+          ".luau"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "luau",
+        "scopeName": "source.luau",
+        "path": "./syntaxes/luau.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "lunaut.restart",
+        "title": "Restart Server",
+        "category": "Lunaut"
+      },
+      {
+        "command": "lunaut.showStatus",
+        "title": "Show Status",
+        "category": "Lunaut"
+      },
+      {
+        "command": "lunaut.showFFlags",
+        "title": "Show FFlags",
+        "category": "Lunaut"
+      },
+      {
+        "command": "lunaut.showDefinitions",
+        "title": "Show Loaded Definitions",
+        "category": "Lunaut"
+      },
+      {
+        "command": "lunaut.regenerateSourcemap",
+        "title": "Regenerate Rojo Sourcemap",
+        "category": "Lunaut"
+      }
+    ],
+    "configuration": {
+      "title": "Lunaut",
+      "properties": {
+        "lunaut.path": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Path to the `lunaut` executable. Empty uses the bundled server, then `lunaut` from `PATH`."
+        },
+        "lunaut.platform": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "standard",
+            "roblox"
+          ],
+          "default": "auto",
+          "markdownDescription": "`auto` turns on Roblox mode when a Rojo project or sourcemap is found."
+        },
+        "lunaut.fflags.enableByDefault": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Enable every non-experimental `Luau*` FFlag."
+        },
+        "lunaut.fflags.sync": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Sync FFlag values with the current Roblox Studio build."
+        },
+        "lunaut.fflags.enableNewSolver": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Turn on the new Luau type solver (`LuauSolverV2`)."
+        },
+        "lunaut.fflags.override": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "markdownDescription": "FFlag values that win over everything else, for example `{ \"LuauTypeInferIterationLimit\": \"4000\" }`.",
+          "properties": {
+            "DebugLuauAlwaysShowConstraintSolvingIncomplete": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `false`"
+            },
+            "DebugLuauAssertOnForcedConstraint": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `false`"
+            },
+            "DebugLuauCFG": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `false`"
+            },
+            "DebugLuauCheckNormalizeInvariant": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `false`"
+            },
+            "DebugLuauDumpCFGJson": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `false`"
+            },
+            "DebugLuauExactTableTypes": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `false`"
+            },
+            "DebugLuauForbidInternalTypes": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `false`"
+            },
+            "DebugLuauForceNonStrictMode": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `false`"
+            },
+            "DebugLuauForceOldSolver": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `false`"
+            },
+            "DebugLuauForceStrictMode": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `false`"
+            },
+            "DebugLuauFreezeArena": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `false`"
+            },
+            "DebugLuauFreezeDuringUnification": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `false`"
+            },
+            "DebugLuauLogBindings": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `false`"
+            },
+            "DebugLuauLogCFG": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `false`"
+            },
+            "DebugLuauLogSolver": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `false`"
+            },
+            "DebugLuauLogSolverToJson": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `false`"
+            },
+            "DebugLuauLogSolverToJsonFile": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `false`"
+            },
+            "DebugLuauLogTypeFamilies": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `false`"
+            },
+            "DebugLuauMagicTypes": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `false`"
+            },
+            "DebugLuauMagicVariableNames": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `false`"
+            },
+            "DebugLuauNoInline": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `false`"
+            },
+            "DebugLuauParseExactTables": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `false`"
+            },
+            "DebugLuauReportReturnTypeVariadicWithTypeSuffix": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `false`"
+            },
+            "DebugLuauSubtypingCheckPathValidity": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `false`"
+            },
+            "DebugLuauTimeTracing": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `false`"
+            },
+            "DebugLuauToStringNoLexicalSort": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `false`"
+            },
+            "DebugLuauTypeFunctionRuntimeHeapLimit": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `0`"
+            },
+            "DebugLuauUserDefinedClasses": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `false`"
+            },
+            "DebugLuauUserDefinedClassesRuntime": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `false`"
+            },
+            "DebugLuauVerboseTypeNames": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `0`"
+            },
+            "DebugLuauWarnOnUnannotatedTopLevelFunctions": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `false`"
+            },
+            "FixMathNoisePrecision": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `false`"
+            },
+            "LuauAddRecursionCounterToNonStrictTypeChecker": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauAllowGlobalDeclarationToBeCalledClass": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauAutocompleteDotMethodConversion": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauBackedgeHeapCheck": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauBetterInferredGenericNames": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauBetterMetatableStringification": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauBidirectionalInferenceBetterLambdaHandling": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauBidirectionalInferenceSetMetatable": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauBlockingTypeAliasExpansion": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauBufferCage": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauBytecodeCostModel": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauCallErrorReportingRecoversArgumentLocationsForPacks": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauCallLuauTm": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauCannotAddIndexerToTablePrimitive": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauCheckFunctionStatementTypes": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauCheckRecursionLimit": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `300`"
+            },
+            "LuauCheckTypeForDeprecated": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauClonePublicInterfaceRetainTypeFunctionSolvedStatus": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauCloneTypeFunctionFromForeignArena": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauCompileCallFbRemap": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauCompileCleanBlockDeadClose": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauCompileConcatTargetTop": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauCompileEmitVectorDouble": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauCompileFastpcall": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauCompileInlineDepth": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `5`"
+            },
+            "LuauCompileInlineThreshold": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `25`"
+            },
+            "LuauCompileInlineThresholdMaxBoost": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `300`"
+            },
+            "LuauCompileLoopUnrollThreshold": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `25`"
+            },
+            "LuauCompileLoopUnrollThresholdMaxBoost": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `300`"
+            },
+            "LuauCompileLoopUnrollZero": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauCompileMoveElision": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauCompileMoveElisionFix": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauCompileNoFoldVectorEqW": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauCompileRecursiveAliases": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauCompileRefactorFeedback": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauCompileReuseLocalRegs": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauCompileTableFoldFix": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauCompileUndoEmitAdjust": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauCompoundAssignSeedsAstTypes": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauConstraintGeneratorRecursionLimit": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `300`"
+            },
+            "LuauCoroutineFinally": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauCoroutineFinallyAnalysis": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauCostModel": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauCyclicRequireTopLevelAccessError": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauCyclicRequireTypeInference": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauCyclicSccWarningDisplayLimit": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `10`"
+            },
+            "LuauDecomposeIntersectionOfFreeType": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauDisallowRedefiningBuiltinTypes": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauDoNotIceForBindingGeneric": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauDoNotLeakGenericsInIndexer": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauDoesCallErrorUnwrapsGroups": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauDontUseInnermostScope": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauEasyStateInit": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauEmitCallFeedback": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauEnumMoreEdges": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauExperimentalIfLocalAnalysis": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauExperimentalIfLocalSyntax": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauExportAnnotationBinding": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauExportTypecheckTypepacks": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauExportValueSyntax": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauExportValueTypecheck": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauExportedTypesParticipateInScc": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauFastpcall": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauFastpcallInterrupt": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauFindFullAncestryLooksIntoTypePacks": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauFixCallMetamethodErrorReporting": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauFixIndexerSubtypingOrdering": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `false`"
+            },
+            "LuauFixNormalizeFunctionIntersections": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauFixSuperNegationTypePaths": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauForceLess": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauFrozenMetaButterfly": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauGcHeapShrinkFix": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauGcTraceUdata": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauGenericCounterMaxDepth": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `15`"
+            },
+            "LuauGenericCounterMaxSteps": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `1500`"
+            },
+            "LuauImproveDeprecatedLint": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauImproveUniqueTableWidthSubtyping": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauIndentTypeMismatchMaxTypeLength": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `10`"
+            },
+            "LuauInferReadOnlyIndexers": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauInlineHitsThreshold": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `32`"
+            },
+            "LuauInstantiateInSubtyping": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `false`"
+            },
+            "LuauInstantiationCheckArguments": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauInstantiationCheckArgumentsDedup": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauIntegerBufferFastcalls": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauIntegerFastcalls": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauIntegerLibrary": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauIntegerType2": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauIterativeTypeSearcher": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauKeyofLexicographicOrdering": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauKnowsTheDataModel3": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauLinterRecursionLimit": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `128`"
+            },
+            "LuauLoadRemapOptionalUserdata": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauMaxCFGDataflowIterations": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `2`"
+            },
+            "LuauNewPointerEncode": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauNewTypePathErrorMessages": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauNonStrictTypeCheckerRecursionLimit": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `300`"
+            },
+            "LuauNormalizeCacheLimit": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `100000`"
+            },
+            "LuauNormalizeGuardAgainstNonTestableNegations": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauNormalizerInitialFuel": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `3000`"
+            },
+            "LuauOptimizeExportTable": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauOptimizeStringGsub": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauOptimizeStringSplit": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauParseErrorLimit": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `100`"
+            },
+            "LuauPcallErrorContinuationReentry": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauPcallOptimize": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauPrimitiveInferenceInTableLimit": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `500`"
+            },
+            "LuauPromoteProto": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauPropertyModifierMismatchErrors": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauRbsConfigAliasResolution": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauRecursionLimit": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `1000`"
+            },
+            "LuauRefactorAutocompleteAncestry": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauRefactorStringSemanticSubtyping": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `false`"
+            },
+            "LuauReferenceCountInitializerIsIterative": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauRefineNotNilWaitsForBlockedTarget": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauRelateIndexersTypo": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauRemoveConstraintSolverEmplace": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauRemoveLoadstringFromBuiltinDefinitions": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauSandboxFreezesVectorMetatable": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauSetmetatableOverrides": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauSimplificationComplexityLimit": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `8`"
+            },
+            "LuauSingleTypeOptionalPackReturnsAttributeParens": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauSkipUnusedTypeTraversals": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauSolverConstraintLimit": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `1000`"
+            },
+            "LuauSolverRecursionLimit": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `500`"
+            },
+            "LuauSolverV2": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `false`"
+            },
+            "LuauSoundGenericMismatches": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauSplitIceHandler": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauSplitTableLookups": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauStackGuardThreshold": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `1024`"
+            },
+            "LuauStepRefineRecursionLimit": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `64`"
+            },
+            "LuauStrictVisitInstantiatedType": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauSubtypingIterationLimit": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `20000`"
+            },
+            "LuauSubtypingMissingPropertiesAsNil": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauSubtypingReasoningLimit": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `100`"
+            },
+            "LuauSubtypingRecursionLimit": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `100`"
+            },
+            "LuauSubtypingSkipUnreadReasoning": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauSuggestionDistance": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `4`"
+            },
+            "LuauTableArrayAdjustCheck": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauTableArrayShrinkOrder": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauTableMoveTimeoutFix": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauTableRobustOom": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauTableTypeMaximumStringifierLength": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `0`"
+            },
+            "LuauTarjanChildLimit": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `15000`"
+            },
+            "LuauTarjanPreallocationSize": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `256`"
+            },
+            "LuauThreadGeneralizeThroughConstraintGeneration": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauTraverseScopeToFunction": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauTypeCloneIterationLimit": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `100000`"
+            },
+            "LuauTypeFamilyApplicationCartesianProductLimit": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `5000`"
+            },
+            "LuauTypeFamilyGraphReductionMaximumSteps": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `1000000`"
+            },
+            "LuauTypeFamilyUseGuesserDepth": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `-1`"
+            },
+            "LuauTypeFunctionSerdeIterationLimit": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `100000`"
+            },
+            "LuauTypeFunctionSerializeArgNames": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauTypeFunctionStructuredErrors": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauTypeFunctionSupportsFrozen": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauTypeFunctionsAbsenceCache": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauTypeFunctionsReturnAfterAllSerialized": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauTypeInferIterationLimit": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `20000`"
+            },
+            "LuauTypeInferRecursionLimit": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `165`"
+            },
+            "LuauTypeInferTypePackLoopLimit": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `5000`"
+            },
+            "LuauTypeLengthLimit": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `1000`"
+            },
+            "LuauTypeMaximumStringifierLength": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `500`"
+            },
+            "LuauTypePathMaximumTraverseSteps": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `100`"
+            },
+            "LuauTypeSimplificationIterationLimit": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `128`"
+            },
+            "LuauUdtfFixTypeNameTypo": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauUdtfTerseChunkNames": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauUnconditionallyVisitTypeAliasParams": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauUnifierRecursionLimit": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `100`"
+            },
+            "LuauUseExplicitTypeArgsInGenerics": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "markdownDescription": "Boolean FFlag, default `true`"
+            },
+            "LuauVisitRecursionLimit": {
+              "type": "string",
+              "pattern": "^-?\\d+$",
+              "markdownDescription": "Integer FFlag, default `500`"
+            }
+          }
+        },
+        "lunaut.definitions": {
+          "type": "array",
+          "default": [],
+          "markdownDescription": "Definition files (`.d.luau`). Globs are allowed. Higher `priority` loads first.",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "path"
+                ],
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "priority": {
+                    "type": "integer"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "lunaut.discoverDefinitions": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Load every `*.d.luau` found in the workspace."
+        },
+        "lunaut.roblox.downloadTypes": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Download the Roblox API definitions in Roblox mode."
+        },
+        "lunaut.roblox.securityLevel": {
+          "type": "string",
+          "enum": [
+            "None",
+            "LocalUserSecurity",
+            "PluginSecurity",
+            "RobloxScriptSecurity"
+          ],
+          "default": "PluginSecurity",
+          "markdownDescription": "Security level of the downloaded Roblox API definitions."
+        },
+        "lunaut.roblox.typesPriority": {
+          "type": "integer",
+          "default": 1000,
+          "markdownDescription": "Load priority of the downloaded Roblox definitions."
+        },
+        "lunaut.rojo.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Use the Rojo sourcemap for requires and instance types."
+        },
+        "lunaut.rojo.projectFile": {
+          "type": "string",
+          "default": "default.project.json"
+        },
+        "lunaut.rojo.sourcemapFile": {
+          "type": "string",
+          "default": "sourcemap.json"
+        },
+        "lunaut.rojo.autogenerate": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Run `rojo sourcemap` when files are added, removed or the project changes."
+        },
+        "lunaut.rojo.includeNonScripts": {
+          "type": "boolean",
+          "default": true
+        },
+        "lunaut.rojo.strictDatamodelTypes": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Type `game`, `script` and `workspace` from the sourcemap in diagnostics too."
+        },
+        "lunaut.rojo.executable": {
+          "type": "string",
+          "default": "rojo"
+        },
+        "lunaut.diagnostics.lint": {
+          "type": "boolean",
+          "default": true
+        },
+        "lunaut.diagnostics.includeDependents": {
+          "type": "boolean",
+          "default": true
+        },
+        "lunaut.analyzeLuaFiles": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Check `.lua` files too, not only `.luau`."
+        },
+        "lunaut.baseLuaurc": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "A `.luaurc` applied under every other one: shared aliases and lint settings. Relative to the workspace, `~/` allowed."
+        },
+        "lunaut.ignoreGlobs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "**/_Index/**"
+          ]
+        },
+        "lunaut.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "bundle-server": "node scripts/bundle-server.js",
+    "package": "npm run compile && npm run bundle-server && vsce package --out lunaut.vsix",
+    "test": "npm run compile && node ./out/test/run.js"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/test-electron": "^2.4.1",
+    "@vscode/vsce": "^3.2.1",
+    "typescript": "^5.4.0"
+  }
+}

@@ -1,0 +1,49 @@
+BasedOnStyle: LLVM
+Language: Cpp
+Standard: c++17
+UseTab: ForContinuationAndIndentation
+TabWidth: 4
+IndentWidth: 4
+ContinuationIndentWidth: 4
+ColumnLimit: 140
+BreakBeforeBraces: Allman
+InsertBraces: true
+RemoveSemicolon: true
+InsertNewlineAtEOF: true
+SeparateDefinitionBlocks: Always
+EmptyLineBeforeAccessModifier: LogicalBlock
+EmptyLineAfterAccessModifier: Never
+KeepEmptyLines:
+  AtStartOfBlock: false
+  AtStartOfFile: false
+  AtEndOfFile: false
+MaxEmptyLinesToKeep: 1
+AccessModifierOffset: -4
+NamespaceIndentation: None
+FixNamespaceComments: false
+CompactNamespaces: false
+PointerAlignment: Left
+ReferenceAlignment: Left
+AlignAfterOpenBracket: AlwaysBreak
+AlignOperands: DontAlign
+AlignTrailingComments: false
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortBlocksOnASingleLine: Never
+AllowShortLambdasOnASingleLine: Inline
+AllowShortEnumsOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+AlwaysBreakTemplateDeclarations: Yes
+BreakConstructorInitializers: BeforeComma
+PackConstructorInitializers: Never
+BreakInheritanceList: BeforeComma
+Cpp11BracedListStyle: true
+SpaceBeforeParens: ControlStatements
+SortIncludes: Never
+IncludeBlocks: Preserve
+LambdaBodyIndentation: Signature
+BinPackArguments: false
+BinPackParameters: OnePerLine
+BinPackLongBracedList: false
+AlignArrayOfStructures: None

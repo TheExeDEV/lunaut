@@ -1,0 +1,686 @@
+#pragma once
+
+#include <filesystem>
+#include <functional>
+#include <iosfwd>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <set>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <vector>
+
+#include "Luau/Config.h"
+#include "Luau/ConfigResolver.h"
+#include "Luau/FileResolver.h"
+#include "Luau/Frontend.h"
+#include "Luau/TypeArena.h"
+
+#include <nlohmann/json.hpp>
+
+namespace lunaut
+{
+
+using json = nlohmann::json;
+
+struct nothing
+{
+};
+
+template <typename T>
+struct result
+{
+	bool state = false;
+	T value{};
+	std::string message;
+
+	static result ok(T value) { return result{true, std::move(value), {}}; }
+
+	static result fail(std::string message) { return result{false, T{}, std::move(message)}; }
+
+	explicit operator bool() const { return state; }
+
+	const T& unpack() const { return value; }
+};
+
+enum class enumitem_message_type : int
+{
+	Error = 1,
+	Warning = 2,
+	Info = 3,
+	Log = 4,
+};
+
+enum class enumitem_diagnostic_severity : int
+{
+	Error = 1,
+	Warning = 2,
+	Information = 3,
+	Hint = 4,
+};
+
+enum class enumitem_completion_kind : int
+{
+	Text = 1,
+	Method = 2,
+	Function = 3,
+	Field = 5,
+	Variable = 6,
+	Class = 7,
+	Interface = 8,
+	Module = 9,
+	Property = 10,
+	Keyword = 14,
+	Snippet = 15,
+	File = 17,
+	Folder = 19,
+	Constant = 21,
+	TypeParameter = 25,
+};
+
+enum class enumitem_symbol_kind : int
+{
+	File = 1,
+	Module = 2,
+	Class = 5,
+	Method = 6,
+	Property = 7,
+	Field = 8,
+	Function = 12,
+	Variable = 13,
+	Constant = 14,
+	Struct = 23,
+	TypeParameter = 26,
+};
+
+enum class enumitem_error_code : int
+{
+	ParseError = -32700,
+	InvalidRequest = -32600,
+	MethodNotFound = -32601,
+	InvalidParams = -32602,
+	InternalError = -32603,
+	ServerNotInitialized = -32002,
+	RequestFailed = -32803,
+};
+
+enum class enumitem_file_change : int
+{
+	Created = 1,
+	Changed = 2,
+	Deleted = 3,
+};
+
+enum class enumitem_server_state
+{
+	Uninitialized,
+	Running,
+	ShuttingDown,
+	Exited,
+};
+
+enum class enumitem_platform_variant
+{
+	Auto,
+	Standard,
+	Roblox,
+};
+
+enum class enumitem_definition_source
+{
+	Config,
+	Cli,
+	Discovered,
+	Roblox,
+};
+
+enum class enumitem_fflag_source
+{
+	Default,
+	EnableByDefault,
+	Sync,
+	NewSolver,
+	Override,
+	Cli,
+};
+
+namespace enum_message_type
+{
+std::string_view get_name(enumitem_message_type item);
+}
+
+namespace enum_platform_variant
+{
+std::string_view get_name(enumitem_platform_variant item);
+std::optional<enumitem_platform_variant> from_name(std::string_view name);
+}
+
+namespace enum_definition_source
+{
+std::string_view get_name(enumitem_definition_source item);
+}
+
+namespace enum_fflag_source
+{
+std::string_view get_name(enumitem_fflag_source item);
+}
+
+struct definitioninfo
+{
+	std::string path;
+	std::string name;
+	std::optional<int> priority;
+	enumitem_definition_source source = enumitem_definition_source::Config;
+};
+
+struct fflaginfo
+{
+	bool enable_by_default = true;
+	bool sync = true;
+	bool enable_new_solver = false;
+	std::map<std::string, std::string> override;
+};
+
+struct robloxinfo
+{
+	bool download_types = true;
+	std::string security_level = "PluginSecurity";
+	int types_priority = 1000;
+};
+
+struct rojoinfo
+{
+	bool enabled = true;
+	std::string project_file = "default.project.json";
+	std::string sourcemap_file = "sourcemap.json";
+	bool autogenerate = true;
+	bool include_non_scripts = true;
+	bool strict_datamodel_types = false;
+	std::string executable = "rojo";
+};
+
+struct diagnosticsinfo
+{
+	bool lint = true;
+	bool include_dependents = true;
+};
+
+struct settingsinfo
+{
+	enumitem_platform_variant platform = enumitem_platform_variant::Auto;
+	fflaginfo fflags;
+	std::vector<definitioninfo> definitions;
+	bool discover_definitions = true;
+	robloxinfo roblox;
+	rojoinfo rojo;
+	diagnosticsinfo diagnostics;
+	std::vector<std::string> ignore_globs;
+	bool analyze_lua_files = true;
+	std::string base_luaurc;
+
+	static settingsinfo from_json(const json& data);
+	static settingsinfo from_json(const json& data, const settingsinfo& base);
+	static result<json> read_vscode_settings(const std::filesystem::path& file);
+	settingsinfo clone(const json& change) const;
+	settingsinfo with_project(const std::filesystem::path& root, const std::optional<std::string>& extra_file) const;
+	json to_json() const;
+};
+
+struct optionsinfo
+{
+	std::map<std::string, std::string> fflags;
+	bool no_flags_enabled = false;
+	std::vector<definitioninfo> definitions;
+	std::optional<std::string> settings_file;
+};
+
+struct loadeddefinitioninfo
+{
+	std::string name;
+	std::string path;
+	int priority = 0;
+	bool success = false;
+	std::string message;
+	enumitem_definition_source source = enumitem_definition_source::Config;
+
+	json to_json() const;
+};
+
+struct fflagstateinfo
+{
+	std::string name;
+	std::string value;
+	std::string kind;
+	enumitem_fflag_source source = enumitem_fflag_source::Default;
+
+	json to_json() const;
+};
+
+namespace stdx
+{
+void oute(const std::string& message);
+void outi(const std::string& message);
+bool check(bool condition, const std::string& message);
+
+std::optional<std::string> read_file(const std::filesystem::path& path);
+bool write_file(const std::filesystem::path& path, const std::string& contents);
+
+bool starts_with(std::string_view value, std::string_view prefix);
+bool ends_with(std::string_view value, std::string_view suffix);
+std::string to_lower(std::string value);
+std::string trim(std::string_view value);
+std::vector<std::string> split(std::string_view value, char separator);
+
+bool has_wildcard(std::string_view pattern);
+bool glob_match(std::string_view pattern, std::string_view path);
+std::vector<std::filesystem::path>
+find_files(const std::filesystem::path& root, std::string_view pattern, const std::vector<std::string>& ignore_globs);
+}
+
+class uri
+{
+public:
+	static std::string to_path(std::string_view value);
+	static std::string from_path(std::string_view path);
+	static std::string normalize_path(std::string_view path);
+	static std::string get_relative(const std::filesystem::path& root, const std::string& path);
+};
+
+class textdocument
+{
+public:
+	textdocument() = default;
+	textdocument(std::string address, std::string text, int version);
+
+	const std::string& get_uri() const;
+	const std::string& get_text() const;
+	int get_version() const;
+
+	void apply_changes(const json& changes, int version);
+	Luau::Position to_luau_position(const json& position) const;
+	json to_lsp_position(const Luau::Position& position) const;
+	json to_lsp_range(const Luau::Location& location) const;
+
+private:
+	size_t get_offset(const json& position) const;
+	void rebuild_lines();
+
+	std::string address;
+	std::string text;
+	int version = 0;
+	std::vector<size_t> lines;
+};
+
+class protocol
+{
+public:
+	static json get_capabilities();
+	static json make_markdown(const std::string& value);
+	static json make_diagnostic(
+		const textdocument& document,
+		const Luau::Location& location,
+		enumitem_diagnostic_severity severity,
+		const std::string& code,
+		const std::string& message);
+	static json make_type_error(const textdocument& document, const Luau::TypeError& error, Luau::FileResolver* resolver);
+	static json make_parse_error(const textdocument& document, const Luau::ParseError& error);
+	static json make_lint_warning(const textdocument& document, const Luau::LintWarning& warning, bool fatal);
+};
+
+class jsonrpc
+{
+public:
+	jsonrpc(std::istream& input, std::ostream& output);
+
+	result<json> read_message();
+	void send_message(const json& message);
+	void send_response(const json& id, const json& value);
+	void send_error(const json& id, enumitem_error_code code, const std::string& message);
+	void send_notification(const std::string& method, const json& params);
+	void send_request(const std::string& method, const json& params);
+
+private:
+	std::istream& input;
+	std::ostream& output;
+	std::mutex lock;
+	int next_id = 1;
+};
+
+class client
+{
+public:
+	virtual ~client() = default;
+
+	virtual void send_log(enumitem_message_type type, const std::string& message) = 0;
+	virtual void send_window_message(enumitem_message_type type, const std::string& message) = 0;
+	virtual void send_diagnostics(const std::string& address, std::optional<int> version, const json& diagnostics) = 0;
+};
+
+class process
+{
+public:
+	static result<std::string> invoke_command(const std::string& command);
+	static bool has_executable(const std::string& name);
+};
+
+class http
+{
+public:
+	static result<std::string> get_text(const std::string& url);
+};
+
+class cache
+{
+public:
+	static std::filesystem::path get_directory();
+	static result<std::string> get_or_fetch(const std::string& name, const std::string& url, bool refresh);
+	static std::optional<std::filesystem::path> get_file(const std::string& name);
+};
+
+struct sourcenode
+{
+	std::string name;
+	std::string class_name;
+	std::vector<std::string> file_paths;
+	std::vector<std::unique_ptr<sourcenode>> children;
+	sourcenode* parent = nullptr;
+	std::string virtual_path;
+	mutable std::unordered_map<const Luau::GlobalTypes*, Luau::TypeId> types;
+
+	bool is_script() const;
+	std::optional<std::string> get_script_path() const;
+	Luau::SourceCode::Type get_source_type() const;
+	const sourcenode* find_child(std::string_view child) const;
+	const sourcenode* find_ancestor(std::string_view ancestor) const;
+	void clear_types() const;
+};
+
+class sourcemap
+{
+public:
+	result<nothing> load_from_file(const std::filesystem::path& file, const std::filesystem::path& root);
+	result<nothing> load_from_string(const std::string& contents, const std::filesystem::path& root);
+	void clear();
+
+	bool is_loaded() const;
+	size_t count() const;
+	const sourcenode* get_root() const;
+	const sourcenode* get_by_virtual_path(const std::string& path) const;
+	const sourcenode* get_by_real_path(const std::string& path) const;
+	std::optional<std::string> get_real_path(const std::string& virtual_path) const;
+	std::optional<std::string> get_virtual_path(const std::string& real_path) const;
+
+	static bool is_virtual_path(const std::string& name);
+	static std::optional<std::string> get_parent_path(const std::string& name);
+
+private:
+	std::unique_ptr<sourcenode> parse_node(const json& data, sourcenode* parent, const std::filesystem::path& root);
+	void add_node(const sourcenode* node);
+
+	std::unique_ptr<sourcenode> root;
+	std::unordered_map<std::string, const sourcenode*> virtual_paths;
+	std::unordered_map<std::string, const sourcenode*> real_paths;
+};
+
+class robloxresolver
+{
+public:
+	using virtualizer = std::function<std::optional<std::string>(const Luau::ModuleName&)>;
+
+	static std::optional<Luau::ModuleInfo>
+	resolve_expression(const sourcemap& map, const Luau::ModuleInfo* context, Luau::AstExpr* node, const virtualizer& to_virtual);
+	static std::optional<Luau::ModuleInfo>
+	resolve_string(const sourcemap& map, const Luau::ModuleInfo* context, const std::string& required);
+};
+
+class instancetypes
+{
+public:
+	void apply(Luau::Frontend& frontend, const sourcemap& map, bool strict_datamodel_types);
+	void clear(Luau::Frontend& frontend, const sourcemap& map);
+
+private:
+	void apply_globals(const Luau::GlobalTypes& globals, const sourcemap& map);
+	Luau::TypeId get_node_type(const Luau::GlobalTypes& globals, const sourcenode* node);
+	void add_children(const Luau::GlobalTypes& globals, Luau::TypeId type, const sourcenode* node);
+
+	Luau::TypeArena arena;
+};
+
+class rojo
+{
+public:
+	static bool is_project(const std::filesystem::path& root, const rojoinfo& info);
+	static result<nothing> generate_sourcemap(const std::filesystem::path& root, const rojoinfo& info);
+};
+
+class robloxmagic
+{
+public:
+	static std::optional<json> get_metadata(const std::string& source);
+	static void apply(Luau::GlobalTypes& globals, const json& metadata);
+};
+
+class robloxtypes
+{
+public:
+	static result<std::string> get_definitions_path(const std::string& security_level, bool refresh);
+};
+
+class fflagregistry
+{
+public:
+	static std::vector<fflagstateinfo>
+	apply(const fflaginfo& info, const std::map<std::string, std::string>& cli, bool no_flags_enabled, client& owner);
+	static std::vector<fflagstateinfo> get_flags();
+	static result<nothing> set_flag(const std::string& name, const std::string& value, enumitem_fflag_source source);
+	static result<std::map<std::string, std::string>> sync_from_roblox(bool refresh);
+};
+
+class definitionloader
+{
+public:
+	static std::vector<definitioninfo> collect(const std::filesystem::path& root, const settingsinfo& settings, bool roblox, client& owner);
+	static std::optional<int> get_directive_priority(const std::string& source);
+	static std::string get_package_name(const definitioninfo& info, const std::filesystem::path& path);
+};
+
+class fileresolver;
+
+class requirenode final : public Luau::RequireNode
+{
+public:
+	requirenode(const fileresolver& resolver, std::filesystem::path path, bool requirer);
+
+	std::string getPathComponent() const override;
+	std::unique_ptr<Luau::RequireNode> resolvePathToNode(const std::string& path) const override;
+	std::vector<std::unique_ptr<Luau::RequireNode>> getChildren() const override;
+	std::vector<Luau::RequireAlias> getAvailableAliases() const override;
+
+private:
+	const fileresolver& resolver;
+	std::filesystem::path path;
+	bool requirer = false;
+};
+
+class requiresuggester final : public Luau::RequireSuggester
+{
+public:
+	explicit requiresuggester(const fileresolver& resolver);
+
+protected:
+	std::unique_ptr<Luau::RequireNode> getNode(const Luau::ModuleName& name) const override;
+
+private:
+	const fileresolver& resolver;
+};
+
+class fileresolver final
+	: public Luau::FileResolver
+	, public Luau::ConfigResolver
+{
+public:
+	explicit fileresolver(std::filesystem::path root);
+
+	std::optional<Luau::SourceCode> readSource(const Luau::ModuleName& name) override;
+	std::optional<Luau::ModuleInfo>
+	resolveModule(const Luau::ModuleInfo* context, Luau::AstExpr* expr, const Luau::TypeCheckLimits& limits) override;
+	std::string getHumanReadableModuleName(const Luau::ModuleName& name) const override;
+	const Luau::Config& getConfig(const Luau::ModuleName& name, const Luau::TypeCheckLimits& limits) const override;
+
+	Luau::ModuleName get_module_name(const std::string& address) const;
+	std::string get_uri(const Luau::ModuleName& name) const;
+	std::optional<std::string> get_real_path(const Luau::ModuleName& name) const;
+	std::optional<std::string> read_text(const std::string& real_path) const;
+
+	const textdocument* get_document(const std::string& address) const;
+	textdocument* get_document(const std::string& address);
+	void set_document(textdocument document);
+	void rem_document(const std::string& address);
+
+	void set_sourcemap(const sourcemap* map);
+	void set_base_config(const std::filesystem::path& path);
+	void clear_config_cache();
+
+	std::optional<std::filesystem::path> get_require_target(const std::string& requirer, const std::string& required) const;
+	std::vector<Luau::RequireAlias> get_aliases(const std::filesystem::path& directory) const;
+	const Luau::Config& get_directory_config(const std::filesystem::path& directory) const;
+
+private:
+	std::optional<Luau::ModuleInfo> resolve_string_require(const Luau::ModuleInfo* context, const std::string& required);
+	std::string resolve_file_candidate(const std::filesystem::path& base) const;
+	void read_config_file(const std::filesystem::path& directory, Luau::Config& config) const;
+
+	std::filesystem::path root;
+	std::unordered_map<std::string, textdocument> documents;
+	const sourcemap* map = nullptr;
+	mutable std::unordered_map<std::string, std::unique_ptr<Luau::Config>> configs;
+	Luau::Config default_config;
+};
+
+class workspace
+{
+public:
+	workspace(client& owner, std::filesystem::path root, settingsinfo settings);
+
+	void initialize();
+	bool is_ready() const;
+	bool is_roblox() const;
+	bool is_inside(const std::string& address) const;
+	const std::filesystem::path& get_root() const;
+	const settingsinfo& get_settings() const;
+	const std::vector<loadeddefinitioninfo>& get_definitions() const;
+	json get_status() const;
+
+	void open_document(const std::string& address, const std::string& text, int version);
+	void update_document(const std::string& address, const json& changes, int version);
+	void close_document(const std::string& address);
+	void save_document(const std::string& address);
+	void apply_watched_changes(const json& changes);
+	void set_settings(settingsinfo next);
+	result<nothing> rebuild_sourcemap(bool regenerate);
+
+	json get_diagnostics(const std::string& address);
+	void publish_diagnostics(const std::string& address);
+	json get_hover(const json& params);
+	json get_completion(const json& params);
+	json get_definition(const json& params);
+	json get_document_symbols(const json& params);
+	json get_signature_help(const json& params);
+
+private:
+	void register_types();
+	void load_definitions();
+	Luau::CheckResult check_module(const Luau::ModuleName& name, bool for_autocomplete);
+	Luau::ModulePtr get_module(const Luau::ModuleName& name, bool for_autocomplete) const;
+	bool is_definition_file(const std::string& path) const;
+	bool is_ignored(const std::string& path) const;
+	std::optional<textdocument> get_text_for(const Luau::ModuleName& name) const;
+	json get_location(const Luau::ModuleName& name, const Luau::Location& location) const;
+
+	client& owner;
+	std::filesystem::path root;
+	settingsinfo settings;
+	fileresolver resolver;
+	Luau::Frontend frontend;
+	sourcemap map;
+	instancetypes instances;
+	std::vector<loadeddefinitioninfo> definitions;
+	std::set<std::string> definition_paths;
+	bool ready = false;
+	bool roblox = false;
+};
+
+class server final : public client
+{
+public:
+	server(jsonrpc& rpc, optionsinfo options);
+
+	int run();
+
+	void send_log(enumitem_message_type type, const std::string& message) override;
+	void send_window_message(enumitem_message_type type, const std::string& message) override;
+	void send_diagnostics(const std::string& address, std::optional<int> version, const json& diagnostics) override;
+
+	json on_initialize(const json& params);
+	json on_shutdown(const json& params);
+	json on_hover(const json& params);
+	json on_completion(const json& params);
+	json on_definition(const json& params);
+	json on_document_symbol(const json& params);
+	json on_signature_help(const json& params);
+	json on_lunaut_status(const json& params);
+	json on_lunaut_fflags(const json& params);
+	json on_lunaut_definitions(const json& params);
+	json on_lunaut_sourcemap(const json& params);
+
+	void on_initialized(const json& params);
+	void on_exit(const json& params);
+	void on_did_open(const json& params);
+	void on_did_change(const json& params);
+	void on_did_close(const json& params);
+	void on_did_save(const json& params);
+	void on_did_change_configuration(const json& params);
+	void on_did_change_watched_files(const json& params);
+	void on_did_change_workspace_folders(const json& params);
+	void on_ignore(const json& params);
+
+private:
+	void process_message(const json& message);
+	void add_workspace(const std::string& address);
+	void register_watchers();
+	workspace& get_workspace(const std::string& address);
+	settingsinfo get_settings_for(const std::filesystem::path& root) const;
+
+	jsonrpc& rpc;
+	optionsinfo options;
+	enumitem_server_state state = enumitem_server_state::Uninitialized;
+	json client_settings = json::object();
+	json client_capabilities = json::object();
+	std::vector<std::unique_ptr<workspace>> workspaces;
+	std::unique_ptr<workspace> null_workspace;
+	std::vector<fflagstateinfo> fflags;
+	int exit_code = 1;
+};
+
+class console final : public client
+{
+public:
+	explicit console(bool verbose);
+
+	int invoke_analyze(const std::vector<std::string>& files, const optionsinfo& options);
+
+	void send_log(enumitem_message_type type, const std::string& message) override;
+	void send_window_message(enumitem_message_type type, const std::string& message) override;
+	void send_diagnostics(const std::string& address, std::optional<int> version, const json& diagnostics) override;
+
+private:
+	bool verbose = false;
+	size_t errors = 0;
+	size_t warnings = 0;
+};
+
+}
