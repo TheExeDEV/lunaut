@@ -27,6 +27,9 @@ const std::unordered_map<std::string_view, request_handler> relevant_requests = 
 	{"textDocument/definition", &server::on_definition},
 	{"textDocument/documentSymbol", &server::on_document_symbol},
 	{"textDocument/signatureHelp", &server::on_signature_help},
+	{"textDocument/references", &server::on_references},
+	{"textDocument/prepareRename", &server::on_prepare_rename},
+	{"textDocument/rename", &server::on_rename},
 	{"lunaut/status", &server::on_lunaut_status},
 	{"lunaut/fflags", &server::on_lunaut_fflags},
 	{"lunaut/definitions", &server::on_lunaut_definitions},
@@ -174,6 +177,21 @@ json server::on_document_symbol(const json& params)
 json server::on_signature_help(const json& params)
 {
 	return get_workspace(params["textDocument"].value("uri", "")).get_signature_help(params);
+}
+
+json server::on_references(const json& params)
+{
+	return get_workspace(params["textDocument"].value("uri", "")).get_references(params);
+}
+
+json server::on_prepare_rename(const json& params)
+{
+	return get_workspace(params["textDocument"].value("uri", "")).get_prepare_rename(params);
+}
+
+json server::on_rename(const json& params)
+{
+	return get_workspace(params["textDocument"].value("uri", "")).get_rename(params);
 }
 
 json server::on_lunaut_status(const json& params)

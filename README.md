@@ -7,6 +7,7 @@ lunaut is your astronaut in Luau code: it checks types and lint while you type, 
 **The server**
 
 - Diagnostics (type errors, syntax errors, lint), hover, completion, go to definition, document symbols, signature help
+- Find all references (`Shift+F12`) and rename (`F2`) across files, for locals and module members
 - Both Luau type solvers: the old one by default, the new one with `lunaut.fflags.enableNewSolver`
 - `require` by string (`./`, `../`, `@self`, aliases from `.luaurc` and `.config.luau`) and by instance (`script.Parent.X`, `game:GetService("X")`, `:WaitForChild("X")`)
 - Completion inside `require("...")`: aliases, folders and modules as you type the path
@@ -45,17 +46,18 @@ lunaut is your astronaut in Luau code: it checks types and lint while you type, 
 5. [FFlags](#fflags)
 6. [Definition files and priorities](#definition-files-and-priorities)
 7. [Rojo](#rojo)
-8. [Requires and .luaurc](#requires-and-luaurc)
-9. [Command reference](#command-reference)
-10. [Custom LSP methods](#custom-lsp-methods)
-11. [Environment variables](#environment-variables)
-12. [Tests](#tests)
-13. [Luau updates](#luau-updates)
-14. [Building from source](#building-from-source)
-15. [Source layout](#source-layout)
-16. [Limitations](#limitations)
-17. [Acknowledgements](#acknowledgements)
-18. [License](#license)
+8. [References and rename](#references-and-rename)
+9. [Requires and .luaurc](#requires-and-luaurc)
+10. [Command reference](#command-reference)
+11. [Custom LSP methods](#custom-lsp-methods)
+12. [Environment variables](#environment-variables)
+13. [Tests](#tests)
+14. [Luau updates](#luau-updates)
+15. [Building from source](#building-from-source)
+16. [Source layout](#source-layout)
+17. [Limitations](#limitations)
+18. [Acknowledgements](#acknowledgements)
+19. [License](#license)
 
 ---
 
@@ -327,6 +329,32 @@ The lists of creatable classes and services come from the metadata line at the t
 
 ---
 
+## References and rename
+
+`Shift+F12` lists every use of the symbol under the cursor, `F2` renames it everywhere at once.
+
+| Symbol | Where it is found |
+| --- | --- |
+| a local, a parameter, a local function | the file it lives in |
+| a module member: `function Util.double()`, `Util.double`, `{ double = ... }` | the module and every file that requires it, open or not |
+
+```luau
+-- Util.luau
+local Util = {}
+function Util.double(value: number): number
+	return value * 2
+end
+return Util
+
+-- Main.server.luau
+local Util = require(script.Parent.Util)
+print(Util.double(21))
+```
+
+Renaming `double` in either file changes both. Members are matched by the table they belong to, not by name, so another table with a `double` field stays untouched. lunaut parses the whole workspace on the first request to know who requires whom; Rojo requires through `script`, `game` and `@game` count too. Names are checked before renaming: a keyword or a name that is not a valid identifier is refused. Globals from definition files (`print`, `game`) cannot be renamed.
+
+---
+
 ## Requires and .luaurc
 
 String requires follow the Luau rules:
@@ -423,6 +451,7 @@ It runs every suite in [`tests/cases`](tests/cases) against `build/lunaut(.exe)`
 | `test_fflags.py` | defaults, `--no-flags-enabled`, `--flag`, bad values, overrides over LSP |
 | `test_definitions.py` | priority order, `--!priority`, globs, a wrong order failing |
 | `test_rojo.py` | sourcemap loading, instance requires, `script` and service types, completion of sourcemap children |
+| `test_references.py` | references and rename for locals, module functions and table keys, in both solvers |
 | `test_config.py` | `.config.luau` aliases, `lunaut.baseLuaurc`, `lunaut.analyzeLuaFiles`, `require` path completion, `const` hover |
 
 Fixtures live in [`tests/fixtures`](tests/fixtures): a plain Luau project, two definition setups and a Rojo project with its own sourcemap and Roblox-like definitions, so tests need neither Rojo nor internet.
@@ -472,7 +501,7 @@ src/Lunaut/
 ├── Cli/              analyze mode
 ├── Server/           JSON-RPC, LSP dispatch, protocol replies
 ├── Core/             workspace, file resolver, FFlags, definitions, text documents
-├── Features/         diagnostics, hover, completion, definition, symbols, signature help
+├── Features/         diagnostics, hover, completion, definition, references, rename, symbols, signature help
 ├── Models/           settings and enum names
 ├── Roblox/           sourcemap, instance requires, DataModel types, Rojo, Roblox types
 └── Util/             strings, glob, uri, processes, http, cache
@@ -487,7 +516,8 @@ tests/                test runner, suites and fixtures
 ## Limitations
 
 - Definition file and FFlag changes need a server restart
-- No rename, find references, semantic tokens or inlay hints yet
+- No semantic tokens or inlay hints yet
+- Rename and references cover locals and table members; globals and type names are not renamed
 - Go to definition works for locals, requires and table members, not for globals from definition files
 - Rojo autogeneration runs `rojo sourcemap` once per change, it does not keep `--watch` running
 - Downloads (FFlags, Roblox definitions) use `curl`, which ships with Windows 10+, macOS and most Linux systems

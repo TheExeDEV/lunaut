@@ -31,6 +31,8 @@ json protocol::get_capabilities()
 		{"signatureHelpProvider", {{"triggerCharacters", {"(", ","}}}},
 		{"definitionProvider", true},
 		{"documentSymbolProvider", true},
+		{"referencesProvider", true},
+		{"renameProvider", {{"prepareProvider", true}}},
 		{"workspace", {{"workspaceFolders", {{"supported", true}, {"changeNotifications", true}}}}},
 	};
 }

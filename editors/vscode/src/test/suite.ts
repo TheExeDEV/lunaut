@@ -84,6 +84,30 @@ export async function run(): Promise<void> {
 	);
 
 	await check(
+		"finds references",
+		async () => {
+			const locations = await vscode.commands.executeCommand<vscode.Location[]>("vscode.executeReferenceProvider", main, new vscode.Position(2, 7));
+			assert.strictEqual(locations.length, 2, JSON.stringify(locations));
+		},
+		results,
+	);
+
+	await check(
+		"renames across files",
+		async () => {
+			const edit = await vscode.commands.executeCommand<vscode.WorkspaceEdit>(
+				"vscode.executeDocumentRenameProvider",
+				main,
+				new vscode.Position(4, 12),
+				"welcome",
+			);
+			const files = edit.entries().map(([uri]) => path.basename(uri.fsPath)).sort();
+			assert.deepStrictEqual(files, ["main.luau", "util.luau"]);
+		},
+		results,
+	);
+
+	await check(
 		"runs the status command",
 		async () => {
 			await vscode.commands.executeCommand("lunaut.showStatus");

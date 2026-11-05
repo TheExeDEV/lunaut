@@ -4,6 +4,7 @@ Luau language support powered by [lunaut](https://github.com/TheExeDEV/lunaut), 
 
 - Type errors, syntax errors and lint while you type
 - Hover, completion (including `require` paths and `.luaurc` aliases), go to definition, document symbols, signature help
+- Find all references and rename (F2) across files
 - Luau FFlags enabled by default and synced with Roblox Studio
 - `.d.luau` definition files with load priorities
 - Rojo projects: requires through the sourcemap, `script` and services typed from the instance tree
