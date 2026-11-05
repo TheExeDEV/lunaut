@@ -1,0 +1,6 @@
+#pragma once
+
+#define CORE_TEXTDOCUMENT_UTF16 true
+#define CORE_LOG_TO_STDERR true
+#define CORE_JSONRPC_MAX_MESSAGE (64 * 1024 * 1024)
+#define CORE_CACHE_MAX_AGE_HOURS 24

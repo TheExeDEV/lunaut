@@ -1,0 +1,13 @@
+{
+  "lunaut.platform": "roblox",
+  "lunaut.fflags.sync": false,
+  "lunaut.roblox.downloadTypes": false,
+  "lunaut.rojo.autogenerate": false,
+  "lunaut.definitions": [
+    {
+      "path": "types/roblox.d.luau",
+      "name": "roblox",
+      "priority": 1000
+    }
+  ]
+}

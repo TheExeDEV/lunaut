@@ -1,0 +1,165 @@
+#!/bin/sh
+set `# <#` >/dev/null 2>&1
+
+set -eu
+
+repository="${LUNAUT_REPOSITORY:-TheExeDEV/lunaut}"
+script_url="https://raw.githubusercontent.com/$repository/main/installers/uninstall"
+install_dir="${LUNAUT_INSTALL_DIR:-$HOME/.lunaut/bin}"
+cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/lunaut"
+purge="${LUNAUT_PURGE:-}"
+
+for argument in "$@"; do
+	case "$argument" in
+		--purge) purge=1 ;;
+		*) echo "Unknown option: $argument (use --purge)" >&2; exit 1 ;;
+	esac
+done
+
+case "$(uname -s)" in
+	MINGW* | MSYS* | CYGWIN*)
+		LUNAUT_PURGE="$purge" powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm $script_url | iex"
+		exit $?
+		;;
+esac
+
+removed=0
+
+for file in lunaut lunaut.download lunaut.vsix; do
+	if [ -e "$install_dir/$file" ]; then
+		rm -f "$install_dir/$file"
+		echo "Removed $install_dir/$file"
+		removed=$((removed + 1))
+	fi
+done
+
+if command -v code >/dev/null 2>&1 && code --list-extensions 2>/dev/null | grep -qx "lunaut.lunaut"; then
+	code --uninstall-extension lunaut.lunaut >/dev/null && echo "Removed the lunaut extension from VS Code"
+fi
+
+remove_if_empty() {
+	if [ -d "$1" ] && [ -z "$(ls -A "$1")" ]; then
+		rmdir "$1"
+	fi
+}
+
+remove_from_path() {
+	file="$1"
+
+	if [ ! -f "$file" ] || ! grep -qF "$install_dir" "$file"; then
+		return
+	fi
+
+	temporary="$file.lunaut-tmp"
+	grep -vF "$install_dir" "$file" | grep -vx "# lunaut" > "$temporary" || true
+	cat "$temporary" > "$file"
+	rm -f "$temporary"
+	echo "Removed lunaut from PATH in $file"
+}
+
+remove_if_empty "$install_dir"
+remove_if_empty "$(dirname "$install_dir")"
+
+for file in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
+	remove_from_path "$file"
+done
+
+rm -f "$HOME/.config/fish/conf.d/lunaut.fish"
+
+if [ -n "$purge" ] && [ -d "$cache_dir" ]; then
+	rm -rf "$cache_dir"
+	echo "Removed $cache_dir"
+fi
+
+if [ "$removed" -eq 0 ]; then
+	echo "lunaut was not found in $install_dir"
+	exit 0
+fi
+
+echo "lunaut is uninstalled. Open a new terminal to refresh PATH."
+
+if [ -z "$purge" ]; then
+	echo "The download cache (FFlags, Roblox types) was kept. Add --purge to remove it too."
+fi
+
+exit 0
+#>
+
+& {
+	$ErrorActionPreference = "Stop"
+
+	$repository = if ($env:LUNAUT_REPOSITORY) { $env:LUNAUT_REPOSITORY } else { "TheExeDEV/lunaut" }
+	$scriptUrl = "https://raw.githubusercontent.com/$repository/main/installers/uninstall"
+
+	if ($PSVersionTable.PSEdition -eq "Core" -and -not $IsWindows) {
+		$flag = if ($env:LUNAUT_PURGE) { " --purge" } else { "" }
+		& sh -c "curl -fsSL $scriptUrl | sh -s --$flag"
+		return
+	}
+
+	$installDir = if ($env:LUNAUT_INSTALL_DIR) { $env:LUNAUT_INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA "lunaut\bin" }
+	$root = Join-Path $env:LOCALAPPDATA "lunaut"
+	$cacheDir = Join-Path $root "cache"
+	$purge = [bool]$env:LUNAUT_PURGE
+	$removed = 0
+
+	foreach ($file in @("lunaut.exe", "lunaut.exe.download", "lunaut.vsix")) {
+		$path = Join-Path $installDir $file
+
+		if (Test-Path -LiteralPath $path) {
+			try {
+				Remove-Item -LiteralPath $path -Force
+			} catch {
+				throw "Could not remove $path. Close VS Code and every running lunaut, then try again."
+			}
+
+			Write-Host "Removed $path"
+			$removed++
+		}
+	}
+
+	if (Get-Command code -ErrorAction SilentlyContinue) {
+		$extensions = & code --list-extensions 2>$null
+
+		if ($extensions -contains "lunaut.lunaut") {
+			& code --uninstall-extension lunaut.lunaut | Out-Null
+			Write-Host "Removed the lunaut extension from VS Code"
+		}
+	}
+
+	if ((Test-Path -LiteralPath $installDir) -and -not (Get-ChildItem -LiteralPath $installDir -Force | Select-Object -First 1)) {
+		Remove-Item -LiteralPath $installDir -Force
+	}
+
+	$userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+
+	if ($userPath) {
+		$entries = @($userPath.Split(";") | Where-Object { $_ -ne "" })
+		$kept = @($entries | Where-Object { $_.TrimEnd("\") -ne $installDir.TrimEnd("\") })
+
+		if ($kept.Count -ne $entries.Count) {
+			[Environment]::SetEnvironmentVariable("Path", $kept -join ";", "User")
+			Write-Host "Removed lunaut from PATH"
+		}
+	}
+
+	if ($purge -and (Test-Path -LiteralPath $cacheDir)) {
+		Remove-Item -LiteralPath $cacheDir -Recurse -Force
+		Write-Host "Removed $cacheDir"
+	}
+
+	if ((Test-Path -LiteralPath $root) -and -not (Get-ChildItem -LiteralPath $root -Force | Select-Object -First 1)) {
+		Remove-Item -LiteralPath $root -Force
+	}
+
+	if ($removed -eq 0) {
+		Write-Host "lunaut was not found in $installDir"
+		return
+	}
+
+	Write-Host "lunaut is uninstalled. Open a new terminal to refresh PATH."
+
+	if (-not $purge) {
+		Write-Host 'The download cache (FFlags, Roblox types) was kept. Run $env:LUNAUT_PURGE=1 before the command to remove it too.'
+	}
+}

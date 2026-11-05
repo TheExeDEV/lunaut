@@ -1,0 +1,6 @@
+{
+  "lunaut.fflags.sync": false,
+  "lunaut.discoverDefinitions": false,
+  "lunaut.baseLuaurc": "base.luaurc",
+  "lunaut.analyzeLuaFiles": false
+}

@@ -1,0 +1,15 @@
+build/
+out/
+.cache/
+compile_commands.json
+
+editors/vscode/node_modules/
+editors/vscode/out/
+editors/vscode/bin/
+editors/vscode/*.vsix
+
+__pycache__/
+tests/fixtures/**/sourcemap.json
+!tests/fixtures/rojo/sourcemap.json
+editors/vscode/LICENSE
+editors/vscode/.vscode-test/

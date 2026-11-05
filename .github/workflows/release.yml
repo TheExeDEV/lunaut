@@ -1,0 +1,87 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            asset: lunaut-win-x64.exe
+            binary: build/lunaut.exe
+          - os: ubuntu-latest
+            asset: lunaut-linux-x64
+            binary: build/lunaut
+          - os: macos-13
+            asset: lunaut-osx-x64
+            binary: build/lunaut
+          - os: macos-latest
+            asset: lunaut-osx-arm64
+            binary: build/lunaut
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
+
+      - name: Build
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build
+
+      - name: Rename
+        shell: bash
+        run: cp ${{ matrix.binary }} ${{ matrix.asset }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+
+  extension:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: lunaut-win-x64.exe
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Package
+        working-directory: editors/vscode
+        env:
+          LUNAUT_BINARY: ${{ github.workspace }}/lunaut-win-x64.exe
+        run: |
+          npm ci
+          npm run package
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lunaut.vsix
+          path: editors/vscode/lunaut.vsix
+
+  publish:
+    needs: [build, extension]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: assets/*
+          generate_release_notes: true

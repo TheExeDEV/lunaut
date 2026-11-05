@@ -1,0 +1,5 @@
+{
+  // tests run offline, so keep Studio sync off
+  "lunaut.fflags.sync": false,
+  "lunaut.discoverDefinitions": false,
+}
