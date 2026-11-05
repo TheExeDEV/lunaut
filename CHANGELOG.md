@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-06
+
 ### Added
 
 - Language server over stdio: diagnostics, hover, completion, go to definition, document symbols, signature help
@@ -18,6 +20,7 @@
 - Find all references and rename across files for locals, module functions and table keys
 - `lunaut analyze` and `lunaut flags` commands
 - VS Code extension, installers, daily Luau update workflow
+- Releases are built, tested and published automatically when the version changes
 
 ### Changed
 

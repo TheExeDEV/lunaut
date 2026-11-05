@@ -2,35 +2,75 @@ name: Release
 
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      release: ${{ steps.version.outputs.release }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Find an unreleased version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(python3 scripts/release.py version)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          if gh api "repos/${{ github.repository }}/git/ref/tags/v$version" > /dev/null 2>&1; then
+            echo "v$version is already released"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "v$version will be released"
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
     name: build (${{ matrix.asset }})
+    needs: check
+    if: needs.check.outputs.release == 'true'
     strategy:
       matrix:
         include:
           - os: windows-latest
             asset: lunaut-win-x64.exe
             binary: build/lunaut.exe
+            generator: -G Ninja
           - os: ubuntu-latest
             asset: lunaut-linux-x64
             binary: build/lunaut
+            generator: -G Ninja
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
       - uses: ilammy/msvc-dev-cmd@v1
         if: runner.os == 'Windows'
 
       - name: Build
         run: |
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-          cmake --build build
+          cmake -S . -B build ${{ matrix.generator }} -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j 4
+
+      - name: Test
+        run: python tests/run.py --binary ${{ matrix.binary }}
 
       - name: Rename
         shell: bash
@@ -43,6 +83,8 @@ jobs:
 
   build-macos:
     name: build (${{ matrix.asset }})
+    needs: check
+    if: needs.check.outputs.release == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -57,11 +99,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Build
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
           cmake --build build -j 4
-          cp build/lunaut ${{ matrix.asset }}
+
+      - name: Test
+        run: python tests/run.py --binary build/lunaut
+
+      - name: Rename
+        run: cp build/lunaut ${{ matrix.asset }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -69,7 +120,7 @@ jobs:
           path: ${{ matrix.asset }}
 
   extension:
-    needs: build
+    needs: [check, build]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -88,6 +139,7 @@ jobs:
           LUNAUT_BINARY: ${{ github.workspace }}/lunaut-win-x64.exe
         run: |
           npm ci
+          npm version ${{ needs.check.outputs.version }} --no-git-tag-version --allow-same-version
           npm run package
 
       - uses: actions/upload-artifact@v4
@@ -96,16 +148,26 @@ jobs:
           path: editors/vscode/lunaut.vsix
 
   publish:
-    needs: [build, build-macos, extension]
-    if: ${{ always() && needs.build.result == 'success' && needs.extension.result == 'success' }}
+    needs: [check, build, build-macos, extension]
+    if: ${{ always() && needs.check.outputs.release == 'true' && needs.build.result == 'success' && needs.extension.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           path: assets
           merge-multiple: true
 
+      - name: Release notes
+        run: python3 scripts/release.py notes ${{ needs.check.outputs.version }} > notes.md
+
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ needs.check.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          name: lunaut ${{ needs.check.outputs.version }}
+          body_path: notes.md
+          prerelease: ${{ contains(needs.check.outputs.version, '-') }}
+          make_latest: ${{ !contains(needs.check.outputs.version, '-') }}
           files: assets/*
-          generate_release_notes: true

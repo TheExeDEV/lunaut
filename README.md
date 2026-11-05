@@ -53,11 +53,12 @@ lunaut is your astronaut in Luau code: it checks types and lint while you type, 
 12. [Environment variables](#environment-variables)
 13. [Tests](#tests)
 14. [Luau updates](#luau-updates)
-15. [Building from source](#building-from-source)
-16. [Source layout](#source-layout)
-17. [Limitations](#limitations)
-18. [Acknowledgements](#acknowledgements)
-19. [License](#license)
+15. [Releasing](#releasing)
+16. [Building from source](#building-from-source)
+17. [Source layout](#source-layout)
+18. [Limitations](#limitations)
+19. [Acknowledgements](#acknowledgements)
+20. [License](#license)
 
 ---
 
@@ -472,6 +473,44 @@ python scripts/update_luau.py
 
 ---
 
+## Releasing
+
+Releases publish themselves. The version lives in one place, `project(lunaut VERSION x.y.z)` in `CMakeLists.txt`.
+
+```bash
+python scripts/release.py bump minor
+```
+
+`bump` takes `patch`, `minor`, `major` or an exact version like `0.3.0`. It writes the version into `CMakeLists.txt` and the VS Code extension and turns `## [Unreleased]` in `CHANGELOG.md` into `## [0.2.0] - <date>`. Commit and push to `main`.
+
+On every push to `main` the [Release](.github/workflows/release.yml) workflow checks whether the tag `v<version>` exists. If it does not, it:
+
+1. builds Windows, Linux and macOS (macOS is skipped when GitHub has no runner),
+2. runs every test on each of them,
+3. packages `lunaut.vsix` with the same version,
+4. creates the tag `v<version>` and publishes the release with the changelog section as notes and every binary attached.
+
+Pushes that do not change the version release nothing. The daily Luau update also bumps the patch version, so merging its pull request ships the new Luau on its own. `python scripts/release.py notes 0.2.0` prints what the release notes will be.
+
+### Branch and tag rules
+
+The rules live in [`.github/rulesets`](.github/rulesets):
+
+| Ruleset | Protects | Rules |
+| --- | --- | --- |
+| `main` | the default branch | no deletion, no force push, changes through pull requests, `build (windows-latest)` and `build (ubuntu-latest)` must pass |
+| `release tags` | tags `v*` | only the Release workflow and admins create them, nobody moves or deletes them |
+
+Admins can bypass both, so you can still push to `main` directly. Apply or update them with
+
+```bash
+python scripts/apply_rulesets.py
+```
+
+or import the JSON files in Settings → Rules → Rulesets → Import a ruleset. GitHub offers rulesets for public repositories and on GitHub Pro and above; on a free private repository the script stops with GitHub's "Upgrade to GitHub Pro or make this repository public" message.
+
+---
+
 ## Building from source
 
 Needs CMake 3.20+, a C++17 compiler (MSVC, GCC or Clang, MinGW works) and git.
@@ -509,7 +548,7 @@ src/Lunaut/
 └── Util/             strings, glob, uri, processes, http, cache
 editors/vscode/       VS Code extension
 installers/           install and uninstall scripts
-scripts/              Luau update script
+scripts/              Luau update, release and ruleset scripts
 tests/                test runner, suites and fixtures
 ```
 
