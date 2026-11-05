@@ -3,6 +3,8 @@ import re
 import subprocess
 import sys
 
+import release
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 VERSION_FILE = ROOT / "luau.version"
 CHANGELOG = ROOT / "CHANGELOG.md"
@@ -62,6 +64,10 @@ def main():
 
 	VERSION_FILE.write_text(latest + "\n", encoding="utf-8")
 	update_changelog(latest)
+
+	next_version = release.get_next("patch")
+	release.write_versions(next_version)
+	release.move_unreleased(next_version)
 	print(latest)
 	return 0
 
