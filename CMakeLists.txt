@@ -16,6 +16,11 @@ endif()
 option(LUNAUT_DEBUG "Enable debug diagnostics" OFF)
 option(LUNAUT_STATIC_RUNTIME "Link C++ runtime statically" ON)
 
+if(MSVC AND LUNAUT_STATIC_RUNTIME)
+	set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+	set(LUAU_STATIC_CRT ON CACHE BOOL "" FORCE)
+endif()
+
 include(FetchContent)
 
 set(LUAU_BUILD_CLI OFF CACHE BOOL "" FORCE)
@@ -46,9 +51,7 @@ target_compile_definitions(lunaut PRIVATE LUNAUT_DEBUG=$<BOOL:${LUNAUT_DEBUG}>)
 
 if(MSVC)
 	target_compile_options(lunaut PRIVATE /W3 /bigobj /utf-8 /permissive-)
-	if(LUNAUT_STATIC_RUNTIME)
-		set_property(TARGET lunaut PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-	endif()
+	target_compile_definitions(lunaut PRIVATE _CRT_SECURE_NO_WARNINGS NOMINMAX)
 else()
 	target_compile_options(lunaut PRIVATE -Wall -Wno-unused-parameter -Wno-unused-function)
 	if(MINGW)

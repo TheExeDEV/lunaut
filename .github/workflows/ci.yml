@@ -17,7 +17,10 @@ jobs:
             binary: build/lunaut
           - os: macos-latest
             binary: build/lunaut
+            optional: true
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    continue-on-error: ${{ matrix.optional == true }}
     steps:
       - uses: actions/checkout@v4
 

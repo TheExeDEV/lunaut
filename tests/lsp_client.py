@@ -15,7 +15,7 @@ def find_binary():
 	explicit = os.environ.get("LUNAUT_BINARY")
 
 	if explicit:
-		return pathlib.Path(explicit)
+		return pathlib.Path(explicit).resolve()
 
 	for name in ("lunaut.exe", "lunaut"):
 		candidate = ROOT.parent / "build" / name
