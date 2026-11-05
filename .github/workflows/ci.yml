@@ -7,6 +7,7 @@ on:
 
 jobs:
   build:
+    name: build (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
@@ -15,12 +16,8 @@ jobs:
             binary: build/lunaut.exe
           - os: ubuntu-latest
             binary: build/lunaut
-          - os: macos-latest
-            binary: build/lunaut
-            optional: true
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
-    continue-on-error: ${{ matrix.optional == true }}
     steps:
       - uses: actions/checkout@v4
 

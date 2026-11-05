@@ -454,6 +454,8 @@ It runs every suite in [`tests/cases`](tests/cases) against `build/lunaut(.exe)`
 | `test_references.py` | references and rename for locals, module functions and table keys, in both solvers |
 | `test_config.py` | `.config.luau` aliases, `lunaut.baseLuaurc`, `lunaut.analyzeLuaFiles`, `require` path completion, `const` hover |
 
+On GitHub the [CI](.github/workflows/ci.yml) workflow builds and tests on Windows and Linux on every push and pull request. macOS runners are often unavailable for private repositories, so macOS has its own [macOS](.github/workflows/macos.yml) workflow: Actions → macOS → Run workflow. Releases try to build macOS too and ship without it if no runner is available.
+
 Fixtures live in [`tests/fixtures`](tests/fixtures): a plain Luau project, two definition setups and a Rojo project with its own sourcemap and Roblox-like definitions, so tests need neither Rojo nor internet.
 
 ---
