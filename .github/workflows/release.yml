@@ -9,6 +9,7 @@ permissions:
 
 jobs:
   build:
+    name: build (${{ matrix.asset }})
     strategy:
       matrix:
         include:
@@ -17,12 +18,6 @@ jobs:
             binary: build/lunaut.exe
           - os: ubuntu-latest
             asset: lunaut-linux-x64
-            binary: build/lunaut
-          - os: macos-15-intel
-            asset: lunaut-osx-x64
-            binary: build/lunaut
-          - os: macos-latest
-            asset: lunaut-osx-arm64
             binary: build/lunaut
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
@@ -40,6 +35,33 @@ jobs:
       - name: Rename
         shell: bash
         run: cp ${{ matrix.binary }} ${{ matrix.asset }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+
+  build-macos:
+    name: build (${{ matrix.asset }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15-intel
+            asset: lunaut-osx-x64
+          - os: macos-latest
+            asset: lunaut-osx-arm64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j 4
+          cp build/lunaut ${{ matrix.asset }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -74,7 +96,8 @@ jobs:
           path: editors/vscode/lunaut.vsix
 
   publish:
-    needs: [build, extension]
+    needs: [build, build-macos, extension]
+    if: ${{ always() && needs.build.result == 'success' && needs.extension.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
