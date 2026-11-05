@@ -74,6 +74,12 @@ class RojoTests(unittest.TestCase):
 		self.assertIn("2 files, 1 errors", result.stdout, result.stdout + result.stderr)
 		self.assertIn("Invalid class name 'Nope'", result.stdout)
 
+	def test_references_through_sourcemap(self):
+		line, character = position_of(self.text, "Util.double", 6)
+		references = self.client.at("textDocument/references", self.uri, line, character)
+		files = sorted(location["uri"].rsplit("/", 1)[1] for location in references)
+		self.assertEqual(files, ["Main.server.luau", "Util.luau"])
+
 	def test_definitions_loaded(self):
 		listed = self.client.request("lunaut/definitions", {})[0]["definitions"]
 		self.assertTrue(all(definition["success"] for definition in listed), listed)

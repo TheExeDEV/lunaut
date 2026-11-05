@@ -590,8 +590,17 @@ public:
 	json get_definition(const json& params);
 	json get_document_symbols(const json& params);
 	json get_signature_help(const json& params);
+	json get_references(const json& params);
+	json get_prepare_rename(const json& params);
+	json get_rename(const json& params);
 
 private:
+	void index_workspace();
+	std::vector<std::pair<Luau::ModuleName, Luau::Location>> find_references(
+		const Luau::ModuleName& name,
+		Luau::Position position,
+		std::optional<Luau::Location>& origin,
+		std::optional<Luau::Location>& declaration);
 	void register_types();
 	void load_definitions();
 	Luau::CheckResult check_module(const Luau::ModuleName& name, bool for_autocomplete);
@@ -632,6 +641,9 @@ public:
 	json on_definition(const json& params);
 	json on_document_symbol(const json& params);
 	json on_signature_help(const json& params);
+	json on_references(const json& params);
+	json on_prepare_rename(const json& params);
+	json on_rename(const json& params);
 	json on_lunaut_status(const json& params);
 	json on_lunaut_fflags(const json& params);
 	json on_lunaut_definitions(const json& params);

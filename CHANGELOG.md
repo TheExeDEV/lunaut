@@ -15,6 +15,7 @@
 - FFlag names and values validated and completed in `lunaut.fflags.override`
 - Completion of aliases, folders and modules inside `require("...")`
 - Hover shows `const x: T` for locals declared with `const`
+- Find all references and rename across files for locals, module functions and table keys
 - `lunaut analyze` and `lunaut flags` commands
 - VS Code extension, installers, daily Luau update workflow
 
