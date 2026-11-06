@@ -1783,6 +1783,46 @@
           "default": true,
           "markdownDescription": "Show a color picker for `Color3.new`, `fromRGB`, `fromHSV` and `fromHex`."
         },
+        "lunaut.completion.autocompleteEnd": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Add `end` (or `until`) after pressing Enter on `function`, `if ... then`, `do`, `repeat` and friends; adds a missing `then` or `do` too."
+        },
+        "lunaut.format.convertQuotes": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Typing `{` inside a `\"string\"` turns it into an interpolated `` `string` ``. Needs `editor.formatOnType`, which the extension turns on for Luau."
+        },
+        "lunaut.format.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Format documents and selections with StyLua."
+        },
+        "lunaut.format.styluaPath": {
+          "type": "string",
+          "default": "stylua",
+          "markdownDescription": "StyLua executable used for formatting."
+        },
+        "lunaut.diagnostics.workspace": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Show diagnostics for every file in the workspace, not only open ones."
+        },
+        "lunaut.rojo.watch": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Keep `rojo sourcemap --watch` running while VS Code is open, instead of regenerating the sourcemap on every change."
+        },
+        "lunaut.studioPlugin.enabled": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Listen for the Roblox Studio companion plugin, which sends the live DataModel. Works with the luau-lsp Studio plugin."
+        },
+        "lunaut.studioPlugin.port": {
+          "type": "integer",
+          "default": 3667,
+          "markdownDescription": "Port for the Studio companion plugin."
+        },
         "lunaut.trace.server": {
           "type": "string",
           "enum": [
@@ -1792,6 +1832,11 @@
           ],
           "default": "off"
         }
+      }
+    },
+    "configurationDefaults": {
+      "[luau]": {
+        "editor.formatOnType": true
       }
     }
   },

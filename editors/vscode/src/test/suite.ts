@@ -107,6 +107,30 @@ export async function run(): Promise<void> {
 		results,
 	);
 
+	await check(
+		"links required files",
+		async () => {
+			const links = await vscode.commands.executeCommand<vscode.DocumentLink[]>("vscode.executeLinkProvider", main);
+			assert.ok(
+				links.some((link) => link.target?.fsPath.endsWith("util.luau")),
+				JSON.stringify(links),
+			);
+		},
+		results,
+	);
+
+	await check(
+		"finds workspace symbols",
+		async () => {
+			const symbols = await vscode.commands.executeCommand<vscode.SymbolInformation[]>("vscode.executeWorkspaceSymbolProvider", "gre");
+			assert.ok(
+				symbols.some((symbol) => symbol.name === "util.greet"),
+				JSON.stringify(symbols.map((symbol) => symbol.name)),
+			);
+		},
+		results,
+	);
+
 	const hintsFile = vscode.Uri.file(path.join(root, "hints.luau"));
 
 	await check(

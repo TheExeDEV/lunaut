@@ -55,6 +55,12 @@ json workspace::get_completion(const json& params)
 		return {{"isIncomplete", false}, {"items", items}};
 	}
 
+	if (params.value("/context/triggerCharacter"_json_pointer, "") == "\n")
+	{
+		invoke_end_completion(params);
+		return {{"isIncomplete", false}, {"items", items}};
+	}
+
 	Luau::Position position = document->to_luau_position(params["position"]);
 	Luau::ModuleName name = resolver.get_module_name(address);
 	check_module(name, true);

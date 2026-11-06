@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Added
+
+- `end` and `until` are inserted after Enter on a block opener, with a missing `then` or `do`
+- Workspace symbols, document highlight, clickable `require` paths and call hierarchy
+- Formatting with StyLua, and `{` in a string turns it into an interpolated string
+- Quick fixes: sort imports, add type annotation, use string require in Rojo projects
+- Diagnostics for the whole workspace with `lunaut.diagnostics.workspace`
+- Roblox Studio companion plugin support (compatible with the luau-lsp plugin)
+- The VS Code extension keeps `rojo sourcemap --watch` running
+- Requests are queued and can be cancelled; diagnostics of dependents are published after the reply
+- Configs for Neovim, Helix and Zed in `editors/`
+
 ## [0.0.3] - 2026-11-06
 
 ### Changed

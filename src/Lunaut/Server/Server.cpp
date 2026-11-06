@@ -36,6 +36,15 @@ const std::unordered_map<std::string_view, request_handler> relevant_requests = 
 	{"textDocument/documentColor", &server::on_document_color},
 	{"textDocument/colorPresentation", &server::on_color_presentation},
 	{"textDocument/foldingRange", &server::on_folding_range},
+	{"textDocument/documentHighlight", &server::on_document_highlight},
+	{"textDocument/documentLink", &server::on_document_link},
+	{"workspace/symbol", &server::on_workspace_symbol},
+	{"textDocument/prepareCallHierarchy", &server::on_prepare_call_hierarchy},
+	{"callHierarchy/incomingCalls", &server::on_incoming_calls},
+	{"callHierarchy/outgoingCalls", &server::on_outgoing_calls},
+	{"textDocument/onTypeFormatting", &server::on_on_type_formatting},
+	{"textDocument/formatting", &server::on_formatting},
+	{"textDocument/rangeFormatting", &server::on_range_formatting},
 	{"lunaut/status", &server::on_lunaut_status},
 	{"lunaut/fflags", &server::on_lunaut_fflags},
 	{"lunaut/definitions", &server::on_lunaut_definitions},
@@ -52,6 +61,8 @@ const std::unordered_map<std::string_view, notification_handler> relevant_notifi
 	{"workspace/didChangeConfiguration", &server::on_did_change_configuration},
 	{"workspace/didChangeWatchedFiles", &server::on_did_change_watched_files},
 	{"workspace/didChangeWorkspaceFolders", &server::on_did_change_workspace_folders},
+	{"$/plugin/full", &server::on_plugin_full},
+	{"$/plugin/clear", &server::on_plugin_clear},
 	{"$/setTrace", &server::on_ignore},
 	{"$/cancelRequest", &server::on_ignore},
 };
@@ -76,25 +87,90 @@ server::server(jsonrpc& rpc, optionsinfo options)
 
 int server::run()
 {
+	std::thread reader(&server::read_messages, this);
+	reader.detach();
+
 	while (state != enumitem_server_state::Exited)
 	{
+		std::optional<json> message = take_message();
+
+		if (!message)
+		{
+			break;
+		}
+
+		process_message(*message);
+
+		bool idle = false;
+
+		{
+			std::lock_guard<std::mutex> guard(queue_lock);
+			idle = queue.empty();
+		}
+
+		if (!idle)
+		{
+			continue;
+		}
+
+		for (const std::unique_ptr<workspace>& folder : workspaces)
+		{
+			folder->flush_diagnostics();
+		}
+
+		if (null_workspace)
+		{
+			null_workspace->flush_diagnostics();
+		}
+	}
+
+	return exit_code;
+}
+
+void server::read_messages()
+{
+	while (true)
+	{
 		result<json> message = rpc.read_message();
+		std::lock_guard<std::mutex> guard(queue_lock);
 
 		if (!message)
 		{
 			if (message.message == "input stream closed")
 			{
-				break;
+				input_closed = true;
+				queue_ready.notify_all();
+				return;
 			}
 
 			stdx::oute(message.message);
 			continue;
 		}
 
-		process_message(message.value);
+		if (message.value.value("method", "") == "$/cancelRequest")
+		{
+			cancelled.insert(message.value.value("/params/id"_json_pointer, json()).dump());
+			continue;
+		}
+
+		queue.push_back(std::move(message.value));
+		queue_ready.notify_all();
+	}
+}
+
+std::optional<json> server::take_message()
+{
+	std::unique_lock<std::mutex> guard(queue_lock);
+	queue_ready.wait(guard, [this]() { return !queue.empty() || input_closed; });
+
+	if (queue.empty())
+	{
+		return std::nullopt;
 	}
 
-	return exit_code;
+	json message = std::move(queue.front());
+	queue.pop_front();
+	return message;
 }
 
 void server::send_log(enumitem_message_type type, const std::string& message)
@@ -123,10 +199,22 @@ void server::send_diagnostics(const std::string& address, std::optional<int> ver
 	rpc.send_notification("textDocument/publishDiagnostics", params);
 }
 
+void server::send_edit(const json& edit, bool move_cursor)
+{
+	if (extension_client)
+	{
+		rpc.send_notification("lunaut/applyEdit", {{"edit", edit}, {"moveCursor", move_cursor}});
+		return;
+	}
+
+	rpc.send_request("workspace/applyEdit", {{"label", "insert end"}, {"edit", edit}});
+}
+
 json server::on_initialize(const json& params)
 {
 	client_settings = priv::get_client_settings(params.value("initializationOptions", json::object()));
 	client_capabilities = params.value("capabilities", json::object());
+	extension_client = params.value("initializationOptions", json::object()).contains("vscode");
 
 	std::vector<std::string> roots;
 
@@ -235,6 +323,79 @@ json server::on_folding_range(const json& params)
 	return get_workspace(params["textDocument"].value("uri", "")).get_folding_ranges(params);
 }
 
+json server::on_document_highlight(const json& params)
+{
+	return get_workspace(params["textDocument"].value("uri", "")).get_document_highlights(params);
+}
+
+json server::on_document_link(const json& params)
+{
+	return get_workspace(params["textDocument"].value("uri", "")).get_document_links(params);
+}
+
+json server::on_workspace_symbol(const json& params)
+{
+	json symbols = json::array();
+
+	for (const std::unique_ptr<workspace>& folder : workspaces)
+	{
+		folder->initialize();
+
+		for (json& symbol : folder->get_workspace_symbols(params))
+		{
+			symbols.push_back(std::move(symbol));
+		}
+	}
+
+	return symbols;
+}
+
+json server::on_prepare_call_hierarchy(const json& params)
+{
+	return get_workspace(params["textDocument"].value("uri", "")).get_call_hierarchy_items(params);
+}
+
+json server::on_incoming_calls(const json& params)
+{
+	return get_workspace(params["item"].value("uri", "")).get_incoming_calls(params);
+}
+
+json server::on_outgoing_calls(const json& params)
+{
+	return get_workspace(params["item"].value("uri", "")).get_outgoing_calls(params);
+}
+
+json server::on_on_type_formatting(const json& params)
+{
+	return get_workspace(params["textDocument"].value("uri", "")).get_on_type_edits(params);
+}
+
+json server::on_formatting(const json& params)
+{
+	return get_workspace(params["textDocument"].value("uri", "")).get_formatting(params);
+}
+
+json server::on_range_formatting(const json& params)
+{
+	return get_workspace(params["textDocument"].value("uri", "")).get_formatting(params);
+}
+
+void server::on_plugin_full(const json& params)
+{
+	for (const std::unique_ptr<workspace>& folder : workspaces)
+	{
+		folder->apply_plugin_tree(params);
+	}
+}
+
+void server::on_plugin_clear(const json& params)
+{
+	for (const std::unique_ptr<workspace>& folder : workspaces)
+	{
+		folder->apply_plugin_tree(nullptr);
+	}
+}
+
 json server::on_lunaut_status(const json& params)
 {
 	json statuses = json::array();
@@ -313,6 +474,7 @@ void server::on_initialized(const json& params)
 	for (const std::unique_ptr<workspace>& folder : workspaces)
 	{
 		folder->initialize();
+		folder->publish_workspace_diagnostics();
 	}
 
 	register_watchers();
@@ -447,6 +609,16 @@ void server::process_message(const json& message)
 	}
 
 	const json& id = message["id"];
+
+	{
+		std::lock_guard<std::mutex> guard(queue_lock);
+
+		if (cancelled.erase(id.dump()) > 0)
+		{
+			rpc.send_error(id, enumitem_error_code::RequestCancelled, "request cancelled");
+			return;
+		}
+	}
 
 	if (state == enumitem_server_state::Uninitialized && method != "initialize")
 	{

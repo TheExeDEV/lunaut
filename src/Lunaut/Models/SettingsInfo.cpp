@@ -50,6 +50,15 @@ const std::unordered_map<std::string_view, std::string_view> relevant_vscode_key
 	{"lunaut.completion.autoImports", "/features/auto_imports"},
 	{"lunaut.semanticTokens.enabled", "/features/semantic_tokens"},
 	{"lunaut.colors.enabled", "/features/colors"},
+	{"lunaut.completion.autocompleteEnd", "/features/autocomplete_end"},
+	{"lunaut.format.convertQuotes", "/features/convert_quotes"},
+	{"lunaut.format.enabled", "/features/formatting"},
+	{"lunaut.format.styluaPath", "/features/stylua"},
+	{"lunaut.diagnostics.workspace", "/diagnostics/workspace"},
+	{"luau-lsp.completion.autocompleteEnd", "/features/autocomplete_end"},
+	{"luau-lsp.autocompleteEnd", "/features/autocomplete_end"},
+	{"luau-lsp.format.convertQuotes", "/features/convert_quotes"},
+	{"luau-lsp.diagnostics.workspace", "/diagnostics/workspace"},
 	{"lunaut.documentationFiles", "/documentation_files"},
 	{"lunaut.disabledGlobals", "/disabled_globals"},
 	{"luau-lsp.platform.type", "/platform"},
@@ -161,6 +170,7 @@ settingsinfo settingsinfo::from_json(const json& data, const settingsinfo& base)
 		const json& diagnostics = data["diagnostics"];
 		priv::read(diagnostics, "lint", info.diagnostics.lint);
 		priv::read(diagnostics, "include_dependents", info.diagnostics.include_dependents);
+		priv::read(diagnostics, "workspace", info.diagnostics.workspace);
 	}
 
 	if (data.contains("inlay_hints") && data["inlay_hints"].is_object())
@@ -188,6 +198,10 @@ settingsinfo settingsinfo::from_json(const json& data, const settingsinfo& base)
 		priv::read(features, "auto_imports", info.features.auto_imports);
 		priv::read(features, "semantic_tokens", info.features.semantic_tokens);
 		priv::read(features, "colors", info.features.colors);
+		priv::read(features, "autocomplete_end", info.features.autocomplete_end);
+		priv::read(features, "convert_quotes", info.features.convert_quotes);
+		priv::read(features, "formatting", info.features.formatting);
+		priv::read(features, "stylua", info.features.stylua);
 	}
 
 	priv::read(data, "documentation_files", info.documentation_files);
@@ -328,7 +342,8 @@ json settingsinfo::to_json() const
 		  {"include_non_scripts", rojo.include_non_scripts},
 		  {"strict_datamodel_types", rojo.strict_datamodel_types},
 		  {"executable", rojo.executable}}},
-		{"diagnostics", {{"lint", diagnostics.lint}, {"include_dependents", diagnostics.include_dependents}}},
+		{"diagnostics",
+		 {{"lint", diagnostics.lint}, {"include_dependents", diagnostics.include_dependents}, {"workspace", diagnostics.workspace}}},
 		{"ignore_globs", ignore_globs},
 		{"analyze_lua_files", analyze_lua_files},
 		{"base_luaurc", base_luaurc},
@@ -351,6 +366,10 @@ json settingsinfo::to_json() const
 			 {"auto_imports", features.auto_imports},
 			 {"semantic_tokens", features.semantic_tokens},
 			 {"colors", features.colors},
+			 {"autocomplete_end", features.autocomplete_end},
+			 {"convert_quotes", features.convert_quotes},
+			 {"formatting", features.formatting},
+			 {"stylua", features.stylua},
 		 }},
 	};
 }

@@ -63,4 +63,38 @@ void workspace::publish_diagnostics(const std::string& address)
 	owner.send_diagnostics(address, version, get_diagnostics(address));
 }
 
+void workspace::publish_workspace_diagnostics()
+{
+	if (!settings.diagnostics.workspace)
+	{
+		return;
+	}
+
+	index_workspace();
+
+	std::vector<Luau::ModuleName> modules;
+
+	for (const auto& [module_name, node] : frontend.sourceNodes)
+	{
+		modules.push_back(module_name);
+	}
+
+	for (const Luau::ModuleName& module_name : modules)
+	{
+		std::optional<std::string> path = resolver.get_real_path(module_name);
+
+		if (!path || is_definition_file(*path) || stdx::ends_with(*path, ".d.luau"))
+		{
+			continue;
+		}
+
+		std::error_code error;
+
+		if (std::filesystem::is_regular_file(*path, error))
+		{
+			publish_diagnostics(uri::from_path(*path));
+		}
+	}
+}
+
 }
