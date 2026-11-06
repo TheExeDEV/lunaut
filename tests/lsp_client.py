@@ -198,7 +198,11 @@ class LspClient:
 			"textDocument/didChange",
 			{"textDocument": {"uri": uri, "version": version}, "contentChanges": [{"text": text}]},
 		)
-		params = self.wait_for("textDocument/publishDiagnostics", lambda params: to_key(params["uri"]) == to_key(uri), timeout)
+		params = self.wait_for(
+			"textDocument/publishDiagnostics",
+			lambda params: to_key(params["uri"]) == to_key(uri) and params.get("version") == version,
+			timeout,
+		)
 		return params["diagnostics"]
 
 	def at(self, method, uri, line, character):
