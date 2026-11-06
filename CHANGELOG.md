@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-06
+
 ### Added
 
 - Inlay hints for variable types, parameter names, parameter types and return types, each with its own setting
