@@ -9,5 +9,8 @@
       "name": "roblox",
       "priority": 1000
     }
+  ],
+  "lunaut.documentationFiles": [
+    "types/docs.json"
   ]
 }

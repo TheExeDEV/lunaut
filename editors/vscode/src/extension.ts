@@ -33,41 +33,45 @@ function getServerPath(context: vscode.ExtensionContext): string {
 	return executableName;
 }
 
-function getServerSettings(): object {
-	const config = vscode.workspace.getConfiguration("lunaut");
+function collectExplicit(section: string, flat: Record<string, unknown>): void {
+	const config = vscode.workspace.getConfiguration(section);
+	const visit = (value: unknown, prefix: string): void => {
+		if (prefix.length > 0) {
+			const inspected = config.inspect(prefix);
+			const explicit = inspected?.workspaceFolderValue ?? inspected?.workspaceValue ?? inspected?.globalValue;
 
-	return {
-		platform: config.get("platform"),
-		fflags: {
-			enable_by_default: config.get("fflags.enableByDefault"),
-			sync: config.get("fflags.sync"),
-			enable_new_solver: config.get("fflags.enableNewSolver"),
-			override: config.get("fflags.override"),
-		},
-		definitions: config.get("definitions"),
-		discover_definitions: config.get("discoverDefinitions"),
-		roblox: {
-			download_types: config.get("roblox.downloadTypes"),
-			security_level: config.get("roblox.securityLevel"),
-			types_priority: config.get("roblox.typesPriority"),
-		},
-		rojo: {
-			enabled: config.get("rojo.enabled"),
-			project_file: config.get("rojo.projectFile"),
-			sourcemap_file: config.get("rojo.sourcemapFile"),
-			autogenerate: config.get("rojo.autogenerate"),
-			include_non_scripts: config.get("rojo.includeNonScripts"),
-			strict_datamodel_types: config.get("rojo.strictDatamodelTypes"),
-			executable: config.get("rojo.executable"),
-		},
-		diagnostics: {
-			lint: config.get("diagnostics.lint"),
-			include_dependents: config.get("diagnostics.includeDependents"),
-		},
-		ignore_globs: config.get("ignoreGlobs"),
-		analyze_lua_files: config.get("analyzeLuaFiles"),
-		base_luaurc: expandHome(config.get<string>("baseLuaurc", "")),
+			if (explicit !== undefined) {
+				flat[`${section}.${prefix}`] = explicit;
+				return;
+			}
+		}
+
+		if (value === null || typeof value !== "object" || Array.isArray(value)) {
+			return;
+		}
+
+		for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+			if (typeof child !== "function") {
+				visit(child, prefix.length > 0 ? `${prefix}.${key}` : key);
+			}
+		}
 	};
+
+	visit(JSON.parse(JSON.stringify(config)), "");
+}
+
+function getServerSettings(): object {
+	const flat: Record<string, unknown> = {};
+	collectExplicit("luau-lsp", flat);
+	collectExplicit("lunaut", flat);
+
+	for (const key of ["lunaut.baseLuaurc", "luau-lsp.server.baseLuaurc"]) {
+		if (typeof flat[key] === "string") {
+			flat[key] = expandHome(flat[key] as string);
+		}
+	}
+
+	return { vscode: flat };
 }
 
 async function startClient(context: vscode.ExtensionContext): Promise<void> {
@@ -84,7 +88,7 @@ async function startClient(context: vscode.ExtensionContext): Promise<void> {
 			{ scheme: "untitled", language: "luau" },
 			{ scheme: "file", language: "lua" },
 		],
-		initializationOptions: { lunaut: getServerSettings() },
+		initializationOptions: getServerSettings(),
 		outputChannel: output,
 		synchronize: {
 			fileEvents: [
@@ -140,11 +144,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ getC
 		}),
 		vscode.commands.registerCommand("lunaut.regenerateSourcemap", () => showJson("Sourcemap", "lunaut/sourcemap", { regenerate: true })),
 		vscode.workspace.onDidChangeConfiguration(async (event) => {
-			if (!event.affectsConfiguration("lunaut")) {
+			if (!event.affectsConfiguration("lunaut") && !event.affectsConfiguration("luau-lsp")) {
 				return;
 			}
 
-			if (event.affectsConfiguration("lunaut.path") || event.affectsConfiguration("lunaut.fflags")) {
+			if (event.affectsConfiguration("lunaut.path") || event.affectsConfiguration("lunaut.fflags") || event.affectsConfiguration("luau-lsp.fflags")) {
 				const choice = await vscode.window.showInformationMessage("Lunaut needs a restart to apply this change.", "Restart");
 
 				if (choice === "Restart") {
@@ -154,7 +158,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ getC
 				return;
 			}
 
-			await client?.sendNotification("workspace/didChangeConfiguration", { settings: { lunaut: getServerSettings() } });
+			await client?.sendNotification("workspace/didChangeConfiguration", { settings: getServerSettings() });
 		}),
 	);
 

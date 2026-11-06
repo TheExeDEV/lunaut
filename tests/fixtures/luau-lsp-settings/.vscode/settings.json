@@ -1,0 +1,11 @@
+{
+  "luau-lsp.platform.type": "standard",
+  "luau-lsp.fflags.sync": false,
+  "luau-lsp.types.definitionFiles": {
+    "@shapes": "types/shapes.d.luau"
+  },
+  "luau-lsp.types.disabledGlobals": ["table.clone"],
+  "luau-lsp.inlayHints.variableTypes": false,
+  "luau-lsp.inlayHints.parameterNames": "all",
+  "lunaut.inlayHints.parameterNames": "none",
+}

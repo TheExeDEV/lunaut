@@ -32,8 +32,37 @@ json protocol::get_capabilities()
 		{"definitionProvider", true},
 		{"documentSymbolProvider", true},
 		{"referencesProvider", true},
+		{"inlayHintProvider", true},
+		{"semanticTokensProvider", {{"legend", get_semantic_legend()}, {"full", true}, {"range", false}}},
+		{"codeActionProvider", {{"codeActionKinds", {"quickfix"}}}},
+		{"colorProvider", true},
+		{"foldingRangeProvider", true},
 		{"renameProvider", {{"prepareProvider", true}}},
 		{"workspace", {{"workspaceFolders", {{"supported", true}, {"changeNotifications", true}}}}},
+	};
+}
+
+json protocol::get_semantic_legend()
+{
+	return {
+		{"tokenTypes",
+		 {
+			 "namespace",
+			 "type",
+			 "class",
+			 "enum",
+			 "interface",
+			 "struct",
+			 "typeParameter",
+			 "parameter",
+			 "variable",
+			 "property",
+			 "enumMember",
+			 "event",
+			 "function",
+			 "method",
+		 }},
+		{"tokenModifiers", {"declaration", "readonly", "defaultLibrary", "deprecated"}},
 	};
 }
 

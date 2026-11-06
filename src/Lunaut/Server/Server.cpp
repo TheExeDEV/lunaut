@@ -30,6 +30,12 @@ const std::unordered_map<std::string_view, request_handler> relevant_requests = 
 	{"textDocument/references", &server::on_references},
 	{"textDocument/prepareRename", &server::on_prepare_rename},
 	{"textDocument/rename", &server::on_rename},
+	{"textDocument/inlayHint", &server::on_inlay_hint},
+	{"textDocument/semanticTokens/full", &server::on_semantic_tokens},
+	{"textDocument/codeAction", &server::on_code_action},
+	{"textDocument/documentColor", &server::on_document_color},
+	{"textDocument/colorPresentation", &server::on_color_presentation},
+	{"textDocument/foldingRange", &server::on_folding_range},
 	{"lunaut/status", &server::on_lunaut_status},
 	{"lunaut/fflags", &server::on_lunaut_fflags},
 	{"lunaut/definitions", &server::on_lunaut_definitions},
@@ -48,6 +54,11 @@ const std::unordered_map<std::string_view, notification_handler> relevant_notifi
 	{"workspace/didChangeWorkspaceFolders", &server::on_did_change_workspace_folders},
 	{"$/setTrace", &server::on_ignore},
 	{"$/cancelRequest", &server::on_ignore},
+};
+
+const std::vector<std::pair<std::string_view, std::string_view>> relevant_refreshes = {
+	{"/workspace/inlayHint/refreshSupport", "workspace/inlayHint/refresh"},
+	{"/workspace/semanticTokens/refreshSupport", "workspace/semanticTokens/refresh"},
 };
 
 const std::vector<std::string_view> watched_globs = {"**/*.luau", "**/*.lua", "**/.luaurc", "**/sourcemap.json", "**/*.project.json"};
@@ -194,6 +205,36 @@ json server::on_rename(const json& params)
 	return get_workspace(params["textDocument"].value("uri", "")).get_rename(params);
 }
 
+json server::on_inlay_hint(const json& params)
+{
+	return get_workspace(params["textDocument"].value("uri", "")).get_inlay_hints(params);
+}
+
+json server::on_semantic_tokens(const json& params)
+{
+	return get_workspace(params["textDocument"].value("uri", "")).get_semantic_tokens(params);
+}
+
+json server::on_code_action(const json& params)
+{
+	return get_workspace(params["textDocument"].value("uri", "")).get_code_actions(params);
+}
+
+json server::on_document_color(const json& params)
+{
+	return get_workspace(params["textDocument"].value("uri", "")).get_document_colors(params);
+}
+
+json server::on_color_presentation(const json& params)
+{
+	return get_workspace(params["textDocument"].value("uri", "")).get_color_presentations(params);
+}
+
+json server::on_folding_range(const json& params)
+{
+	return get_workspace(params["textDocument"].value("uri", "")).get_folding_ranges(params);
+}
+
 json server::on_lunaut_status(const json& params)
 {
 	json statuses = json::array();
@@ -318,6 +359,14 @@ void server::on_did_change_configuration(const json& params)
 	for (const std::unique_ptr<workspace>& folder : workspaces)
 	{
 		folder->set_settings(get_settings_for(folder->get_root()));
+	}
+
+	for (const auto& [capability, method] : priv::relevant_refreshes)
+	{
+		if (client_capabilities.value(json::json_pointer(std::string(capability)), false))
+		{
+			rpc.send_request(std::string(method), nullptr);
+		}
 	}
 }
 
@@ -506,6 +555,11 @@ json get_client_settings(const json& value)
 	if (!value.is_object())
 	{
 		return json::object();
+	}
+
+	if (value.contains("vscode") && value["vscode"].is_object())
+	{
+		return settingsinfo::convert_vscode_settings(value["vscode"]);
 	}
 
 	if (value.contains("lunaut") && value["lunaut"].is_object())

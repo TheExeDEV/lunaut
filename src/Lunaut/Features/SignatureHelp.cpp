@@ -6,6 +6,7 @@
 #include "core.d.hpp"
 
 #include "Luau/AstQuery.h"
+#include "Luau/PrettyPrinter.h"
 #include "Luau/ToString.h"
 #include "Luau/TypePack.h"
 
@@ -17,7 +18,6 @@ namespace priv
 {
 
 Luau::AstExprCall* find_call(const Luau::SourceModule& source, Luau::Position position);
-std::string get_callee_name(Luau::AstExpr* expr);
 
 }
 }
@@ -69,7 +69,18 @@ json workspace::get_signature_help(const json& params)
 	options.functionTypeArguments = true;
 	options.hideFunctionSelfArgument = call->self;
 
-	std::string label = Luau::toStringNamedFunction(priv::get_callee_name(call->func), *function, options);
+	std::string signature = Luau::toStringNamedFunction("", *function, options);
+
+	for (size_t found = signature.find("_: "); found != std::string::npos; found = signature.find("_: ", found))
+	{
+		signature.erase(found, 3);
+	}
+
+	std::string label = "function " + stdx::trim(Luau::toString(call->func)) + signature;
+	Luau::AstExprIndexName* index = call->func->as<Luau::AstExprIndexName>();
+	Luau::Position anchor = index != nullptr ? index->indexLocation.begin : call->func->location.begin;
+	std::optional<std::string> symbol =
+		settings.features.documentation ? Luau::getDocumentationSymbolAtPosition(*source, *module, anchor) : std::nullopt;
 	auto [arguments, tail] = Luau::flatten(function->argTypes);
 	size_t skip = call->self && function->hasSelf ? 1 : 0;
 	json parameters = json::array();
@@ -83,7 +94,17 @@ json workspace::get_signature_help(const json& params)
 			parameter = function->argNames[i]->name + ": " + parameter;
 		}
 
-		parameters.push_back({{"label", parameter}});
+		json entry = {{"label", parameter}};
+
+		if (symbol)
+		{
+			if (std::optional<std::string> notes = docs.get_parameter_markdown(*symbol, i))
+			{
+				entry["documentation"] = protocol::make_markdown(*notes);
+			}
+		}
+
+		parameters.push_back(entry);
 	}
 
 	size_t active = 0;
@@ -96,8 +117,18 @@ json workspace::get_signature_help(const json& params)
 		}
 	}
 
+	json signature_info = {{"label", label}, {"parameters", parameters}};
+
+	if (symbol)
+	{
+		if (std::optional<std::string> notes = docs.get_markdown(*symbol))
+		{
+			signature_info["documentation"] = protocol::make_markdown(*notes);
+		}
+	}
+
 	return {
-		{"signatures", {{{"label", label}, {"parameters", parameters}}}},
+		{"signatures", json::array({signature_info})},
 		{"activeSignature", 0},
 		{"activeParameter", parameters.empty() ? 0 : std::min(active, parameters.size() - 1)},
 	};
@@ -123,26 +154,6 @@ Luau::AstExprCall* find_call(const Luau::SourceModule& source, Luau::Position po
 	}
 
 	return nullptr;
-}
-
-std::string get_callee_name(Luau::AstExpr* expr)
-{
-	if (Luau::AstExprGlobal* global = expr->as<Luau::AstExprGlobal>())
-	{
-		return global->name.value;
-	}
-
-	if (Luau::AstExprLocal* local = expr->as<Luau::AstExprLocal>())
-	{
-		return local->local->name.value;
-	}
-
-	if (Luau::AstExprIndexName* index = expr->as<Luau::AstExprIndexName>())
-	{
-		return index->index.value;
-	}
-
-	return "function";
 }
 
 }

@@ -104,6 +104,8 @@ void attach(Luau::TableType::Props& props, std::string_view name, const std::sha
 void apply_instance(Luau::GlobalTypes& globals);
 void apply_constructors(Luau::GlobalTypes& globals, const json& metadata);
 void apply_enums(Luau::GlobalTypes& globals);
+void apply_library_documentation(Luau::GlobalTypes& globals, const std::string& library);
+std::string to_luau_symbol(std::string symbol);
 std::vector<std::string> get_list(const json& metadata, const char* key);
 
 }
@@ -132,6 +134,8 @@ std::optional<json> robloxmagic::get_metadata(const std::string& source)
 
 void robloxmagic::apply(Luau::GlobalTypes& globals, const json& metadata)
 {
+	priv::apply_library_documentation(globals, "debug");
+	priv::apply_library_documentation(globals, "utf8");
 	priv::apply_instance(globals);
 	priv::apply_constructors(globals, metadata);
 	priv::apply_enums(globals);
@@ -544,6 +548,52 @@ void apply_enums(Luau::GlobalTypes& globals)
 	}
 
 	globals.globalScope->importedTypeBindings["Enum"] = enums;
+}
+
+void apply_library_documentation(Luau::GlobalTypes& globals, const std::string& library)
+{
+	const auto binding = globals.globalScope->bindings.find(Luau::AstName(globals.globalNames.names->get(library.c_str())));
+
+	if (binding == globals.globalScope->bindings.end())
+	{
+		return;
+	}
+
+	if (binding->second.documentationSymbol)
+	{
+		binding->second.documentationSymbol = to_luau_symbol(*binding->second.documentationSymbol);
+	}
+
+	Luau::TypeId type = binding->second.typeId;
+	Luau::Type* mutable_type = Luau::asMutable(type);
+
+	if (mutable_type->documentationSymbol)
+	{
+		mutable_type->documentationSymbol = to_luau_symbol(*mutable_type->documentationSymbol);
+	}
+
+	if (Luau::TableType* table = Luau::getMutable<Luau::TableType>(type))
+	{
+		table->name = "typeof(" + library + ")";
+
+		for (auto& [name, property] : table->props)
+		{
+			if (property.documentationSymbol)
+			{
+				property.documentationSymbol = to_luau_symbol(*property.documentationSymbol);
+			}
+		}
+	}
+}
+
+std::string to_luau_symbol(std::string symbol)
+{
+	if (stdx::starts_with(symbol, "@roblox"))
+	{
+		symbol.replace(0, 7, "@luau");
+	}
+
+	return symbol;
 }
 
 std::vector<std::string> get_list(const json& metadata, const char* key)

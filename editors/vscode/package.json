@@ -1696,6 +1696,93 @@
             "**/_Index/**"
           ]
         },
+        "lunaut.inlayHints.variableTypes": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show the inferred type after local variables and loop variables."
+        },
+        "lunaut.inlayHints.parameterNames": {
+          "type": "string",
+          "enum": [
+            "none",
+            "literals",
+            "all"
+          ],
+          "default": "literals",
+          "enumDescriptions": [
+            "No parameter names",
+            "Only before literal arguments like `5` or `\"text\"`",
+            "Before every argument"
+          ],
+          "markdownDescription": "Show parameter names before call arguments."
+        },
+        "lunaut.inlayHints.parameterTypes": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Show the inferred type of function parameters without annotations."
+        },
+        "lunaut.inlayHints.functionReturnTypes": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show the inferred return type of functions without a return annotation."
+        },
+        "lunaut.inlayHints.hideHintsForErrorTypes": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Do not show hints for types that failed to infer."
+        },
+        "lunaut.inlayHints.hideHintsForMatchingParameterNames": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Do not show a parameter name when the argument already has that name."
+        },
+        "lunaut.inlayHints.typeHintMaxLength": {
+          "type": "integer",
+          "default": 50,
+          "minimum": 10,
+          "markdownDescription": "Longer type hints are cut."
+        },
+        "lunaut.inlayHints.makeInsertable": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Double-clicking a type hint inserts it as an annotation."
+        },
+        "lunaut.hover.documentation": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show documentation in hover and completion: Roblox and Luau API docs and comments above declarations. Downloads the API docs once a day."
+        },
+        "lunaut.documentationFiles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Extra documentation files in the Roblox API docs JSON format."
+        },
+        "lunaut.disabledGlobals": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Globals to remove: whole libraries like `table` or members like `table.clone`."
+        },
+        "lunaut.completion.autoImports": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Suggest modules and Roblox services that are not required yet and add the `require` or `GetService` line."
+        },
+        "lunaut.semanticTokens.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Color locals, parameters, globals, properties, methods and types by meaning."
+        },
+        "lunaut.colors.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show a color picker for `Color3.new`, `fromRGB`, `fromHSV` and `fromHex`."
+        },
         "lunaut.trace.server": {
           "type": "string",
           "enum": [

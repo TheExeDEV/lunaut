@@ -1,0 +1,26 @@
+{
+  "@roblox/globaltype/Instance.FindFirstChildWhichIsA": {
+    "documentation": "Returns the first child that is of the given class.",
+    "params": [
+      {
+        "name": "self",
+        "documentation": "@roblox/globaltype/Instance.FindFirstChildWhichIsA/param/0"
+      },
+      {
+        "name": "className",
+        "documentation": "@roblox/globaltype/Instance.FindFirstChildWhichIsA/param/1"
+      }
+    ],
+    "returns": [
+      "@roblox/globaltype/Instance.FindFirstChildWhichIsA/return/0"
+    ],
+    "learn_more_link": "https://create.roblox.com/docs/reference/engine/classes/Instance#FindFirstChildWhichIsA",
+    "code_sample": "local model = workspace:FindFirstChildWhichIsA(\"Model\")"
+  },
+  "@roblox/globaltype/Instance.FindFirstChildWhichIsA/param/1": {
+    "documentation": "The class to look for."
+  },
+  "@roblox/globaltype/Instance.FindFirstChildWhichIsA/return/0": {
+    "documentation": "The child, or nil."
+  }
+}

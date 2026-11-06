@@ -41,12 +41,12 @@ class LspTests(unittest.TestCase):
 	def test_hover_local(self):
 		line, character = position_of(self.main_text, "count", 1)
 		hover = self.client.at("textDocument/hover", self.main_uri, line, character)
-		self.assertIn("count: number", hover["contents"]["value"])
+		self.assertIn("local count: number", hover["contents"]["value"])
 
 	def test_hover_function(self):
 		line, character = position_of(self.main_text, "util.add", 6)
 		hover = self.client.at("textDocument/hover", self.main_uri, line, character)
-		self.assertIn("function add(a: number, b: number): number", hover["contents"]["value"])
+		self.assertIn("function util.add(a: number, b: number): number", hover["contents"]["value"])
 
 	def test_completion_members(self):
 		text = self.main_text.replace("print(util.greet", "print(util.")
