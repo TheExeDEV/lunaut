@@ -582,10 +582,10 @@ python scripts/update_luau.py
 Releases publish themselves. The version lives in one place, `project(lunaut VERSION x.y.z)` in `CMakeLists.txt`.
 
 ```bash
-python scripts/release.py bump minor
+python scripts/release.py bump
 ```
 
-`bump` takes `patch`, `minor`, `major` or an exact version like `0.3.0`. It writes the version into `CMakeLists.txt` and the VS Code extension and turns `## [Unreleased]` in `CHANGELOG.md` into `## [0.2.0] - <date>`. Commit and push to `main`.
+Versions count up by `0.0.1` and carry over every ten, like an odometer: `0.0.1`, `0.0.2` … `0.0.9`, then `0.1.0`; after `0.9.9` comes `1.0.0`. `bump` without arguments picks the next one; it also takes an exact version like `0.3.0`. It writes the version into `CMakeLists.txt` and the VS Code extension and turns `## [Unreleased]` in `CHANGELOG.md` into `## [0.0.4] - <date>`. Commit and push to `main`.
 
 On every push to `main` the [Release](.github/workflows/release.yml) workflow checks whether the tag `v<version>` exists. If it does not, it:
 
@@ -594,7 +594,7 @@ On every push to `main` the [Release](.github/workflows/release.yml) workflow ch
 3. packages `lunaut.vsix` with the same version,
 4. creates the tag `v<version>` and publishes the release with the changelog section as notes and every binary attached.
 
-Pushes that do not change the version release nothing. The daily Luau update also bumps the patch version, so merging its pull request ships the new Luau on its own. `python scripts/release.py notes 0.2.0` prints what the release notes will be.
+Pushes that do not change the version release nothing. To rebuild any commit under a chosen version, run the workflow by hand: Actions → Release → Run workflow, with `ref` (commit, branch or tag), `version` and `latest` (whether it becomes the latest release). The daily Luau update also bumps the patch version, so merging its pull request ships the new Luau on its own. `python scripts/release.py notes 0.2.0` prints what the release notes will be.
 
 ### Branch and tag rules
 

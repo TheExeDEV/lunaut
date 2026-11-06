@@ -2,7 +2,13 @@
 
 ## [Unreleased]
 
-## [0.2.0] - 2026-11-06
+### Changed
+
+- Versions count up by 0.0.1 and carry over every ten: 0.0.9 is followed by 0.1.0, 0.9.9 by 1.0.0
+- Earlier releases are renumbered: 0.1.0 is now 0.0.1, 0.2.0 is now 0.0.2
+- The Release workflow can be started by hand to build any commit under any version
+
+## [0.0.2] - 2026-11-06
 
 ### Added
 
@@ -18,7 +24,7 @@
 
 - Hover, completion details and signature help use the same format as luau-lsp
 
-## [0.1.0] - 2026-11-06
+## [0.0.1] - 2026-11-05
 
 ### Added
 

@@ -65,7 +65,7 @@ def main():
 	VERSION_FILE.write_text(latest + "\n", encoding="utf-8")
 	update_changelog(latest)
 
-	next_version = release.get_next("patch")
+	next_version = release.get_next()
 	release.write_versions(next_version)
 	release.move_unreleased(next_version)
 	print(latest)

@@ -31,8 +31,21 @@ def parse(version):
 	return tuple(int(part) for part in match.groups()[:3])
 
 
-def get_next(kind):
+def get_next(kind="next"):
 	major, minor, patch = parse(get_version())
+
+	if kind == "next":
+		patch += 1
+
+		if patch == 10:
+			patch = 0
+			minor += 1
+
+		if minor == 10:
+			minor = 0
+			major += 1
+
+		return f"{major}.{minor}.{patch}"
 
 	if kind == "major":
 		return f"{major + 1}.0.0"
@@ -90,7 +103,7 @@ def command_version(arguments):
 
 
 def command_bump(arguments):
-	target = arguments.version if arguments.version not in ("major", "minor", "patch") else get_next(arguments.version)
+	target = arguments.version if arguments.version not in ("next", "major", "minor", "patch") else get_next(arguments.version)
 
 	if parse(target) <= parse(get_version()) and "-" not in target:
 		raise SystemExit(f"{target} is not newer than {get_version()}")
@@ -110,8 +123,8 @@ def main():
 
 	commands.add_parser("version", help="print the current version").set_defaults(handler=command_version)
 
-	bump = commands.add_parser("bump", help="set a new version: X.Y.Z, major, minor or patch")
-	bump.add_argument("version")
+	bump = commands.add_parser("bump", help="set a new version: next (default, 0.0.9 -> 0.1.0), X.Y.Z, major, minor or patch")
+	bump.add_argument("version", nargs="?", default="next")
 	bump.set_defaults(handler=command_bump)
 
 	notes = commands.add_parser("notes", help="print release notes from CHANGELOG.md")
