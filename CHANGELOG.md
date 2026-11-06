@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.0.3] - 2026-11-06
+
 ### Changed
 
 - Versions count up by 0.0.1 and carry over every ten: 0.0.9 is followed by 0.1.0, 0.9.9 by 1.0.0
