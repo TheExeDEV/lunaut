@@ -156,9 +156,9 @@ void workspace::update_document(const std::string& address, const json& changes,
 	std::vector<Luau::ModuleName> dirty;
 	frontend.markDirty(name, &dirty);
 
-	publish_diagnostics(address);
+	pending.insert(address);
 
-	if (!settings.diagnostics.include_dependents)
+	if (!settings.diagnostics.include_dependents && !settings.diagnostics.workspace)
 	{
 		return;
 	}
@@ -166,10 +166,57 @@ void workspace::update_document(const std::string& address, const json& changes,
 	for (const Luau::ModuleName& dependent : dirty)
 	{
 		std::string dependent_uri = resolver.get_uri(dependent);
+		bool open = resolver.get_document(dependent_uri) != nullptr;
 
-		if (dependent != name && !dependent_uri.empty() && resolver.get_document(dependent_uri) != nullptr)
+		if (dependent != name && !dependent_uri.empty() &&
+			(settings.diagnostics.workspace || (open && settings.diagnostics.include_dependents)))
 		{
-			publish_diagnostics(dependent_uri);
+			pending.insert(dependent_uri);
+		}
+	}
+}
+
+void workspace::flush_diagnostics()
+{
+	std::set<std::string> current;
+	current.swap(pending);
+
+	for (const std::string& address : current)
+	{
+		publish_diagnostics(address);
+	}
+}
+
+void workspace::apply_plugin_tree(const json& tree)
+{
+	if (!roblox || !settings.rojo.enabled)
+	{
+		return;
+	}
+
+	plugin_tree = tree;
+	instances.clear(frontend, map);
+
+	if (tree.is_null())
+	{
+		map.clear_plugin();
+	}
+	else
+	{
+		map.merge_plugin(tree);
+	}
+
+	resolver.set_sourcemap(map.is_loaded() ? &map : nullptr);
+	instances.apply(frontend, map, settings.rojo.strict_datamodel_types);
+	owner.send_log(enumitem_message_type::Info, "applied Studio plugin tree: " + std::to_string(map.count()) + " instances");
+
+	for (const auto& [module_name, node] : frontend.sourceNodes)
+	{
+		std::string address = resolver.get_uri(module_name);
+
+		if (!address.empty() && resolver.get_document(address) != nullptr)
+		{
+			pending.insert(address);
 		}
 	}
 }
@@ -267,9 +314,11 @@ void workspace::apply_watched_changes(const json& changes)
 
 		if (!address.empty() && resolver.get_document(address) != nullptr)
 		{
-			publish_diagnostics(address);
+			pending.insert(address);
 		}
 	}
+
+	publish_workspace_diagnostics();
 }
 
 void workspace::set_settings(settingsinfo next)
@@ -342,6 +391,11 @@ result<nothing> workspace::rebuild_sourcemap(bool regenerate)
 	if (!loaded)
 	{
 		return loaded;
+	}
+
+	if (!plugin_tree.is_null())
+	{
+		map.merge_plugin(plugin_tree);
 	}
 
 	resolver.set_sourcemap(&map);

@@ -3,6 +3,8 @@ import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
 import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } from "vscode-languageclient/node";
+import { isWatching, startWatchers, stopWatchers } from "./rojo";
+import { startStudioServer, stopStudioServer } from "./studio";
 
 let client: LanguageClient | undefined;
 let output: vscode.OutputChannel | undefined;
@@ -71,6 +73,10 @@ function getServerSettings(): object {
 		}
 	}
 
+	if (isWatching()) {
+		flat["lunaut.rojo.autogenerate"] = false;
+	}
+
 	return { vscode: flat };
 }
 
@@ -102,6 +108,20 @@ async function startClient(context: vscode.ExtensionContext): Promise<void> {
 
 	client = new LanguageClient("lunaut", "Lunaut", serverOptions, clientOptions);
 	await client.start();
+
+	client.onNotification("lunaut/applyEdit", async (params: { edit: object; moveCursor: boolean }) => {
+		const edit = await client!.protocol2CodeConverter.asWorkspaceEdit(params.edit as never);
+
+		if (!edit) {
+			return;
+		}
+
+		const applied = await vscode.workspace.applyEdit(edit);
+
+		if (applied && params.moveCursor) {
+			await vscode.commands.executeCommand("cursorMove", { to: "prevBlankLine" });
+		}
+	});
 }
 
 async function stopClient(): Promise<void> {
@@ -148,6 +168,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ getC
 				return;
 			}
 
+			if (event.affectsConfiguration("lunaut.rojo") || event.affectsConfiguration("luau-lsp.sourcemap")) {
+				startWatchers(output!);
+			}
+
+			if (event.affectsConfiguration("lunaut.studioPlugin") || event.affectsConfiguration("luau-lsp.studioPlugin")) {
+				startStudioServer(() => client, output!);
+			}
+
 			if (event.affectsConfiguration("lunaut.path") || event.affectsConfiguration("lunaut.fflags") || event.affectsConfiguration("luau-lsp.fflags")) {
 				const choice = await vscode.window.showInformationMessage("Lunaut needs a restart to apply this change.", "Restart");
 
@@ -162,6 +190,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ getC
 		}),
 	);
 
+	startWatchers(output);
+	startStudioServer(() => client, output);
+	context.subscriptions.push({ dispose: () => stopWatchers() }, { dispose: () => stopStudioServer() });
+
 	try {
 		await startClient(context);
 	} catch (error) {
@@ -172,5 +204,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ getC
 }
 
 export async function deactivate(): Promise<void> {
+	stopWatchers();
+	stopStudioServer();
 	await stopClient();
 }

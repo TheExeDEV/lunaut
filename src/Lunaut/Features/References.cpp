@@ -5,8 +5,6 @@
 
 #include "core.d.hpp"
 
-#include "Luau/AstQuery.h"
-
 #include <algorithm>
 #include <stdexcept>
 
@@ -41,49 +39,8 @@ const std::set<std::string_view> reserved_words = {
 	"while",
 };
 
-struct ownerkey
-{
-	Luau::ModuleName module;
-	Luau::Location location;
-	bool by_property = false;
-
-	bool operator==(const ownerkey& other) const;
-};
-
-struct target
-{
-	Luau::AstLocal* local = nullptr;
-	std::string name;
-	std::optional<ownerkey> owner;
-	Luau::Location origin;
-};
-
-struct local_collector final : Luau::AstVisitor
-{
-	explicit local_collector(Luau::AstLocal* local);
-
-	bool visit(Luau::AstExprLocal* node) override;
-
-	Luau::AstLocal* local;
-	std::vector<Luau::Location> found;
-};
-
-struct property_collector final : Luau::AstVisitor
-{
-	property_collector(const Luau::Module& module, std::string name, ownerkey owner);
-
-	bool visit(Luau::AstExprIndexName* node) override;
-	bool visit(Luau::AstExprTable* node) override;
-
-	const Luau::Module& module;
-	std::string name;
-	ownerkey owner;
-	std::vector<Luau::Location> found;
-};
-
-std::optional<ownerkey> get_owner(const Luau::Module& module, const Luau::AstExpr* object, const std::string& name);
-std::optional<target> find_target(const Luau::Module& module, const Luau::SourceModule& source, Luau::Position position);
 bool is_identifier(const std::string& name);
+bool is_renamable(const symbolinfo& symbol);
 
 }
 }
@@ -138,7 +95,7 @@ std::vector<std::pair<Luau::ModuleName, Luau::Location>> workspace::find_referen
 		return references;
 	}
 
-	std::optional<priv::target> found = priv::find_target(*module, *source, position);
+	std::optional<symbolinfo> found = symbolfinder::find(*module, *source, position);
 
 	if (!found)
 	{
@@ -149,12 +106,10 @@ std::vector<std::pair<Luau::ModuleName, Luau::Location>> workspace::find_referen
 
 	if (found->local != nullptr)
 	{
-		priv::local_collector collected(found->local);
-		source->root->visit(&collected);
 		declaration = found->local->location;
 		references.emplace_back(name, found->local->location);
 
-		for (const Luau::Location& location : collected.found)
+		for (const Luau::Location& location : symbolfinder::find_local_uses(*source, found->local))
 		{
 			references.emplace_back(name, location);
 		}
@@ -162,7 +117,7 @@ std::vector<std::pair<Luau::ModuleName, Luau::Location>> workspace::find_referen
 		return references;
 	}
 
-	if (!found->owner || stdx::starts_with(found->owner->module, "@"))
+	if (!priv::is_renamable(*found))
 	{
 		return references;
 	}
@@ -170,10 +125,10 @@ std::vector<std::pair<Luau::ModuleName, Luau::Location>> workspace::find_referen
 	index_workspace();
 
 	std::set<Luau::ModuleName> candidates = {name};
-	Luau::ModuleName definition = found->owner->module.empty() ? name : found->owner->module;
+	Luau::ModuleName definition = found->owner_module.empty() ? name : found->owner_module;
 	candidates.insert(definition);
 
-	if (found->owner->by_property)
+	if (found->by_property)
 	{
 		for (const auto& [module_name, node] : frontend.sourceNodes)
 		{
@@ -196,15 +151,12 @@ std::vector<std::pair<Luau::ModuleName, Luau::Location>> workspace::find_referen
 		const Luau::SourceModule* candidate_source = frontend.getSourceModule(candidate);
 		Luau::ModulePtr candidate_module = get_module(candidate, false);
 
-		if (candidate_source == nullptr || !candidate_module || candidate_source->root == nullptr)
+		if (candidate_source == nullptr || !candidate_module)
 		{
 			continue;
 		}
 
-		priv::property_collector collected(*candidate_module, found->name, *found->owner);
-		candidate_source->root->visit(&collected);
-
-		for (const Luau::Location& location : collected.found)
+		for (const Luau::Location& location : symbolfinder::find_member_uses(*candidate_module, *candidate_source, *found))
 		{
 			if (seen.insert({candidate, location.begin.line, location.begin.column}).second)
 			{
@@ -273,9 +225,9 @@ json workspace::get_prepare_rename(const json& params)
 		return nullptr;
 	}
 
-	std::optional<priv::target> found = priv::find_target(*module, *source, document->to_luau_position(params["position"]));
+	std::optional<symbolinfo> found = symbolfinder::find(*module, *source, document->to_luau_position(params["position"]));
 
-	if (!found || (found->local == nullptr && (!found->owner || stdx::starts_with(found->owner->module, "@"))))
+	if (!found || (found->local == nullptr && !priv::is_renamable(*found)))
 	{
 		return nullptr;
 	}
@@ -333,176 +285,6 @@ namespace
 namespace priv
 {
 
-bool ownerkey::operator==(const ownerkey& other) const
-{
-	return by_property == other.by_property && module == other.module && location == other.location;
-}
-
-local_collector::local_collector(Luau::AstLocal* local)
-	: local(local)
-{
-}
-
-bool local_collector::visit(Luau::AstExprLocal* node)
-{
-	if (node->local == local)
-	{
-		found.push_back(node->location);
-	}
-
-	return true;
-}
-
-property_collector::property_collector(const Luau::Module& module, std::string name, ownerkey owner)
-	: module(module)
-	, name(std::move(name))
-	, owner(std::move(owner))
-{
-}
-
-bool property_collector::visit(Luau::AstExprIndexName* node)
-{
-	if (name == node->index.value)
-	{
-		std::optional<ownerkey> found = get_owner(module, node->expr, name);
-
-		if (found && *found == owner)
-		{
-			this->found.push_back(node->indexLocation);
-		}
-	}
-
-	return true;
-}
-
-bool property_collector::visit(Luau::AstExprTable* node)
-{
-	for (const Luau::AstExprTable::Item& item : node->items)
-	{
-		if (item.kind != Luau::AstExprTable::Item::Kind::Record || item.key == nullptr)
-		{
-			continue;
-		}
-
-		Luau::AstExprConstantString* key = item.key->as<Luau::AstExprConstantString>();
-
-		if (key == nullptr || std::string(key->value.data, key->value.size) != name)
-		{
-			continue;
-		}
-
-		std::optional<ownerkey> found = get_owner(module, node, name);
-
-		if (found && *found == owner)
-		{
-			this->found.push_back(key->location);
-		}
-	}
-
-	return true;
-}
-
-std::optional<ownerkey> get_owner(const Luau::Module& module, const Luau::AstExpr* object, const std::string& name)
-{
-	const Luau::TypeId* type = module.astTypes.find(object);
-
-	if (type == nullptr)
-	{
-		return std::nullopt;
-	}
-
-	Luau::TypeId followed = Luau::follow(*type);
-	const Luau::TableType* table = Luau::get<Luau::TableType>(followed);
-
-	if (table == nullptr)
-	{
-		if (const Luau::MetatableType* metatable = Luau::get<Luau::MetatableType>(followed))
-		{
-			table = Luau::get<Luau::TableType>(Luau::follow(metatable->table));
-		}
-	}
-
-	if (table == nullptr)
-	{
-		return std::nullopt;
-	}
-
-	if (!table->definitionModuleName.empty())
-	{
-		return ownerkey{table->definitionModuleName, table->definitionLocation, false};
-	}
-
-	const auto property = table->props.find(name);
-
-	if (property != table->props.end() && property->second.location)
-	{
-		return ownerkey{"", *property->second.location, true};
-	}
-
-	return std::nullopt;
-}
-
-std::optional<target> find_target(const Luau::Module& module, const Luau::SourceModule& source, Luau::Position position)
-{
-	Luau::ExprOrLocal hit = Luau::findExprOrLocalAtPosition(source, position);
-
-	if (Luau::AstLocal* local = hit.getLocal())
-	{
-		return target{local, local->name.value, std::nullopt, local->location};
-	}
-
-	Luau::AstExpr* expr = hit.getExpr();
-
-	if (expr == nullptr)
-	{
-		return std::nullopt;
-	}
-
-	if (Luau::AstExprLocal* local = expr->as<Luau::AstExprLocal>())
-	{
-		return target{local->local, local->local->name.value, std::nullopt, local->location};
-	}
-
-	if (Luau::AstExprIndexName* index = expr->as<Luau::AstExprIndexName>())
-	{
-		if (!index->indexLocation.containsClosed(position))
-		{
-			return std::nullopt;
-		}
-
-		std::string name = index->index.value;
-		return target{nullptr, name, get_owner(module, index->expr, name), index->indexLocation};
-	}
-
-	Luau::AstExprConstantString* key = expr->as<Luau::AstExprConstantString>();
-
-	if (key == nullptr)
-	{
-		return std::nullopt;
-	}
-
-	for (Luau::AstNode* node : Luau::findAstAncestryOfPosition(source, position))
-	{
-		Luau::AstExprTable* table = node->as<Luau::AstExprTable>();
-
-		if (table == nullptr)
-		{
-			continue;
-		}
-
-		for (const Luau::AstExprTable::Item& item : table->items)
-		{
-			if (item.kind == Luau::AstExprTable::Item::Kind::Record && item.key == key)
-			{
-				std::string name(key->value.data, key->value.size);
-				return target{nullptr, name, get_owner(module, table, name), key->location};
-			}
-		}
-	}
-
-	return std::nullopt;
-}
-
 bool is_identifier(const std::string& name)
 {
 	if (name.empty() || reserved_words.find(name) != reserved_words.end())
@@ -516,6 +298,11 @@ bool is_identifier(const std::string& name)
 	}
 
 	return std::all_of(name.begin(), name.end(), [](char c) { return std::isalnum(static_cast<unsigned char>(c)) || c == '_'; });
+}
+
+bool is_renamable(const symbolinfo& symbol)
+{
+	return symbol.member && !stdx::starts_with(symbol.owner_module, "@");
 }
 
 }

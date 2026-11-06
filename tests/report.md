@@ -1,25 +1,25 @@
 # Test report
 
-- Date: 2026-11-06 14:11:06
+- Date: 2026-11-06 19:41:07
 - Binary: `C:\Users\win11\Desktop\lusp\build\lunaut.exe`
-- Version: `lunaut 0.1.0 (Luau 0.742, GNU 16.2.0)`
-- Result: **82/82 passed** in 2.3s
+- Version: `lunaut 0.0.3 (Luau 0.742, GNU 16.2.0)`
+- Result: **96/96 passed** in 3.4s
 
 | Test | Status | Time |
 | --- | --- | --- |
-| `test_cli.CliTests.test_analyze_clean_file` | PASS | 0.83s |
-| `test_cli.CliTests.test_analyze_reports_errors` | PASS | 0.03s |
-| `test_cli.CliTests.test_analyze_unknown_require` | PASS | 0.03s |
+| `test_cli.CliTests.test_analyze_clean_file` | PASS | 0.73s |
+| `test_cli.CliTests.test_analyze_reports_errors` | PASS | 0.04s |
+| `test_cli.CliTests.test_analyze_unknown_require` | PASS | 0.04s |
 | `test_cli.CliTests.test_help` | PASS | 0.01s |
-| `test_cli.CliTests.test_unknown_option` | PASS | 0.01s |
+| `test_cli.CliTests.test_unknown_option` | PASS | 0.02s |
 | `test_cli.CliTests.test_version` | PASS | 0.01s |
-| `test_config.ConfigTests.test_base_luaurc_and_lua_files` | PASS | 0.03s |
-| `test_config.ConfigTests.test_config_luau_aliases` | PASS | 0.03s |
+| `test_config.ConfigTests.test_base_luaurc_and_lua_files` | PASS | 0.07s |
+| `test_config.ConfigTests.test_config_luau_aliases` | PASS | 0.06s |
 | `test_config.ConfigTests.test_require_path_completion` | PASS | 0.03s |
-| `test_definitions.DefinitionTests.test_cli_duplicate_keeps_config_priority` | PASS | 0.03s |
+| `test_definitions.DefinitionTests.test_cli_duplicate_keeps_config_priority` | PASS | 0.08s |
 | `test_definitions.DefinitionTests.test_priority_order_loads_dependent_files` | PASS | 0.03s |
-| `test_definitions.DefinitionTests.test_wrong_priority_fails` | PASS | 0.03s |
-| `test_features.FeatureTests.test_auto_import_modules` | PASS | 0.01s |
+| `test_definitions.DefinitionTests.test_wrong_priority_fails` | PASS | 0.04s |
+| `test_features.FeatureTests.test_auto_import_modules` | PASS | 0.02s |
 | `test_features.FeatureTests.test_code_action_adds_require` | PASS | 0.00s |
 | `test_features.FeatureTests.test_code_actions_for_lints` | PASS | 0.00s |
 | `test_features.FeatureTests.test_completion_function_details` | PASS | 0.00s |
@@ -29,20 +29,20 @@
 | `test_features.FeatureTests.test_hover_line_comment_documentation` | PASS | 0.00s |
 | `test_features.FeatureTests.test_hover_moonwave_documentation` | PASS | 0.00s |
 | `test_features.FeatureTests.test_hover_string_length` | PASS | 0.00s |
-| `test_features.FeatureTests.test_inlay_hints_can_be_disabled` | PASS | 0.03s |
+| `test_features.FeatureTests.test_inlay_hints_can_be_disabled` | PASS | 0.04s |
 | `test_features.FeatureTests.test_inlay_hints_default` | PASS | 0.00s |
 | `test_features.FeatureTests.test_inlay_hints_insertable` | PASS | 0.00s |
-| `test_features.FeatureTests.test_inlay_hints_parameter_types` | PASS | 0.03s |
+| `test_features.FeatureTests.test_inlay_hints_parameter_types` | PASS | 0.05s |
 | `test_features.FeatureTests.test_semantic_tokens` | PASS | 0.00s |
 | `test_features.LuauLspSettingsTests.test_definition_files_and_disabled_globals` | PASS | 0.00s |
 | `test_features.LuauLspSettingsTests.test_settings_mapped_with_lunaut_priority` | PASS | 0.00s |
 | `test_features.LuauLspSettingsTests.test_vscode_flat_settings` | PASS | 0.03s |
-| `test_features.RobloxDocumentationTests.test_api_documentation_in_hover_and_completion` | PASS | 0.18s |
-| `test_features.RobloxDocumentationTests.test_service_auto_import` | PASS | 0.18s |
-| `test_fflags.FFlagTests.test_cli_override` | PASS | 0.01s |
-| `test_fflags.FFlagTests.test_flags_enabled_by_default` | PASS | 0.01s |
-| `test_fflags.FFlagTests.test_invalid_value` | PASS | 0.01s |
-| `test_fflags.FFlagTests.test_json_output` | PASS | 0.01s |
+| `test_features.RobloxDocumentationTests.test_api_documentation_in_hover_and_completion` | PASS | 0.29s |
+| `test_features.RobloxDocumentationTests.test_service_auto_import` | PASS | 0.23s |
+| `test_fflags.FFlagTests.test_cli_override` | PASS | 0.02s |
+| `test_fflags.FFlagTests.test_flags_enabled_by_default` | PASS | 0.02s |
+| `test_fflags.FFlagTests.test_invalid_value` | PASS | 0.02s |
+| `test_fflags.FFlagTests.test_json_output` | PASS | 0.02s |
 | `test_fflags.FFlagTests.test_no_flags_enabled` | PASS | 0.01s |
 | `test_fflags.FFlagTests.test_settings_override_over_lsp` | PASS | 0.03s |
 | `test_fflags.FFlagTests.test_unknown_flag` | PASS | 0.01s |
@@ -60,6 +60,20 @@
 | `test_lsp.LspTests.test_signature_help` | PASS | 0.00s |
 | `test_lsp.LspTests.test_status` | PASS | 0.00s |
 | `test_lsp.LspTests.test_unknown_method` | PASS | 0.00s |
+| `test_navigation.NavigationTests.test_autocomplete_end` | PASS | 0.00s |
+| `test_navigation.NavigationTests.test_call_hierarchy` | PASS | 0.01s |
+| `test_navigation.NavigationTests.test_cancelled_request` | PASS | 0.00s |
+| `test_navigation.NavigationTests.test_convert_quotes` | PASS | 0.00s |
+| `test_navigation.NavigationTests.test_document_highlight` | PASS | 0.00s |
+| `test_navigation.NavigationTests.test_document_links` | PASS | 0.00s |
+| `test_navigation.NavigationTests.test_formatting_with_stylua` | PASS | 0.22s |
+| `test_navigation.NavigationTests.test_formatting_without_stylua` | PASS | 0.07s |
+| `test_navigation.NavigationTests.test_outgoing_calls` | PASS | 0.00s |
+| `test_navigation.NavigationTests.test_sort_imports_and_annotation` | PASS | 0.00s |
+| `test_navigation.NavigationTests.test_workspace_symbols` | PASS | 0.00s |
+| `test_navigation.RojoNavigationTests.test_string_require_action` | PASS | 0.21s |
+| `test_navigation.RojoNavigationTests.test_studio_plugin_tree` | PASS | 0.20s |
+| `test_navigation.WorkspaceDiagnosticsTests.test_unopened_files_get_diagnostics` | PASS | 0.04s |
 | `test_references.NewSolverReferenceTests.test_local_references` | PASS | 0.00s |
 | `test_references.NewSolverReferenceTests.test_prepare_rename` | PASS | 0.00s |
 | `test_references.NewSolverReferenceTests.test_property_references_across_files` | PASS | 0.00s |
@@ -86,6 +100,6 @@
 | `test_rojo.RojoTests.test_references_through_sourcemap` | PASS | 0.00s |
 | `test_rojo.RojoTests.test_required_types_flow` | PASS | 0.00s |
 | `test_rojo.RojoTests.test_roblox_magic_functions` | PASS | 0.00s |
-| `test_rojo.RojoTests.test_roblox_magic_new_solver` | PASS | 0.18s |
+| `test_rojo.RojoTests.test_roblox_magic_new_solver` | PASS | 0.19s |
 | `test_rojo.RojoTests.test_script_instance_type` | PASS | 0.00s |
 | `test_rojo.RojoTests.test_status` | PASS | 0.00s |

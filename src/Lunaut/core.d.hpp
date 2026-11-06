@@ -5,7 +5,10 @@
 #include <iosfwd>
 #include <map>
 #include <memory>
+#include <condition_variable>
+#include <deque>
 #include <mutex>
+#include <thread>
 #include <optional>
 #include <set>
 #include <string>
@@ -105,6 +108,7 @@ enum class enumitem_error_code : int
 	InternalError = -32603,
 	ServerNotInitialized = -32002,
 	RequestFailed = -32803,
+	RequestCancelled = -32800,
 };
 
 enum class enumitem_file_change : int
@@ -259,12 +263,17 @@ struct featuresinfo
 	bool auto_imports = true;
 	bool semantic_tokens = true;
 	bool colors = true;
+	bool autocomplete_end = true;
+	bool convert_quotes = true;
+	bool formatting = true;
+	std::string stylua = "stylua";
 };
 
 struct diagnosticsinfo
 {
 	bool lint = true;
 	bool include_dependents = true;
+	bool workspace = false;
 };
 
 struct settingsinfo
@@ -422,6 +431,8 @@ public:
 	virtual void send_log(enumitem_message_type type, const std::string& message) = 0;
 	virtual void send_window_message(enumitem_message_type type, const std::string& message) = 0;
 	virtual void send_diagnostics(const std::string& address, std::optional<int> version, const json& diagnostics) = 0;
+
+	virtual void send_edit(const json& edit, bool move_cursor) {}
 };
 
 class process
@@ -453,6 +464,7 @@ struct sourcenode
 	std::vector<std::unique_ptr<sourcenode>> children;
 	sourcenode* parent = nullptr;
 	std::string virtual_path;
+	bool plugin = false;
 	mutable std::unordered_map<const Luau::GlobalTypes*, Luau::TypeId> types;
 
 	bool is_script() const;
@@ -468,6 +480,8 @@ class sourcemap
 public:
 	result<nothing> load_from_file(const std::filesystem::path& file, const std::filesystem::path& root);
 	result<nothing> load_from_string(const std::string& contents, const std::filesystem::path& root);
+	bool merge_plugin(const json& tree);
+	void clear_plugin();
 	void clear();
 
 	bool is_loaded() const;
@@ -484,6 +498,8 @@ public:
 private:
 	std::unique_ptr<sourcenode> parse_node(const json& data, sourcenode* parent, const std::filesystem::path& root);
 	void add_node(const sourcenode* node);
+	void rebuild_maps();
+	bool merge_node(sourcenode* node, const json& data);
 
 	std::unique_ptr<sourcenode> root;
 	std::unordered_map<std::string, const sourcenode*> virtual_paths;
@@ -565,6 +581,29 @@ public:
 	static std::vector<definitioninfo> collect(const std::filesystem::path& root, const settingsinfo& settings, bool roblox, client& owner);
 	static std::optional<int> get_directive_priority(const std::string& source);
 	static std::string get_package_name(const definitioninfo& info, const std::filesystem::path& path);
+};
+
+struct symbolinfo
+{
+	Luau::AstLocal* local = nullptr;
+	std::string name;
+	bool member = false;
+	bool by_property = false;
+	Luau::ModuleName owner_module;
+	Luau::Location owner_location;
+	Luau::Location origin;
+
+	bool is_same_owner(const symbolinfo& other) const;
+};
+
+class symbolfinder
+{
+public:
+	static std::optional<symbolinfo> find(const Luau::Module& module, const Luau::SourceModule& source, Luau::Position position);
+	static std::optional<symbolinfo> get_member(const Luau::Module& module, const Luau::AstExpr* object, const std::string& name);
+	static std::vector<Luau::Location> find_local_uses(const Luau::SourceModule& source, Luau::AstLocal* local);
+	static std::vector<Luau::Location>
+	find_member_uses(const Luau::Module& module, const Luau::SourceModule& source, const symbolinfo& symbol);
 };
 
 class fileresolver;
@@ -664,6 +703,7 @@ public:
 
 	json get_diagnostics(const std::string& address);
 	void publish_diagnostics(const std::string& address);
+	void flush_diagnostics();
 	json get_hover(const json& params);
 	json get_completion(const json& params);
 	json get_definition(const json& params);
@@ -678,6 +718,17 @@ public:
 	json get_document_colors(const json& params);
 	json get_color_presentations(const json& params);
 	json get_folding_ranges(const json& params);
+	json get_document_highlights(const json& params);
+	json get_document_links(const json& params);
+	json get_workspace_symbols(const json& params);
+	json get_call_hierarchy_items(const json& params);
+	json get_incoming_calls(const json& params);
+	json get_outgoing_calls(const json& params);
+	json get_on_type_edits(const json& params);
+	json get_formatting(const json& params);
+	void invoke_end_completion(const json& params);
+	void publish_workspace_diagnostics();
+	void apply_plugin_tree(const json& tree);
 
 private:
 	void index_workspace();
@@ -713,6 +764,8 @@ private:
 	json roblox_metadata = json::object();
 	std::vector<loadeddefinitioninfo> definitions;
 	std::set<std::string> definition_paths;
+	std::set<std::string> pending;
+	json plugin_tree = nullptr;
 	bool ready = false;
 	bool roblox = false;
 };
@@ -727,6 +780,7 @@ public:
 	void send_log(enumitem_message_type type, const std::string& message) override;
 	void send_window_message(enumitem_message_type type, const std::string& message) override;
 	void send_diagnostics(const std::string& address, std::optional<int> version, const json& diagnostics) override;
+	void send_edit(const json& edit, bool move_cursor) override;
 
 	json on_initialize(const json& params);
 	json on_shutdown(const json& params);
@@ -744,6 +798,15 @@ public:
 	json on_document_color(const json& params);
 	json on_color_presentation(const json& params);
 	json on_folding_range(const json& params);
+	json on_document_highlight(const json& params);
+	json on_document_link(const json& params);
+	json on_workspace_symbol(const json& params);
+	json on_prepare_call_hierarchy(const json& params);
+	json on_incoming_calls(const json& params);
+	json on_outgoing_calls(const json& params);
+	json on_on_type_formatting(const json& params);
+	json on_formatting(const json& params);
+	json on_range_formatting(const json& params);
 	json on_lunaut_status(const json& params);
 	json on_lunaut_fflags(const json& params);
 	json on_lunaut_definitions(const json& params);
@@ -758,10 +821,14 @@ public:
 	void on_did_change_configuration(const json& params);
 	void on_did_change_watched_files(const json& params);
 	void on_did_change_workspace_folders(const json& params);
+	void on_plugin_full(const json& params);
+	void on_plugin_clear(const json& params);
 	void on_ignore(const json& params);
 
 private:
 	void process_message(const json& message);
+	void read_messages();
+	std::optional<json> take_message();
 	void add_workspace(const std::string& address);
 	void register_watchers();
 	workspace& get_workspace(const std::string& address);
@@ -776,6 +843,12 @@ private:
 	std::unique_ptr<workspace> null_workspace;
 	std::vector<fflagstateinfo> fflags;
 	int exit_code = 1;
+	bool extension_client = false;
+	std::deque<json> queue;
+	std::mutex queue_lock;
+	std::condition_variable queue_ready;
+	std::set<std::string> cancelled;
+	bool input_closed = false;
 };
 
 class console final : public client

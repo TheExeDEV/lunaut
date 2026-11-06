@@ -1,0 +1,19 @@
+{
+	"lsp": {
+		"luau-lsp": {
+			"binary": {
+				"path": "lunaut",
+				"arguments": ["lsp"]
+			},
+			"initialization_options": {
+				"vscode": {
+					"lunaut.inlayHints.parameterNames": "literals",
+					"lunaut.inlayHints.variableTypes": true
+				}
+			}
+		}
+	},
+	"inlay_hints": {
+		"enabled": true
+	}
+}

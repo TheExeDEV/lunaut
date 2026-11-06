@@ -5,6 +5,8 @@
 
 #include "core.d.hpp"
 
+#include <algorithm>
+
 namespace lunaut
 {
 namespace
@@ -59,6 +61,66 @@ void sourcemap::clear()
 	root.reset();
 	virtual_paths.clear();
 	real_paths.clear();
+}
+
+bool sourcemap::merge_plugin(const json& tree)
+{
+	if (!tree.is_object())
+	{
+		return false;
+	}
+
+	if (!root)
+	{
+		root = std::make_unique<sourcenode>();
+		root->name = "game";
+		root->class_name = "DataModel";
+		root->virtual_path = std::string(priv::datamodel_root);
+		root->plugin = true;
+	}
+
+	if (root->class_name != "DataModel")
+	{
+		return false;
+	}
+
+	bool changed = merge_node(root.get(), tree);
+	rebuild_maps();
+	return changed;
+}
+
+void sourcemap::clear_plugin()
+{
+	if (!root)
+	{
+		return;
+	}
+
+	if (root->plugin)
+	{
+		clear();
+		return;
+	}
+
+	std::vector<sourcenode*> pending = {root.get()};
+
+	while (!pending.empty())
+	{
+		sourcenode* node = pending.back();
+		pending.pop_back();
+
+		node->children.erase(
+			std::remove_if(
+				node->children.begin(), node->children.end(), [](const std::unique_ptr<sourcenode>& child) { return child->plugin; }),
+			node->children.end());
+
+		for (const std::unique_ptr<sourcenode>& child : node->children)
+		{
+			pending.push_back(child.get());
+		}
+	}
+
+	rebuild_maps();
 }
 
 bool sourcemap::is_loaded() const
@@ -173,6 +235,69 @@ std::unique_ptr<sourcenode> sourcemap::parse_node(const json& data, sourcenode* 
 	}
 
 	return node;
+}
+
+void sourcemap::rebuild_maps()
+{
+	virtual_paths.clear();
+	real_paths.clear();
+
+	if (root)
+	{
+		add_node(root.get());
+	}
+}
+
+bool sourcemap::merge_node(sourcenode* node, const json& data)
+{
+	bool changed = false;
+	std::set<std::string> seen;
+
+	if (node->plugin && data.contains("ClassName") && data["ClassName"].is_string() &&
+		node->class_name != data["ClassName"].get<std::string>())
+	{
+		node->class_name = data["ClassName"].get<std::string>();
+		changed = true;
+	}
+
+	for (const json& child : data.value("Children", json::array()))
+	{
+		std::string name = child.value("Name", "");
+
+		if (name.empty() || !seen.insert(name).second)
+		{
+			continue;
+		}
+
+		auto existing = std::find_if(
+			node->children.begin(), node->children.end(), [&name](const std::unique_ptr<sourcenode>& item) { return item->name == name; });
+
+		if (existing != node->children.end())
+		{
+			changed = merge_node(existing->get(), child) || changed;
+			continue;
+		}
+
+		std::unique_ptr<sourcenode> created = std::make_unique<sourcenode>();
+		created->name = name;
+		created->class_name = child.value("ClassName", "Instance");
+		created->parent = node;
+		created->virtual_path = node->virtual_path + "/" + name;
+		created->plugin = true;
+		merge_node(created.get(), child);
+		node->children.push_back(std::move(created));
+		changed = true;
+	}
+
+	size_t before = node->children.size();
+	node->children.erase(
+		std::remove_if(
+			node->children.begin(),
+			node->children.end(),
+			[&seen](const std::unique_ptr<sourcenode>& child) { return child->plugin && seen.count(child->name) == 0; }),
+		node->children.end());
+
+	return changed || before != node->children.size();
 }
 
 void sourcemap::add_node(const sourcenode* node)

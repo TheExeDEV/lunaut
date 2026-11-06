@@ -111,6 +111,8 @@ class LspClient:
 
 			if "id" in message and "method" in message:
 				self.send({"jsonrpc": "2.0", "id": message["id"], "result": None})
+				self.history.append(message)
+				self.notifications.put(message)
 				continue
 
 			if "id" in message:
@@ -148,6 +150,20 @@ class LspClient:
 			raise LspError(response["error"])
 
 		return response.get("result")
+
+	def wait_response(self, identifier, timeout=60):
+		deadline = time.time() + timeout
+
+		with self.lock:
+			while identifier not in self.responses:
+				remaining = deadline - time.time()
+
+				if remaining <= 0:
+					raise TimeoutError(f"no response {identifier}")
+
+				self.lock.wait(remaining)
+
+			return self.responses.pop(identifier)
 
 	def notify(self, method, params):
 		self.send({"jsonrpc": "2.0", "method": method, "params": params})

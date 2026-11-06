@@ -47,24 +47,25 @@ lunaut is your astronaut in Luau code: it checks types and lint while you type, 
 1. [Installation](#installation)
 2. [Quick start](#quick-start)
 3. [VS Code](#vs-code)
-4. [Settings](#settings)
-5. [FFlags](#fflags)
-6. [Definition files and priorities](#definition-files-and-priorities)
-7. [Rojo](#rojo)
-8. [Editor features](#editor-features)
-9. [References and rename](#references-and-rename)
-10. [Requires and .luaurc](#requires-and-luaurc)
-11. [Command reference](#command-reference)
-12. [Custom LSP methods](#custom-lsp-methods)
-13. [Environment variables](#environment-variables)
-14. [Tests](#tests)
-15. [Luau updates](#luau-updates)
-16. [Releasing](#releasing)
-17. [Building from source](#building-from-source)
-18. [Source layout](#source-layout)
-19. [Limitations](#limitations)
-20. [Acknowledgements](#acknowledgements)
-21. [License](#license)
+4. [Other editors](#other-editors)
+5. [Settings](#settings)
+6. [FFlags](#fflags)
+7. [Definition files and priorities](#definition-files-and-priorities)
+8. [Rojo](#rojo)
+9. [Editor features](#editor-features)
+10. [References and rename](#references-and-rename)
+11. [Requires and .luaurc](#requires-and-luaurc)
+12. [Command reference](#command-reference)
+13. [Custom LSP methods](#custom-lsp-methods)
+14. [Environment variables](#environment-variables)
+15. [Tests](#tests)
+16. [Luau updates](#luau-updates)
+17. [Releasing](#releasing)
+18. [Building from source](#building-from-source)
+19. [Source layout](#source-layout)
+20. [Limitations](#limitations)
+21. [Acknowledgements](#acknowledgements)
+22. [License](#license)
 
 ---
 
@@ -163,6 +164,12 @@ code --install-extension lunaut.vsix
 
 ---
 
+## Other editors
+
+Any editor with LSP support can run `lunaut lsp`. Ready configs for Neovim, Helix and Zed are in [`editors/`](editors/README.md). The server reads `.vscode/settings.json` itself, so a project configured for VS Code works the same everywhere.
+
+---
+
 ## Settings
 
 All settings live in VS Code settings under `lunaut.*` (luau-lsp settings work too, see [luau-lsp settings](#luau-lsp-settings)): user settings for your machine, `.vscode/settings.json` for a project. The server reads `.vscode/settings.json` itself too, so `lunaut analyze` in a terminal or CI uses exactly the same project settings as the editor. Comments and trailing commas are fine, like everywhere in VS Code.
@@ -228,6 +235,14 @@ All settings live in VS Code settings under `lunaut.*` (luau-lsp settings work t
 | `lunaut.completion.autoImports` | `true` | suggest modules and services that are not required yet |
 | `lunaut.semanticTokens.enabled` | `true` | semantic highlighting |
 | `lunaut.colors.enabled` | `true` | color picker for `Color3` |
+| `lunaut.completion.autocompleteEnd` | `true` | insert `end` or `until` after Enter on a block opener, adding a missing `then` or `do` |
+| `lunaut.format.convertQuotes` | `true` | typing `{` in a `"string"` turns it into an interpolated string |
+| `lunaut.format.enabled` | `true` | format documents and selections with StyLua |
+| `lunaut.format.styluaPath` | `stylua` | StyLua executable |
+| `lunaut.diagnostics.workspace` | `false` | diagnostics for every file in the workspace, not only open ones |
+| `lunaut.rojo.watch` | `true` | VS Code only: keep `rojo sourcemap --watch` running instead of regenerating on every change |
+| `lunaut.studioPlugin.enabled` | `false` | VS Code only: accept the live DataModel from the Studio companion plugin |
+| `lunaut.studioPlugin.port` | `3667` | port of the Studio companion plugin |
 | `lunaut.trace.server` | `off` | log LSP traffic to the Lunaut output channel |
 
 ### luau-lsp settings
@@ -354,6 +369,12 @@ rojo sourcemap default.project.json --output sourcemap.json --include-non-script
 
 on start, when a `.luau` file is created or deleted and when a `*.project.json` changes. Without Rojo on `PATH` it uses the `sourcemap.json` that is already there, and reloads it whenever it changes, for example when you run `rojo sourcemap --watch` yourself.
 
+In VS Code the extension keeps `rojo sourcemap --watch` running for every workspace folder with a project file (`lunaut.rojo.watch`), and the server only reloads what Rojo writes. If Rojo exits, the server goes back to regenerating on its own.
+
+### Studio companion plugin
+
+With `lunaut.studioPlugin.enabled` the VS Code extension listens on `127.0.0.1:3667` for the [luau-lsp Studio Companion plugin](https://create.roblox.com/store/asset/10913122509). The plugin sends the live DataModel from Studio, and instances that exist only in the place, not in the Rojo project, get types and completion too. *Clear* in the plugin drops them again. Run luau-lsp or lunaut, not both: they use the same port.
+
 `.server.luau` and `.client.luau` files are checked as scripts, everything else as modules.
 
 ### Roblox types
@@ -425,6 +446,31 @@ Functions show their parameters next to the name and fill the call with placehol
 | `LocalUnused`, `FunctionUnused`, `ImportUnused` | rename to `_name` |
 | any lint | add `--!nolint Name` at the top of the file |
 | `Unknown global 'Util'` | add the `require` or `GetService` line |
+
+Without a diagnostic:
+
+| Under the cursor | Action |
+| --- | --- |
+| anywhere | *Sort imports*: sorts the block of `require` and `GetService` lines at the top |
+| a local without an annotation | *Add type annotation*: writes the inferred type, like `: number` |
+| `require(script.Parent.Helper)` in Rojo | *Use string require*: `require("./Helper")`, or `require("@game/ReplicatedStorage/Shared/Util")` across services |
+
+### Typing
+
+Pressing Enter after `function ...`, `if ... then`, `for ... do`, `while ... do`, `do` or `repeat` adds the closing `end` or `until` when the block is still open, and adds a missing `then` or `do` (`lunaut.completion.autocompleteEnd`). Typing `{` inside a `"string"` or `'string'` turns it into `` `string {` `` (`lunaut.format.convertQuotes`); the extension turns on `editor.formatOnType` for Luau so this works out of the box.
+
+### Formatting
+
+*Format Document* and *Format Selection* run [StyLua](https://github.com/JohnnyMorganz/StyLua) with the project's `stylua.toml`. Install StyLua or point `lunaut.format.styluaPath` at it.
+
+### Navigation
+
+| Feature | What it does |
+| --- | --- |
+| document highlight | marks every use of the symbol under the cursor in the file, writes and reads apart |
+| document links | the path in `require("./util")` or `require("@alias/x")` is clickable |
+| workspace symbols | `Ctrl+T` finds functions, locals and module members in every file |
+| call hierarchy | *Show Call Hierarchy* lists callers and callees of a function, across modules |
 
 ### Colors, folding, highlighting
 
@@ -663,7 +709,7 @@ tests/                test runner, suites and fixtures
 - Definition file and FFlag changes need a server restart
 - Rename and references cover locals and table members; globals and type names are not renamed
 - Go to definition works for locals, requires and table members, not for globals from definition files
-- Rojo autogeneration runs `rojo sourcemap` once per change, it does not keep `--watch` running
+- Outside VS Code Rojo autogeneration runs `rojo sourcemap` once per change, it does not keep `--watch` running, and the Studio plugin is not available
 - Downloads (FFlags, Roblox definitions) use `curl`, which ships with Windows 10+, macOS and most Linux systems
 
 ---

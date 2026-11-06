@@ -1,0 +1,16 @@
+[language-server.lunaut]
+command = "lunaut"
+args = ["lsp"]
+
+[language-server.lunaut.config.vscode]
+"lunaut.inlayHints.parameterNames" = "literals"
+"lunaut.inlayHints.variableTypes" = true
+
+[[language]]
+name = "luau"
+scope = "source.luau"
+file-types = ["luau"]
+roots = ["default.project.json", ".luaurc", ".config.luau"]
+comment-token = "--"
+indent = { tab-width = 4, unit = "\t" }
+language-servers = ["lunaut"]
