@@ -54,7 +54,7 @@ jobs:
             echo "latest=true" >> "$GITHUB_OUTPUT"
           fi
 
-          if gh api "repos/${{ github.repository }}/git/ref/tags/v$version" > /dev/null 2>&1; then
+          if gh api "repos/${{ github.repository }}/releases/tags/v$version" > /dev/null 2>&1; then
             echo "v$version is already released"
             echo "release=false" >> "$GITHUB_OUTPUT"
           else
