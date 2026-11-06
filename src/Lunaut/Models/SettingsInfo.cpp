@@ -12,7 +12,7 @@ namespace
 namespace priv
 {
 
-constexpr std::string_view vscode_prefix = "lunaut.";
+const std::vector<std::string_view> vscode_prefixes = {"lunaut.", "luau-lsp."};
 constexpr std::string_view vscode_file = ".vscode/settings.json";
 
 const std::unordered_map<std::string_view, std::string_view> relevant_vscode_keys = {
@@ -38,6 +38,50 @@ const std::unordered_map<std::string_view, std::string_view> relevant_vscode_key
 	{"lunaut.ignoreGlobs", "/ignore_globs"},
 	{"lunaut.analyzeLuaFiles", "/analyze_lua_files"},
 	{"lunaut.baseLuaurc", "/base_luaurc"},
+	{"lunaut.inlayHints.variableTypes", "/inlay_hints/variable_types"},
+	{"lunaut.inlayHints.parameterNames", "/inlay_hints/parameter_names"},
+	{"lunaut.inlayHints.parameterTypes", "/inlay_hints/parameter_types"},
+	{"lunaut.inlayHints.functionReturnTypes", "/inlay_hints/function_return_types"},
+	{"lunaut.inlayHints.hideHintsForErrorTypes", "/inlay_hints/hide_error_types"},
+	{"lunaut.inlayHints.hideHintsForMatchingParameterNames", "/inlay_hints/hide_matching_names"},
+	{"lunaut.inlayHints.typeHintMaxLength", "/inlay_hints/max_length"},
+	{"lunaut.inlayHints.makeInsertable", "/inlay_hints/insertable"},
+	{"lunaut.hover.documentation", "/features/documentation"},
+	{"lunaut.completion.autoImports", "/features/auto_imports"},
+	{"lunaut.semanticTokens.enabled", "/features/semantic_tokens"},
+	{"lunaut.colors.enabled", "/features/colors"},
+	{"lunaut.documentationFiles", "/documentation_files"},
+	{"lunaut.disabledGlobals", "/disabled_globals"},
+	{"luau-lsp.platform.type", "/platform"},
+	{"luau-lsp.fflags.enableByDefault", "/fflags/enable_by_default"},
+	{"luau-lsp.fflags.sync", "/fflags/sync"},
+	{"luau-lsp.fflags.enableNewSolver", "/fflags/enable_new_solver"},
+	{"luau-lsp.fflags.override", "/fflags/override"},
+	{"luau-lsp.types.definitionFiles", "/definitions"},
+	{"luau-lsp.types.documentationFiles", "/documentation_files"},
+	{"luau-lsp.types.disabledGlobals", "/disabled_globals"},
+	{"luau-lsp.types.roblox", "/roblox/download_types"},
+	{"luau-lsp.types.robloxSecurityLevel", "/roblox/security_level"},
+	{"luau-lsp.sourcemap.enabled", "/rojo/enabled"},
+	{"luau-lsp.sourcemap.rojoProjectFile", "/rojo/project_file"},
+	{"luau-lsp.sourcemap.sourcemapFile", "/rojo/sourcemap_file"},
+	{"luau-lsp.sourcemap.autogenerate", "/rojo/autogenerate"},
+	{"luau-lsp.sourcemap.includeNonScripts", "/rojo/include_non_scripts"},
+	{"luau-lsp.sourcemap.rojoPath", "/rojo/executable"},
+	{"luau-lsp.diagnostics.strictDatamodelTypes", "/rojo/strict_datamodel_types"},
+	{"luau-lsp.diagnostics.includeDependents", "/diagnostics/include_dependents"},
+	{"luau-lsp.ignoreGlobs", "/ignore_globs"},
+	{"luau-lsp.analyzeLuaFiles", "/analyze_lua_files"},
+	{"luau-lsp.server.baseLuaurc", "/base_luaurc"},
+	{"luau-lsp.inlayHints.variableTypes", "/inlay_hints/variable_types"},
+	{"luau-lsp.inlayHints.parameterNames", "/inlay_hints/parameter_names"},
+	{"luau-lsp.inlayHints.parameterTypes", "/inlay_hints/parameter_types"},
+	{"luau-lsp.inlayHints.functionReturnTypes", "/inlay_hints/function_return_types"},
+	{"luau-lsp.inlayHints.hideHintsForErrorTypes", "/inlay_hints/hide_error_types"},
+	{"luau-lsp.inlayHints.hideHintsForMatchingParameterNames", "/inlay_hints/hide_matching_names"},
+	{"luau-lsp.inlayHints.typeHintMaxLength", "/inlay_hints/max_length"},
+	{"luau-lsp.inlayHints.makeInsertable", "/inlay_hints/insertable"},
+	{"luau-lsp.completion.imports.enabled", "/features/auto_imports"},
 };
 
 template <typename T>
@@ -119,6 +163,35 @@ settingsinfo settingsinfo::from_json(const json& data, const settingsinfo& base)
 		priv::read(diagnostics, "include_dependents", info.diagnostics.include_dependents);
 	}
 
+	if (data.contains("inlay_hints") && data["inlay_hints"].is_object())
+	{
+		const json& hints = data["inlay_hints"];
+		priv::read(hints, "variable_types", info.inlay_hints.variable_types);
+		priv::read(hints, "parameter_types", info.inlay_hints.parameter_types);
+		priv::read(hints, "function_return_types", info.inlay_hints.function_return_types);
+		priv::read(hints, "hide_error_types", info.inlay_hints.hide_error_types);
+		priv::read(hints, "hide_matching_names", info.inlay_hints.hide_matching_names);
+		priv::read(hints, "max_length", info.inlay_hints.max_length);
+		priv::read(hints, "insertable", info.inlay_hints.insertable);
+
+		if (hints.contains("parameter_names") && hints["parameter_names"].is_string())
+		{
+			info.inlay_hints.parameter_names =
+				enum_parameter_hints::from_name(hints["parameter_names"].get<std::string>()).value_or(info.inlay_hints.parameter_names);
+		}
+	}
+
+	if (data.contains("features") && data["features"].is_object())
+	{
+		const json& features = data["features"];
+		priv::read(features, "documentation", info.features.documentation);
+		priv::read(features, "auto_imports", info.features.auto_imports);
+		priv::read(features, "semantic_tokens", info.features.semantic_tokens);
+		priv::read(features, "colors", info.features.colors);
+	}
+
+	priv::read(data, "documentation_files", info.documentation_files);
+	priv::read(data, "disabled_globals", info.disabled_globals);
 	priv::read(data, "analyze_lua_files", info.analyze_lua_files);
 	priv::read(data, "base_luaurc", info.base_luaurc);
 
@@ -162,6 +235,11 @@ result<json> settingsinfo::read_vscode_settings(const std::filesystem::path& fil
 		return result<json>::fail(file.generic_string() + ": " + error.what());
 	}
 
+	return result<json>::ok(convert_vscode_settings(data));
+}
+
+json settingsinfo::convert_vscode_settings(const json& data)
+{
 	std::map<std::string, json> flat;
 	priv::flatten(data, "", flat);
 
@@ -177,7 +255,7 @@ result<json> settingsinfo::read_vscode_settings(const std::filesystem::path& fil
 		}
 	}
 
-	return result<json>::ok(converted);
+	return converted;
 }
 
 settingsinfo settingsinfo::with_project(const std::filesystem::path& root, const std::optional<std::string>& extra_file) const
@@ -254,6 +332,26 @@ json settingsinfo::to_json() const
 		{"ignore_globs", ignore_globs},
 		{"analyze_lua_files", analyze_lua_files},
 		{"base_luaurc", base_luaurc},
+		{"documentation_files", documentation_files},
+		{"disabled_globals", disabled_globals},
+		{"inlay_hints",
+		 {
+			 {"variable_types", inlay_hints.variable_types},
+			 {"parameter_names", enum_parameter_hints::get_name(inlay_hints.parameter_names)},
+			 {"parameter_types", inlay_hints.parameter_types},
+			 {"function_return_types", inlay_hints.function_return_types},
+			 {"hide_error_types", inlay_hints.hide_error_types},
+			 {"hide_matching_names", inlay_hints.hide_matching_names},
+			 {"max_length", inlay_hints.max_length},
+			 {"insertable", inlay_hints.insertable},
+		 }},
+		{"features",
+		 {
+			 {"documentation", features.documentation},
+			 {"auto_imports", features.auto_imports},
+			 {"semantic_tokens", features.semantic_tokens},
+			 {"colors", features.colors},
+		 }},
 	};
 }
 
@@ -427,9 +525,13 @@ void flatten(const json& value, const std::string& prefix, std::map<std::string,
 	{
 		std::string next = prefix.empty() ? key : prefix + "." + key;
 
-		if (stdx::starts_with(next, vscode_prefix) || stdx::starts_with(std::string(vscode_prefix), next + "."))
+		for (std::string_view prefix : vscode_prefixes)
 		{
-			flatten(child, next, target);
+			if (stdx::starts_with(next, prefix) || stdx::starts_with(std::string(prefix), next + "."))
+			{
+				flatten(child, next, target);
+				break;
+			}
 		}
 	}
 }

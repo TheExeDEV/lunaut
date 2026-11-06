@@ -53,6 +53,19 @@ void workspace::initialize()
 
 	register_types();
 
+	if (settings.features.documentation)
+	{
+		std::vector<std::filesystem::path> files;
+
+		for (const std::string& file : settings.documentation_files)
+		{
+			std::filesystem::path path(file);
+			files.push_back(path.is_absolute() ? path : root / path);
+		}
+
+		docs.load(roblox, files, owner);
+	}
+
 #if FFLAG_ROJO
 	if (roblox && settings.rojo.enabled)
 	{
@@ -348,12 +361,59 @@ void workspace::register_types()
 	}
 
 	load_definitions();
+	apply_disabled_globals(frontend.globals);
+
+	if (!FFlag::LuauSolverV2)
+	{
+		apply_disabled_globals(frontend.globalsForAutocomplete);
+	}
 
 	Luau::freeze(frontend.globals.globalTypes);
 
 	if (!FFlag::LuauSolverV2)
 	{
 		Luau::freeze(frontend.globalsForAutocomplete.globalTypes);
+	}
+}
+
+void workspace::apply_disabled_globals(Luau::GlobalTypes& globals)
+{
+	for (const std::string& disabled : settings.disabled_globals)
+	{
+		size_t dot = disabled.find('.');
+		std::string library = disabled.substr(0, dot);
+		std::optional<std::string> member = dot == std::string::npos ? std::nullopt : std::optional<std::string>(disabled.substr(dot + 1));
+		Luau::AstName name = globals.globalNames.names->get(library.c_str());
+		auto binding = name.value == nullptr ? globals.globalScope->bindings.end() : globals.globalScope->bindings.find(name);
+
+		if (binding == globals.globalScope->bindings.end())
+		{
+			owner.send_log(enumitem_message_type::Warning, "disabling globals: unknown global " + disabled);
+			continue;
+		}
+
+		if (!member)
+		{
+			globals.globalScope->bindings.erase(binding);
+			owner.send_log(enumitem_message_type::Info, "disabled global " + disabled);
+			continue;
+		}
+
+		Luau::TypeId type = Luau::follow(binding->second.typeId);
+		bool erased = false;
+
+		if (Luau::TableType* table = Luau::getMutable<Luau::TableType>(type))
+		{
+			erased = table->props.erase(*member) > 0;
+		}
+		else if (Luau::ExternType* extern_type = Luau::getMutable<Luau::ExternType>(type))
+		{
+			erased = extern_type->props.erase(*member) > 0;
+		}
+
+		owner.send_log(
+			erased ? enumitem_message_type::Info : enumitem_message_type::Warning,
+			std::string(erased ? "disabled global " : "disabling globals: cannot remove ") + disabled);
 	}
 }
 
@@ -427,6 +487,8 @@ void workspace::load_definitions()
 
 		definitions.push_back(loaded);
 	}
+
+	roblox_metadata = metadata;
 
 	if (!roblox)
 	{

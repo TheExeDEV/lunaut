@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### Added
+
+- Inlay hints for variable types, parameter names, parameter types and return types, each with its own setting
+- Documentation in hover, completion and signature help from the Roblox and Luau API docs and Moonwave comments
+- Auto-imports of workspace modules and Roblox services in completion
+- Semantic highlighting, quick fixes for lints and unknown globals, a `Color3` color picker and folding ranges with `--#region`
+- `lunaut.documentationFiles` and `lunaut.disabledGlobals`
+- luau-lsp settings (`luau-lsp.*`) are read as well, `lunaut.*` wins when both are set
+- `LUNAUT_OFFLINE=1` turns off every download
+
+### Changed
+
+- Hover, completion details and signature help use the same format as luau-lsp
+
 ## [0.1.0] - 2026-11-06
 
 ### Added

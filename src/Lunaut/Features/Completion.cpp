@@ -7,6 +7,9 @@
 
 #include "Luau/Autocomplete.h"
 #include "Luau/ToString.h"
+#include "Luau/TxnLog.h"
+#include "Luau/TypePack.h"
+#include "Luau/TypeUtils.h"
 
 namespace lunaut
 {
@@ -36,6 +39,7 @@ const std::map<Luau::TypeCorrectKind, std::string_view> relevant_sort = {
 enumitem_completion_kind get_kind(const Luau::AutocompleteEntry& entry);
 std::string get_sort_text(const std::string& label, const Luau::AutocompleteEntry& entry);
 std::optional<json> get_string_range(const textdocument& document, const std::vector<Luau::AstNode*>& ancestry);
+std::pair<std::string, std::string> get_call_details(const Luau::AutocompleteEntry& entry, const Luau::FunctionType& function);
 
 }
 }
@@ -85,14 +89,46 @@ json workspace::get_completion(const json& params)
 			{"sortText", priv::get_sort_text(label, entry)},
 		};
 
-		if (entry.type)
-		{
-			item["detail"] = Luau::toString(*entry.type, options);
-		}
-
 		if (entry.deprecated)
 		{
 			item["tags"] = {1};
+		}
+
+		if (settings.features.documentation)
+		{
+			std::optional<std::string> markdown = entry.documentationSymbol ? docs.get_markdown(*entry.documentationSymbol) : std::nullopt;
+
+			if (!markdown && entry.type)
+			{
+				markdown = get_type_documentation(*entry.type);
+			}
+
+			if (markdown)
+			{
+				item["documentation"] = protocol::make_markdown(*markdown);
+			}
+		}
+
+		const Luau::FunctionType* function = entry.type ? Luau::get<Luau::FunctionType>(Luau::follow(*entry.type)) : nullptr;
+		bool callable = function != nullptr && entry.kind != Luau::AutocompleteEntryKind::GeneratedFunction &&
+			entry.kind != Luau::AutocompleteEntryKind::Type;
+
+		if (entry.type)
+		{
+			item["detail"] = Luau::toString(Luau::follow(*entry.type));
+		}
+
+		if (callable)
+		{
+			auto [details, snippet] = priv::get_call_details(entry, *function);
+			item["labelDetails"] = {{"detail", details}};
+
+			if (entry.parens != Luau::ParenthesesRecommendation::None && !entry.insertText)
+			{
+				item["insertText"] = label + snippet + "$0";
+				item["insertTextFormat"] = 2;
+				item["command"] = {{"title", "Trigger Signature Help"}, {"command", "editor.action.triggerParameterHints"}};
+			}
 		}
 
 		if (entry.kind == Luau::AutocompleteEntryKind::RequirePath && string_range)
@@ -104,17 +140,27 @@ json workspace::get_completion(const json& params)
 		{
 			item["insertText"] = *entry.insertText;
 		}
-		else if (entry.parens == Luau::ParenthesesRecommendation::CursorAfter)
+		else if (!item.contains("insertText") && entry.parens != Luau::ParenthesesRecommendation::None)
 		{
 			item["insertText"] = label + "()";
 		}
-		else if (entry.parens == Luau::ParenthesesRecommendation::CursorInside)
-		{
-			item["insertText"] = label + "($0)";
-			item["insertTextFormat"] = 2;
-		}
 
 		items.push_back(item);
+	}
+
+	if (completion.context == Luau::AutocompleteContext::Expression || completion.context == Luau::AutocompleteContext::Statement)
+	{
+		std::set<std::string> taken;
+
+		for (const auto& [label, entry] : completion.entryMap)
+		{
+			taken.insert(label);
+		}
+
+		for (json& item : get_auto_imports(name, *document, taken))
+		{
+			items.push_back(std::move(item));
+		}
 	}
 
 	return {{"isIncomplete", false}, {"items", items}};
@@ -157,6 +203,69 @@ std::string get_sort_text(const std::string& label, const Luau::AutocompleteEntr
 
 	const auto found = relevant_sort.find(entry.typeCorrect);
 	return std::string(found == relevant_sort.end() ? "3" : found->second) + label;
+}
+
+std::pair<std::string, std::string> get_call_details(const Luau::AutocompleteEntry& entry, const Luau::FunctionType& function)
+{
+	std::string details = "(";
+	std::string snippet = "(";
+	bool comma = false;
+	size_t index = 0;
+	size_t stop = 1;
+	auto [required, maximum] = Luau::getParameterExtents(Luau::TxnLog::empty(), function.argTypes, true);
+
+	for (Luau::TypeId argument : function.argTypes)
+	{
+		if (Luau::get<Luau::UnknownType>(Luau::follow(argument)) != nullptr)
+		{
+			++required;
+		}
+	}
+
+	Luau::TypePackIterator it = Luau::begin(function.argTypes);
+
+	for (; it != Luau::end(function.argTypes); ++it, ++index)
+	{
+		if (index == 0 && entry.indexedWithSelf)
+		{
+			continue;
+		}
+
+		std::string name = index < function.argNames.size() && function.argNames[index] ? function.argNames[index]->name : "_";
+		bool fill = index < required;
+
+		if (comma)
+		{
+			details += ", ";
+			snippet += fill ? ", " : "";
+		}
+
+		details += name;
+
+		if (fill)
+		{
+			snippet += "${" + std::to_string(stop++) + ":" + name + "}";
+		}
+
+		comma = true;
+	}
+
+	if (std::optional<Luau::TypePackId> tail = it.tail(); tail && !Luau::isEmpty(*tail))
+	{
+		const Luau::VariadicTypePack* variadic = Luau::get<Luau::VariadicTypePack>(Luau::follow(*tail));
+
+		if (variadic == nullptr || !variadic->hidden)
+		{
+			details += (comma ? ", " : "") + Luau::toString(*tail);
+		}
+	}
+
+	if (entry.parens == Luau::ParenthesesRecommendation::CursorInside && snippet == "(")
+	{
+		snippet += "$1";
+	}
+
+	return {details + ")", snippet + ")"};
 }
 
 std::optional<json> get_string_range(const textdocument& document, const std::vector<Luau::AstNode*>& ancestry)

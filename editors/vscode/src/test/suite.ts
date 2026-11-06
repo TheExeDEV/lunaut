@@ -107,6 +107,73 @@ export async function run(): Promise<void> {
 		results,
 	);
 
+	const hintsFile = vscode.Uri.file(path.join(root, "hints.luau"));
+
+	await check(
+		"shows inlay hints",
+		async () => {
+			const document = await vscode.workspace.openTextDocument(hintsFile);
+			await vscode.window.showTextDocument(document);
+			const hints = await waitFor(async () => {
+				const found = await vscode.commands.executeCommand<vscode.InlayHint[]>(
+					"vscode.executeInlayHintProvider",
+					hintsFile,
+					new vscode.Range(0, 0, document.lineCount, 0),
+				);
+				return found.length > 0 ? found : undefined;
+			});
+			const labels = hints.map((hint) => (typeof hint.label === "string" ? hint.label : hint.label.map((part) => part.value).join("")));
+			assert.ok(labels.includes(": string"), labels.join(","));
+			assert.ok(labels.includes("value:"), labels.join(","));
+		},
+		results,
+	);
+
+	await check(
+		"provides semantic tokens",
+		async () => {
+			const tokens = await vscode.commands.executeCommand<vscode.SemanticTokens>("vscode.provideDocumentSemanticTokens", hintsFile);
+			assert.ok(tokens && tokens.data.length >= 5 && tokens.data.length % 5 === 0);
+		},
+		results,
+	);
+
+	await check(
+		"provides folding ranges",
+		async () => {
+			const ranges = await vscode.commands.executeCommand<vscode.FoldingRange[]>("vscode.executeFoldingRangeProvider", hintsFile);
+			assert.ok(ranges.some((range) => range.start === 1 && range.end === 2), JSON.stringify(ranges));
+		},
+		results,
+	);
+
+	await check(
+		"provides colors",
+		async () => {
+			const document = await vscode.workspace.openTextDocument({ language: "luau", content: "local red = Color3.fromRGB(255, 0, 0)\n" });
+			const colors = await vscode.commands.executeCommand<vscode.ColorInformation[]>("vscode.executeDocumentColorProvider", document.uri);
+			assert.strictEqual(colors.length, 1);
+			assert.strictEqual(colors[0].color.red, 1);
+		},
+		results,
+	);
+
+	await check(
+		"passes changed settings to the server",
+		async () => {
+			await vscode.workspace.getConfiguration("lunaut").update("inlayHints.functionReturnTypes", false, vscode.ConfigurationTarget.Global);
+			const api = extension!.exports as { getClient: () => { sendRequest: (method: string, params: object) => Promise<any> } | undefined };
+			const settings = await waitFor(async () => {
+				const status = await api.getClient()!.sendRequest("lunaut/status", {});
+				const current = status.workspaces[0].settings;
+				return current.inlay_hints.function_return_types === false ? current : undefined;
+			});
+			assert.strictEqual(settings.inlay_hints.function_return_types, false);
+			await vscode.workspace.getConfiguration("lunaut").update("inlayHints.functionReturnTypes", undefined, vscode.ConfigurationTarget.Global);
+		},
+		results,
+	);
+
 	await check(
 		"runs the status command",
 		async () => {

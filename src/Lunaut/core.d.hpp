@@ -137,6 +137,39 @@ enum class enumitem_definition_source
 	Roblox,
 };
 
+enum class enumitem_token_type : int
+{
+	Namespace = 0,
+	Type = 1,
+	Class = 2,
+	Enum = 3,
+	Interface = 4,
+	Struct = 5,
+	TypeParameter = 6,
+	Parameter = 7,
+	Variable = 8,
+	Property = 9,
+	EnumMember = 10,
+	Event = 11,
+	Function = 12,
+	Method = 13,
+};
+
+enum class enumitem_token_modifier : int
+{
+	Declaration = 1,
+	Readonly = 2,
+	DefaultLibrary = 4,
+	Deprecated = 8,
+};
+
+enum class enumitem_parameter_hints
+{
+	None,
+	Literals,
+	All,
+};
+
 enum class enumitem_fflag_source
 {
 	Default,
@@ -161,6 +194,12 @@ std::optional<enumitem_platform_variant> from_name(std::string_view name);
 namespace enum_definition_source
 {
 std::string_view get_name(enumitem_definition_source item);
+}
+
+namespace enum_parameter_hints
+{
+std::string_view get_name(enumitem_parameter_hints item);
+std::optional<enumitem_parameter_hints> from_name(std::string_view name);
 }
 
 namespace enum_fflag_source
@@ -202,6 +241,26 @@ struct rojoinfo
 	std::string executable = "rojo";
 };
 
+struct inlayhintsinfo
+{
+	bool variable_types = true;
+	enumitem_parameter_hints parameter_names = enumitem_parameter_hints::Literals;
+	bool parameter_types = false;
+	bool function_return_types = true;
+	bool hide_error_types = true;
+	bool hide_matching_names = true;
+	int max_length = 50;
+	bool insertable = true;
+};
+
+struct featuresinfo
+{
+	bool documentation = true;
+	bool auto_imports = true;
+	bool semantic_tokens = true;
+	bool colors = true;
+};
+
 struct diagnosticsinfo
 {
 	bool lint = true;
@@ -220,10 +279,15 @@ struct settingsinfo
 	std::vector<std::string> ignore_globs;
 	bool analyze_lua_files = true;
 	std::string base_luaurc;
+	inlayhintsinfo inlay_hints;
+	featuresinfo features;
+	std::vector<std::string> documentation_files;
+	std::vector<std::string> disabled_globals;
 
 	static settingsinfo from_json(const json& data);
 	static settingsinfo from_json(const json& data, const settingsinfo& base);
 	static result<json> read_vscode_settings(const std::filesystem::path& file);
+	static json convert_vscode_settings(const json& data);
 	settingsinfo clone(const json& change) const;
 	settingsinfo with_project(const std::filesystem::path& root, const std::optional<std::string>& extra_file) const;
 	json to_json() const;
@@ -318,6 +382,7 @@ class protocol
 {
 public:
 	static json get_capabilities();
+	static json get_semantic_legend();
 	static json make_markdown(const std::string& value);
 	static json make_diagnostic(
 		const textdocument& document,
@@ -457,6 +522,20 @@ public:
 	static result<nothing> generate_sourcemap(const std::filesystem::path& root, const rojoinfo& info);
 };
 
+class documentation
+{
+public:
+	void load(bool roblox, const std::vector<std::filesystem::path>& files, client& owner);
+	bool is_loaded() const;
+	std::optional<std::string> get_markdown(const std::string& symbol) const;
+	std::optional<std::string> get_parameter_markdown(const std::string& symbol, size_t index) const;
+	static std::optional<std::string> get_comment_markdown(const Luau::SourceModule& source, const std::string& text, unsigned int line);
+
+private:
+	json entries = json::object();
+	bool loaded = false;
+};
+
 class robloxmagic
 {
 public:
@@ -593,9 +672,21 @@ public:
 	json get_references(const json& params);
 	json get_prepare_rename(const json& params);
 	json get_rename(const json& params);
+	json get_inlay_hints(const json& params);
+	json get_semantic_tokens(const json& params);
+	json get_code_actions(const json& params);
+	json get_document_colors(const json& params);
+	json get_color_presentations(const json& params);
+	json get_folding_ranges(const json& params);
 
 private:
 	void index_workspace();
+	json get_auto_imports(const Luau::ModuleName& name, const textdocument& document, const std::set<std::string>& taken);
+	std::optional<json> make_import_edit(const Luau::ModuleName& name, const textdocument& document, const std::string& symbol);
+	std::optional<std::string> get_import_statement(const Luau::ModuleName& from, const std::string& symbol) const;
+	unsigned int get_import_line(const Luau::ModuleName& name, const textdocument& document);
+	std::optional<std::string> get_comment_documentation(const Luau::ModuleName& name, const Luau::Location& location);
+	std::optional<std::string> get_type_documentation(Luau::TypeId type);
 	std::vector<std::pair<Luau::ModuleName, Luau::Location>> find_references(
 		const Luau::ModuleName& name,
 		Luau::Position position,
@@ -603,6 +694,7 @@ private:
 		std::optional<Luau::Location>& declaration);
 	void register_types();
 	void load_definitions();
+	void apply_disabled_globals(Luau::GlobalTypes& globals);
 	Luau::CheckResult check_module(const Luau::ModuleName& name, bool for_autocomplete);
 	Luau::ModulePtr get_module(const Luau::ModuleName& name, bool for_autocomplete) const;
 	bool is_definition_file(const std::string& path) const;
@@ -617,6 +709,8 @@ private:
 	Luau::Frontend frontend;
 	sourcemap map;
 	instancetypes instances;
+	documentation docs;
+	json roblox_metadata = json::object();
 	std::vector<loadeddefinitioninfo> definitions;
 	std::set<std::string> definition_paths;
 	bool ready = false;
@@ -644,6 +738,12 @@ public:
 	json on_references(const json& params);
 	json on_prepare_rename(const json& params);
 	json on_rename(const json& params);
+	json on_inlay_hint(const json& params);
+	json on_semantic_tokens(const json& params);
+	json on_code_action(const json& params);
+	json on_document_color(const json& params);
+	json on_color_presentation(const json& params);
+	json on_folding_range(const json& params);
 	json on_lunaut_status(const json& params);
 	json on_lunaut_fflags(const json& params);
 	json on_lunaut_definitions(const json& params);

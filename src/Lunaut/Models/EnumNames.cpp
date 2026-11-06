@@ -25,6 +25,12 @@ const std::map<enumitem_platform_variant, std::string_view> platform_variant_nam
 	{enumitem_platform_variant::Roblox, "roblox"},
 };
 
+const std::map<enumitem_parameter_hints, std::string_view> parameter_hints_names = {
+	{enumitem_parameter_hints::None, "none"},
+	{enumitem_parameter_hints::Literals, "literals"},
+	{enumitem_parameter_hints::All, "all"},
+};
+
 const std::map<enumitem_definition_source, std::string_view> definition_source_names = {
 	{enumitem_definition_source::Config, "Config"},
 	{enumitem_definition_source::Cli, "Cli"},
@@ -69,6 +75,27 @@ std::string_view get_name(enumitem_platform_variant item)
 std::optional<enumitem_platform_variant> from_name(std::string_view name)
 {
 	for (const auto& [item, item_name] : priv::platform_variant_names)
+	{
+		if (item_name == name)
+		{
+			return item;
+		}
+	}
+
+	return std::nullopt;
+}
+}
+
+namespace enum_parameter_hints
+{
+std::string_view get_name(enumitem_parameter_hints item)
+{
+	return priv::get_name_from(priv::parameter_hints_names, item);
+}
+
+std::optional<enumitem_parameter_hints> from_name(std::string_view name)
+{
+	for (const auto& [item, item_name] : priv::parameter_hints_names)
 	{
 		if (item_name == name)
 		{

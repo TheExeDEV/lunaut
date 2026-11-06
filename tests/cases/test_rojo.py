@@ -38,7 +38,7 @@ class RojoTests(unittest.TestCase):
 	def test_script_instance_type(self):
 		line, character = position_of(self.text, "script.Parent", 2)
 		hover = self.client.at("textDocument/hover", self.uri, line, character)
-		self.assertIn("script: Script", hover["contents"]["value"])
+		self.assertIn("type script = Script", hover["contents"]["value"])
 
 	def test_completion_from_sourcemap_children(self):
 		text = "local parent = script.Parent.\nlocal shared = game:GetService(\"ReplicatedStorage\").Shared.\n"

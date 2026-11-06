@@ -8,6 +8,11 @@ lunaut is your astronaut in Luau code: it checks types and lint while you type, 
 
 - Diagnostics (type errors, syntax errors, lint), hover, completion, go to definition, document symbols, signature help
 - Find all references (`Shift+F12`) and rename (`F2`) across files, for locals and module members
+- Inlay hints for variable types, parameter names, parameter and return types, each switchable in settings
+- Documentation in hover, completion and signature help: Roblox and Luau API docs and Moonwave comments in your code
+- Auto-imports: modules and Roblox services that are not required yet, with the `require` or `GetService` line added for you
+- Semantic highlighting, quick fixes, a color picker for `Color3` and folding with `--#region`
+- Reads luau-lsp settings (`luau-lsp.*`) as they are, so a project set up for luau-lsp works without changes
 - Both Luau type solvers: the old one by default, the new one with `lunaut.fflags.enableNewSolver`
 - `require` by string (`./`, `../`, `@self`, aliases from `.luaurc` and `.config.luau`) and by instance (`script.Parent.X`, `game:GetService("X")`, `:WaitForChild("X")`)
 - Completion inside `require("...")`: aliases, folders and modules as you type the path
@@ -46,19 +51,20 @@ lunaut is your astronaut in Luau code: it checks types and lint while you type, 
 5. [FFlags](#fflags)
 6. [Definition files and priorities](#definition-files-and-priorities)
 7. [Rojo](#rojo)
-8. [References and rename](#references-and-rename)
-9. [Requires and .luaurc](#requires-and-luaurc)
-10. [Command reference](#command-reference)
-11. [Custom LSP methods](#custom-lsp-methods)
-12. [Environment variables](#environment-variables)
-13. [Tests](#tests)
-14. [Luau updates](#luau-updates)
-15. [Releasing](#releasing)
-16. [Building from source](#building-from-source)
-17. [Source layout](#source-layout)
-18. [Limitations](#limitations)
-19. [Acknowledgements](#acknowledgements)
-20. [License](#license)
+8. [Editor features](#editor-features)
+9. [References and rename](#references-and-rename)
+10. [Requires and .luaurc](#requires-and-luaurc)
+11. [Command reference](#command-reference)
+12. [Custom LSP methods](#custom-lsp-methods)
+13. [Environment variables](#environment-variables)
+14. [Tests](#tests)
+15. [Luau updates](#luau-updates)
+16. [Releasing](#releasing)
+17. [Building from source](#building-from-source)
+18. [Source layout](#source-layout)
+19. [Limitations](#limitations)
+20. [Acknowledgements](#acknowledgements)
+21. [License](#license)
 
 ---
 
@@ -159,7 +165,7 @@ code --install-extension lunaut.vsix
 
 ## Settings
 
-All settings live in VS Code settings under `lunaut.*`: user settings for your machine, `.vscode/settings.json` for a project. The server reads `.vscode/settings.json` itself too, so `lunaut analyze` in a terminal or CI uses exactly the same project settings as the editor. Comments and trailing commas are fine, like everywhere in VS Code.
+All settings live in VS Code settings under `lunaut.*` (luau-lsp settings work too, see [luau-lsp settings](#luau-lsp-settings)): user settings for your machine, `.vscode/settings.json` for a project. The server reads `.vscode/settings.json` itself too, so `lunaut analyze` in a terminal or CI uses exactly the same project settings as the editor. Comments and trailing commas are fine, like everywhere in VS Code.
 
 ```jsonc
 // .vscode/settings.json
@@ -208,7 +214,45 @@ All settings live in VS Code settings under `lunaut.*`: user settings for your m
 | `lunaut.ignoreGlobs` | `["**/_Index/**"]` | files that never get diagnostics and are never discovered |
 | `lunaut.analyzeLuaFiles` | `true` | check `.lua` files too, not only `.luau` |
 | `lunaut.baseLuaurc` | `""` | a `.luaurc` applied under every other one, relative to the workspace |
+| `lunaut.inlayHints.variableTypes` | `true` | type hints after locals and loop variables |
+| `lunaut.inlayHints.parameterNames` | `literals` | parameter names before arguments: `none`, `literals` or `all` |
+| `lunaut.inlayHints.parameterTypes` | `false` | type hints after function parameters without annotations |
+| `lunaut.inlayHints.functionReturnTypes` | `true` | return type hints after function signatures |
+| `lunaut.inlayHints.hideHintsForErrorTypes` | `true` | skip hints for types that failed to infer |
+| `lunaut.inlayHints.hideHintsForMatchingParameterNames` | `true` | skip `value:` before an argument already named `value` |
+| `lunaut.inlayHints.typeHintMaxLength` | `50` | longer type hints are cut |
+| `lunaut.inlayHints.makeInsertable` | `true` | double-click a type hint to insert it as an annotation |
+| `lunaut.hover.documentation` | `true` | documentation in hover, completion and signature help |
+| `lunaut.documentationFiles` | `[]` | extra documentation files in the Roblox API docs format |
+| `lunaut.disabledGlobals` | `[]` | globals to remove, like `table` or `table.clone` |
+| `lunaut.completion.autoImports` | `true` | suggest modules and services that are not required yet |
+| `lunaut.semanticTokens.enabled` | `true` | semantic highlighting |
+| `lunaut.colors.enabled` | `true` | color picker for `Color3` |
 | `lunaut.trace.server` | `off` | log LSP traffic to the Lunaut output channel |
+
+### luau-lsp settings
+
+lunaut understands the settings of [luau-lsp](https://github.com/JohnnyMorganz/luau-lsp), in `.vscode/settings.json` and in your user settings. When both are set, `lunaut.*` wins.
+
+| luau-lsp | lunaut |
+| --- | --- |
+| `luau-lsp.platform.type` | `lunaut.platform` |
+| `luau-lsp.fflags.enableByDefault`, `sync`, `enableNewSolver`, `override` | `lunaut.fflags.*` |
+| `luau-lsp.types.definitionFiles` | `lunaut.definitions` |
+| `luau-lsp.types.documentationFiles` | `lunaut.documentationFiles` |
+| `luau-lsp.types.disabledGlobals` | `lunaut.disabledGlobals` |
+| `luau-lsp.types.robloxSecurityLevel` | `lunaut.roblox.securityLevel` |
+| `luau-lsp.types.roblox` | `lunaut.roblox.downloadTypes` |
+| `luau-lsp.sourcemap.enabled`, `rojoProjectFile`, `sourcemapFile`, `autogenerate`, `includeNonScripts`, `rojoPath` | `lunaut.rojo.*` |
+| `luau-lsp.diagnostics.strictDatamodelTypes` | `lunaut.rojo.strictDatamodelTypes` |
+| `luau-lsp.diagnostics.includeDependents` | `lunaut.diagnostics.includeDependents` |
+| `luau-lsp.inlayHints.*` | `lunaut.inlayHints.*` |
+| `luau-lsp.completion.imports.enabled` | `lunaut.completion.autoImports` |
+| `luau-lsp.ignoreGlobs` | `lunaut.ignoreGlobs` |
+| `luau-lsp.analyzeLuaFiles` | `lunaut.analyzeLuaFiles` |
+| `luau-lsp.server.baseLuaurc` | `lunaut.baseLuaurc` |
+
+The Roblox definitions and API docs are the same files luau-lsp uses, from `luau-lsp.pages.dev`, loaded as the `@roblox` package, so hover, completion and documentation symbols match.
 
 ---
 
@@ -330,6 +374,64 @@ The lists of creatable classes and services come from the metadata line at the t
 
 ---
 
+## Editor features
+
+### Hover
+
+Hover text follows luau-lsp:
+
+| Under the cursor | Hover |
+| --- | --- |
+| a local | `local count: number`, `const limit: number` |
+| a function | `function Util.double(value: number): number`, methods as `function Part:Clone(): Part` |
+| a global | `type game = DataModel` |
+| a type name | `type Vector<T> = { x: T, y: T }` |
+| a string | `string (6 bytes)` |
+
+Documentation follows under a `----------` line: the Roblox or Luau API docs for API members, otherwise the comment right above the declaration. Moonwave comments are rendered with `@param`, `@return`, `@error` sections and `@deprecated`, `@yields`, `@since` labels:
+
+```luau
+--[=[
+	Doubles a number.
+
+	@param value number to double
+	@return the doubled number
+]=]
+local function double(value: number): number
+```
+
+Signature help shows the same documentation for the function and each parameter.
+
+### Inlay hints
+
+Gray hints inside the code: `local result = scale(2, 3)` shows `: number` after `result` and `value:`, `factor:` before the arguments. Every kind has its own switch under `lunaut.inlayHints`; VS Code's `editor.inlayHints.enabled` turns all of them off at once. Changes apply right away, no restart needed.
+
+### Completion and auto-imports
+
+Functions show their parameters next to the name and fill the call with placeholders: `add(${1:a}, ${2:b})`. Names of modules in the workspace and Roblox services that are not imported yet appear too; picking one adds the line at the top, after the existing imports:
+
+| Picked | Added |
+| --- | --- |
+| a module next to the file | `local Util = require("./Util")` |
+| a module under a `.luaurc` alias | `local Signal = require("@packages/Signal")` |
+| a sibling instance in Rojo | `local Helper = require(script.Parent.Helper)` |
+| another instance in Rojo | `local Util = require(game:GetService("ReplicatedStorage").Shared.Util)` |
+| a Roblox service | `local Players = game:GetService("Players")` |
+
+### Quick fixes
+
+| Diagnostic | Fix |
+| --- | --- |
+| `LocalUnused`, `FunctionUnused`, `ImportUnused` | rename to `_name` |
+| any lint | add `--!nolint Name` at the top of the file |
+| `Unknown global 'Util'` | add the `require` or `GetService` line |
+
+### Colors, folding, highlighting
+
+`Color3.new`, `fromRGB`, `fromHSV` and `fromHex` with literal arguments get a color square and a picker; the picked color is written back in the same constructor. Functions, blocks, tables, comment runs and `--#region` / `--#endregion` fold. Semantic highlighting marks parameters, locals, functions, methods, properties, enum items, types and built-in globals.
+
+---
+
 ## References and rename
 
 `Shift+F12` lists every use of the symbol under the cursor, `F2` renames it everywhere at once.
@@ -434,6 +536,7 @@ Other editors can pass settings in `initializationOptions` and `workspace/didCha
 | `LUNAUT_PURGE` | uninstaller | also remove the cache |
 | `LUNAUT_REPOSITORY` | installer, uninstaller | GitHub repository to download from |
 | `LUNAUT_BINARY` | tests, extension packaging | path to the server executable |
+| `LUNAUT_OFFLINE` | server | never download anything, use the cache only (tests set it) |
 
 ---
 
@@ -453,6 +556,7 @@ It runs every suite in [`tests/cases`](tests/cases) against `build/lunaut(.exe)`
 | `test_definitions.py` | priority order, `--!priority`, globs, a wrong order failing |
 | `test_rojo.py` | sourcemap loading, instance requires, `script` and service types, completion of sourcemap children |
 | `test_references.py` | references and rename for locals, module functions and table keys, in both solvers |
+| `test_features.py` | inlay hints and their switches, documentation, signature help, auto-imports, semantic tokens, quick fixes, colors, folding, luau-lsp settings |
 | `test_config.py` | `.config.luau` aliases, `lunaut.baseLuaurc`, `lunaut.analyzeLuaFiles`, `require` path completion, `const` hover |
 
 On GitHub the [CI](.github/workflows/ci.yml) workflow builds and tests on Windows and Linux on every push and pull request. macOS runners are often unavailable for private repositories, so macOS has its own [macOS](.github/workflows/macos.yml) workflow: Actions → macOS → Run workflow. Releases try to build macOS too and ship without it if no runner is available.
@@ -557,7 +661,6 @@ tests/                test runner, suites and fixtures
 ## Limitations
 
 - Definition file and FFlag changes need a server restart
-- No semantic tokens or inlay hints yet
 - Rename and references cover locals and table members; globals and type names are not renamed
 - Go to definition works for locals, requires and table members, not for globals from definition files
 - Rojo autogeneration runs `rojo sourcemap` once per change, it does not keep `--watch` running

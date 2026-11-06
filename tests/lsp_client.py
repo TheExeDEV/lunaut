@@ -8,6 +8,7 @@ import time
 import urllib.parse
 
 ROOT = pathlib.Path(__file__).resolve().parent
+os.environ["LUNAUT_OFFLINE"] = "1"
 FIXTURES = ROOT / "fixtures"
 
 
