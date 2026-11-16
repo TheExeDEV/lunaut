@@ -559,6 +559,32 @@ std::optional<Luau::ModuleName> workspace::find_definition_module(Luau::TypeId t
 	return module;
 }
 
+std::optional<std::string>
+workspace::get_type_alias_name(Luau::TypeId type, const Luau::ScopePtr& scope, const Luau::AstType* annotation) const
+{
+	if (std::optional<priv::named_type> reference = priv::get_reference_alias(scope, annotation))
+	{
+		return reference->name;
+	}
+
+	Luau::TypeId followed = Luau::follow(type);
+
+	if (Luau::get<Luau::IntersectionType>(followed) == nullptr)
+	{
+		return std::nullopt;
+	}
+
+	Luau::ModuleName module;
+	std::string name;
+
+	if (!find_type_alias(followed, module, name))
+	{
+		return std::nullopt;
+	}
+
+	return name;
+}
+
 std::optional<std::string> workspace::get_type_documentation(Luau::TypeId type)
 {
 	Luau::TypeId followed = Luau::follow(type);

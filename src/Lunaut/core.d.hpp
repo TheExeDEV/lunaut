@@ -769,6 +769,7 @@ public:
 	json get_prepare_rename(const json& params);
 	json get_rename(const json& params);
 	json get_inlay_hints(const json& params);
+	std::optional<std::string> get_type_alias_name(Luau::TypeId type, const Luau::ScopePtr& scope, const Luau::AstType* annotation) const;
 	json get_semantic_tokens(const json& params);
 	json get_code_actions(const json& params);
 	json get_document_colors(const json& params);

@@ -134,6 +134,15 @@ class RequireAliasTests(unittest.TestCase):
 		self.assertIn("Recursive node.", value)
 		self.assertNotIn("where", value)
 
+	def test_inlay_hints_preserve_intersection_alias(self):
+		hints = self.client.request(
+			"textDocument/inlayHint",
+			{"textDocument": {"uri": self.uri}, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 99, "character": 0}}},
+		)
+		shape = next(hint for hint in hints if hint["position"]["line"] == 2 and hint["kind"] == 1)
+		self.assertEqual(shape["label"], ": Shape")
+		self.assertNotIn("textEdits", shape)
+
 
 class TypeStatsTests(unittest.TestCase):
 	def test_type_stats_request(self):

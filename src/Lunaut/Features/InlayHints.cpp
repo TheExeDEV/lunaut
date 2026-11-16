@@ -24,17 +24,23 @@ constexpr int kind_parameter = 2;
 struct hint_collector final : Luau::AstVisitor
 {
 	hint_collector(
-		const Luau::Module& module, const textdocument& document, const inlayhintsinfo& info, unsigned int first, unsigned int last);
+		const workspace& owner,
+		const Luau::Module& module,
+		const textdocument& document,
+		const inlayhintsinfo& info,
+		unsigned int first,
+		unsigned int last);
 
 	bool visit(Luau::AstStatLocal* node) override;
 	bool visit(Luau::AstStatForIn* node) override;
 	bool visit(Luau::AstExprFunction* node) override;
 	bool visit(Luau::AstExprCall* node) override;
 
-	void add_variable(Luau::AstLocal* local, std::optional<Luau::TypeId> type);
+	void add_variable(Luau::AstLocal* local, std::optional<Luau::TypeId> type, const Luau::ScopePtr& scope);
 	void add_type(Luau::Position position, const Luau::ToStringResult& text);
 	bool is_visible(Luau::Position position) const;
 
+	const workspace& owner;
 	const Luau::Module& module;
 	const textdocument& document;
 	const inlayhintsinfo& info;
@@ -78,7 +84,7 @@ json workspace::get_inlay_hints(const json& params)
 	unsigned int first = params.value("/range/start/line"_json_pointer, 0u);
 	unsigned int last = params.value("/range/end/line"_json_pointer, 0xFFFFFFFFu);
 
-	priv::hint_collector collected(*module, *document, info, first, last);
+	priv::hint_collector collected(*this, *module, *document, info, first, last);
 	source->root->visit(&collected);
 	return collected.hints;
 }
@@ -89,8 +95,14 @@ namespace priv
 {
 
 hint_collector::hint_collector(
-	const Luau::Module& module, const textdocument& document, const inlayhintsinfo& info, unsigned int first, unsigned int last)
-	: module(module)
+	const workspace& owner,
+	const Luau::Module& module,
+	const textdocument& document,
+	const inlayhintsinfo& info,
+	unsigned int first,
+	unsigned int last)
+	: owner(owner)
+	, module(module)
 	, document(document)
 	, info(info)
 	, first(first)
@@ -133,7 +145,7 @@ bool hint_collector::visit(Luau::AstStatLocal* node)
 			}
 		}
 
-		add_variable(local, type);
+		add_variable(local, type, scope);
 	}
 
 	return true;
@@ -152,7 +164,7 @@ bool hint_collector::visit(Luau::AstStatForIn* node)
 	{
 		if (local->annotation == nullptr)
 		{
-			add_variable(local, scope ? scope->lookup(Luau::Symbol(local)) : std::nullopt);
+			add_variable(local, scope ? scope->lookup(Luau::Symbol(local)) : std::nullopt, scope);
 		}
 	}
 
@@ -253,7 +265,7 @@ bool hint_collector::visit(Luau::AstExprCall* node)
 	return true;
 }
 
-void hint_collector::add_variable(Luau::AstLocal* local, std::optional<Luau::TypeId> type)
+void hint_collector::add_variable(Luau::AstLocal* local, std::optional<Luau::TypeId> type, const Luau::ScopePtr& scope)
 {
 	if (!type || local->name == "_" || !is_visible(local->location.end))
 	{
@@ -264,6 +276,19 @@ void hint_collector::add_variable(Luau::AstLocal* local, std::optional<Luau::Typ
 
 	if (info.hide_error_types && Luau::get<Luau::ErrorType>(followed) != nullptr)
 	{
+		return;
+	}
+
+	if (std::optional<std::string> alias = owner.get_type_alias_name(followed, scope, local->annotation))
+	{
+		Luau::ToStringResult text{*alias};
+
+		if (local->annotation == nullptr && (scope == nullptr || !scope->lookupType(*alias)))
+		{
+			text.invalid = true;
+		}
+
+		add_type(local->location.end, text);
 		return;
 	}
 
