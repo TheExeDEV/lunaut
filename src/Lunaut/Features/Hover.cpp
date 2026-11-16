@@ -359,8 +359,12 @@ json workspace::get_hover(const json& params)
 	options.hideTableKind = true;
 	options.hideTableAliasExpansions = true;
 
+	Luau::ToStringOptions display_options = options;
+	display_options.exhaustive = false;
+
 	std::string text = Luau::toString(*type, options);
-	const std::string display = value_alias ? value_alias->name : text;
+	std::string display_text = Luau::toString(*type, display_options);
+	const std::string display = value_alias ? value_alias->name : display_text;
 
 	if (alias)
 	{
@@ -611,7 +615,6 @@ bool is_same_type(Luau::TypeId left, Luau::TypeId right)
 	}
 
 	Luau::ToStringOptions options;
-	options.exhaustive = true;
 	options.hideTableAliasExpansions = true;
 
 	for (size_t index = 0; index < left_intersection->parts.size(); ++index)
@@ -621,7 +624,10 @@ bool is_same_type(Luau::TypeId left, Luau::TypeId right)
 			continue;
 		}
 
-		if (Luau::toString(left_intersection->parts[index], options) != Luau::toString(right_intersection->parts[index], options))
+		const std::string left_text = Luau::toString(left_intersection->parts[index], options);
+		const std::string right_text = Luau::toString(right_intersection->parts[index], options);
+
+		if (left_text != right_text)
 		{
 			return false;
 		}

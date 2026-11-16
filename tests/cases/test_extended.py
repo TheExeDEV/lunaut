@@ -123,6 +123,17 @@ class RequireAliasTests(unittest.TestCase):
 		value = hover_text(self.client, self.uri, self.consumer, 'require("./config")')
 		self.assertEqual(value.strip(), "```luau\nConfig\n```")
 
+	def test_require_preserves_intersection_alias(self):
+		value = hover_text(self.client, self.uri, self.consumer, "local shape = require", 6)
+		self.assertIn("local shape: Shape", value)
+		self.assertIn("Intersected shape.", value)
+
+	def test_require_preserves_recursive_alias(self):
+		value = hover_text(self.client, self.uri, self.consumer, "local node = require", 6)
+		self.assertIn("local node: Node", value)
+		self.assertIn("Recursive node.", value)
+		self.assertNotIn("where", value)
+
 
 class TypeStatsTests(unittest.TestCase):
 	def test_type_stats_request(self):

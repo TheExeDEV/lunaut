@@ -1,3 +1,5 @@
 --!strict
 local config = require("./config")
-print(config.maxPlayers)
+local shape = require("./shapes")
+local node = require("./nodes")
+print(config.maxPlayers, shape.count, node.value)

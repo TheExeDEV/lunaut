@@ -1,9 +1,9 @@
 # Test report
 
-- Date: 2026-11-17 01:17:16
+- Date: 2026-11-17 01:29:18
 - Binary: `/home/ifmnb/Git/lunaut/build/lunaut`
 - Version: `lunaut 0.0.4 (Luau 0.747, GNU 16.2.1)`
-- Result: **119/119 passed** in 0.9s
+- Result: **121/121 passed** in 0.9s
 
 | Test | Status | Time |
 | --- | --- | --- |
@@ -38,6 +38,8 @@
 | `test_extended.ProtectionTests.test_malformed_request_does_not_crash` | PASS | 0.01s |
 | `test_extended.RequireAliasTests.test_require_call_preserves_annotated_alias` | PASS | 0.00s |
 | `test_extended.RequireAliasTests.test_require_preserves_annotated_alias` | PASS | 0.00s |
+| `test_extended.RequireAliasTests.test_require_preserves_intersection_alias` | PASS | 0.00s |
+| `test_extended.RequireAliasTests.test_require_preserves_recursive_alias` | PASS | 0.00s |
 | `test_extended.TypeStatsTests.test_stats_cli_json` | PASS | 0.01s |
 | `test_extended.TypeStatsTests.test_stats_cli_text` | PASS | 0.01s |
 | `test_extended.TypeStatsTests.test_type_stats_request` | PASS | 0.01s |
@@ -61,7 +63,7 @@
 | `test_features.LuauLspSettingsTests.test_settings_mapped_with_lunaut_priority` | PASS | 0.00s |
 | `test_features.LuauLspSettingsTests.test_vscode_flat_settings` | PASS | 0.01s |
 | `test_features.RobloxDocumentationTests.test_api_documentation_in_hover_and_completion` | PASS | 0.08s |
-| `test_features.RobloxDocumentationTests.test_service_auto_import` | PASS | 0.08s |
+| `test_features.RobloxDocumentationTests.test_service_auto_import` | PASS | 0.07s |
 | `test_fflags.FFlagTests.test_cli_override` | PASS | 0.00s |
 | `test_fflags.FFlagTests.test_flags_enabled_by_default` | PASS | 0.00s |
 | `test_fflags.FFlagTests.test_invalid_value` | PASS | 0.00s |
@@ -123,6 +125,6 @@
 | `test_rojo.RojoTests.test_references_through_sourcemap` | PASS | 0.00s |
 | `test_rojo.RojoTests.test_required_types_flow` | PASS | 0.00s |
 | `test_rojo.RojoTests.test_roblox_magic_functions` | PASS | 0.00s |
-| `test_rojo.RojoTests.test_roblox_magic_new_solver` | PASS | 0.06s |
+| `test_rojo.RojoTests.test_roblox_magic_new_solver` | PASS | 0.07s |
 | `test_rojo.RojoTests.test_script_instance_type` | PASS | 0.00s |
 | `test_rojo.RojoTests.test_status` | PASS | 0.00s |
