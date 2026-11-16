@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.0.4] - 2026-11-16
+
+### Changed
+
+- Sync to upstream Luau 0.747
+
 ### Added
 
 - `end` and `until` are inserted after Enter on a block opener, with a missing `then` or `do`
