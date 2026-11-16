@@ -42,6 +42,11 @@ class DocumentationTests(unittest.TestCase):
 		self.assertIn("type MovingPoint", value)
 		self.assertIn("A moving point.", value)
 
+	def test_intersection_comment_on_local_value(self):
+		value = hover_text(self.client, self.uri, self.main, "local moving: MovingPoint", len("local "))
+		self.assertIn("local moving: MovingPoint", value)
+		self.assertIn("A moving point.", value)
+
 	def test_function_comment_from_definition_file(self):
 		value = hover_text(self.client, self.uri, self.main, "add(1, 2)")
 		self.assertIn("function add", value)

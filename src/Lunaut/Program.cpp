@@ -277,6 +277,8 @@ int invoke_lsp(const commandinfo& info)
 #endif
 
 	std::ios::sync_with_stdio(false);
+	std::cin.tie(nullptr);
+	std::cerr.tie(nullptr);
 
 	jsonrpc rpc(std::cin, std::cout);
 	server instance(rpc, info.options);
