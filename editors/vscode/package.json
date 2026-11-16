@@ -1773,6 +1773,15 @@
           "default": true,
           "markdownDescription": "Suggest modules and Roblox services that are not required yet and add the `require` or `GetService` line."
         },
+        "lunaut.completion.importKeyword": {
+          "type": "string",
+          "enum": [
+            "local",
+            "const"
+          ],
+          "default": "local",
+          "markdownDescription": "Keyword used for inserted auto-import declarations: `local` or `const`."
+        },
         "lunaut.semanticTokens.enabled": {
           "type": "boolean",
           "default": true,

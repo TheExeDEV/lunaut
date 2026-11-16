@@ -48,6 +48,7 @@ const std::unordered_map<std::string_view, std::string_view> relevant_vscode_key
 	{"lunaut.inlayHints.makeInsertable", "/inlay_hints/insertable"},
 	{"lunaut.hover.documentation", "/features/documentation"},
 	{"lunaut.completion.autoImports", "/features/auto_imports"},
+	{"lunaut.completion.importKeyword", "/features/import_keyword"},
 	{"lunaut.semanticTokens.enabled", "/features/semantic_tokens"},
 	{"lunaut.colors.enabled", "/features/colors"},
 	{"lunaut.completion.autocompleteEnd", "/features/autocomplete_end"},
@@ -209,6 +210,13 @@ settingsinfo settingsinfo::from_json(const json& data, const settingsinfo& base)
 		priv::read(features, "documentation", info.features.documentation);
 		priv::read(features, "auto_imports", info.features.auto_imports);
 		priv::read(features, "semantic_tokens", info.features.semantic_tokens);
+
+		if (features.contains("import_keyword") && features["import_keyword"].is_string())
+		{
+			info.features.import_keyword =
+				enum_import_keyword::from_name(features["import_keyword"].get<std::string>()).value_or(info.features.import_keyword);
+		}
+
 		priv::read(features, "colors", info.features.colors);
 		priv::read(features, "autocomplete_end", info.features.autocomplete_end);
 		priv::read(features, "convert_quotes", info.features.convert_quotes);
@@ -377,6 +385,7 @@ json settingsinfo::to_json() const
 		 {
 			 {"documentation", features.documentation},
 			 {"auto_imports", features.auto_imports},
+			 {"import_keyword", enum_import_keyword::get_name(features.import_keyword)},
 			 {"semantic_tokens", features.semantic_tokens},
 			 {"colors", features.colors},
 			 {"autocomplete_end", features.autocomplete_end},

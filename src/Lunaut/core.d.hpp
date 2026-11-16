@@ -174,6 +174,12 @@ enum class enumitem_parameter_hints
 	All,
 };
 
+enum class enumitem_import_keyword
+{
+	Local,
+	Const,
+};
+
 enum class enumitem_fflag_source
 {
 	Default,
@@ -204,6 +210,12 @@ namespace enum_parameter_hints
 {
 std::string_view get_name(enumitem_parameter_hints item);
 std::optional<enumitem_parameter_hints> from_name(std::string_view name);
+}
+
+namespace enum_import_keyword
+{
+std::string_view get_name(enumitem_import_keyword item);
+std::optional<enumitem_import_keyword> from_name(std::string_view name);
 }
 
 namespace enum_fflag_source
@@ -261,6 +273,7 @@ struct featuresinfo
 {
 	bool documentation = true;
 	bool auto_imports = true;
+	enumitem_import_keyword import_keyword = enumitem_import_keyword::Local;
 	bool semantic_tokens = true;
 	bool colors = true;
 	bool autocomplete_end = true;

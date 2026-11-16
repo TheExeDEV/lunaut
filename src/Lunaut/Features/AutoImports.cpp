@@ -23,6 +23,7 @@ const std::vector<std::string_view> init_files = {"init.luau", "init.lua"};
 
 bool is_identifier(const std::string& name);
 bool is_import(const Luau::AstStat* statement);
+std::string get_keyword(const featuresinfo& features);
 std::string get_module_symbol(const Luau::ModuleName& name);
 std::string strip_module_suffix(const std::string& path);
 std::string make_instance_path(const std::string& virtual_path);
@@ -65,7 +66,9 @@ json workspace::get_auto_imports(const Luau::ModuleName& name, const textdocumen
 	{
 		for (const std::string& service : priv::get_services(roblox_metadata))
 		{
-			add(service, "local " + service + " = game:GetService(\"" + service + "\")", "Auto-import service " + service);
+			add(service,
+				priv::get_keyword(settings.features) + service + " = game:GetService(\"" + service + "\")",
+				"Auto-import service " + service);
 		}
 	}
 
@@ -115,7 +118,7 @@ std::optional<json> workspace::make_import_edit(const Luau::ModuleName& name, co
 
 		if (std::find(services.begin(), services.end(), symbol) != services.end())
 		{
-			statement = "local " + symbol + " = game:GetService(\"" + symbol + "\")";
+			statement = priv::get_keyword(settings.features) + symbol + " = game:GetService(\"" + symbol + "\")";
 		}
 	}
 
@@ -162,7 +165,7 @@ std::optional<std::string> workspace::get_import_statement(const Luau::ModuleNam
 
 		if (from_parent && target_parent && *from_parent == *target_parent && priv::is_identifier(symbol))
 		{
-			return "local " + symbol + " = require(script.Parent." + symbol + ")";
+			return priv::get_keyword(settings.features) + symbol + " = require(script.Parent." + symbol + ")";
 		}
 
 		std::string path = priv::make_instance_path(target);
@@ -172,7 +175,7 @@ std::optional<std::string> workspace::get_import_statement(const Luau::ModuleNam
 			return std::nullopt;
 		}
 
-		return "local " + symbol + " = require(" + path + ")";
+		return priv::get_keyword(settings.features) + symbol + " = require(" + path + ")";
 	}
 
 	std::optional<std::string> from_real = resolver.get_real_path(from);
@@ -222,7 +225,7 @@ std::optional<std::string> workspace::get_import_statement(const Luau::ModuleNam
 		}
 	}
 
-	return "local " + symbol + " = require(\"" + path + "\")";
+	return priv::get_keyword(settings.features) + symbol + " = require(\"" + path + "\")";
 }
 
 unsigned int workspace::get_import_line(const Luau::ModuleName& name, const textdocument& document)
@@ -264,6 +267,11 @@ namespace
 {
 namespace priv
 {
+
+std::string get_keyword(const featuresinfo& features)
+{
+	return std::string(enum_import_keyword::get_name(features.import_keyword)) + " ";
+}
 
 bool is_identifier(const std::string& name)
 {

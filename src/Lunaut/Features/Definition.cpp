@@ -79,9 +79,16 @@ json workspace::get_definition(const json& params)
 
 	if (Luau::AstStatTypeAlias* statement = node != nullptr ? node->as<Luau::AstStatTypeAlias>() : nullptr)
 	{
-		if (statement->nameLocation.containsClosed(position))
+		if (statement->nameLocation.containsClosed(position) && scope != nullptr)
 		{
-			return get_location(name, statement->type->location);
+			std::optional<Luau::TypeFun> definition = scope->lookupType(statement->name.value);
+
+			if (definition && definition->definitionLocation)
+			{
+				return get_location(name, *definition->definitionLocation);
+			}
+
+			return get_location(name, statement->nameLocation);
 		}
 	}
 

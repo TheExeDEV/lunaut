@@ -43,8 +43,6 @@ std::string to_string_named_function(
 std::optional<Luau::Property> find_property(Luau::TypeId owner, const std::string& name, Luau::TypeId& base);
 std::optional<Luau::ModuleName> get_definition_module(Luau::TypeId type);
 std::optional<Luau::ModuleName> find_imported_module(const Luau::ScopePtr& scope, const std::string& alias);
-std::optional<std::string> get_return_alias(const Luau::SourceModule& source);
-bool is_require_call(const Luau::AstExpr* expr);
 std::optional<size_t> get_utf8_length(std::string_view text);
 
 }
@@ -86,6 +84,7 @@ json workspace::get_hover(const json& params)
 	std::optional<priv::named_type> alias;
 	std::optional<priv::location_info> origin;
 	std::optional<std::string> index_name;
+	bool require_reference = false;
 	std::optional<std::string> symbol = Luau::getDocumentationSymbolAtPosition(*source, *module, position);
 
 	if (Luau::AstTypeReference* reference = node->as<Luau::AstTypeReference>())
@@ -253,6 +252,45 @@ json workspace::get_hover(const json& params)
 
 		if (!type)
 		{
+			if (Luau::AstExprGlobal* global = expr->as<Luau::AstExprGlobal>(); global != nullptr && global->name == "require")
+			{
+				for (Luau::AstNode* ancestor : ancestry)
+				{
+					Luau::AstExprCall* call = ancestor->as<Luau::AstExprCall>();
+
+					if (call == nullptr || call->func != expr)
+					{
+						continue;
+					}
+
+					for (Luau::AstNode* statement_node : ancestry)
+					{
+						Luau::AstStatLocal* statement = statement_node->as<Luau::AstStatLocal>();
+
+						if (statement == nullptr)
+						{
+							continue;
+						}
+
+						for (size_t index = 0; index < statement->values.size && index < statement->vars.size; ++index)
+						{
+							if (statement->values.data[index] == call)
+							{
+								type = scope->lookup(Luau::Symbol(statement->vars.data[index]));
+							}
+						}
+
+						break;
+					}
+
+					require_reference = type.has_value();
+					break;
+				}
+			}
+		}
+
+		if (!type)
+		{
 			if (const Luau::TypeId* found = module->astTypes.find(expr))
 			{
 				type = *found;
@@ -275,120 +313,12 @@ json workspace::get_hover(const json& params)
 
 	type = Luau::follow(*type);
 
-	std::optional<std::string> require_alias;
-	const Luau::AstExpr* required_expr = nullptr;
-	const Luau::AstLocal* required_local = nullptr;
-
-	if (Luau::AstExpr* expr = target.getExpr(); expr != nullptr && priv::is_require_call(expr))
-	{
-		required_expr = expr;
-	}
-
-	if (required_expr == nullptr)
-	{
-		if (Luau::AstExpr* expr = target.getExpr(); expr != nullptr && expr->as<Luau::AstExprGlobal>() != nullptr &&
-			std::string_view(expr->as<Luau::AstExprGlobal>()->name.value) == "require")
-		{
-			for (auto it = ancestry.rbegin(); it != ancestry.rend() && required_expr == nullptr; ++it)
-			{
-				Luau::AstExprCall* call = (*it)->as<Luau::AstExprCall>();
-
-				if (call == nullptr || call->func != expr)
-				{
-					continue;
-				}
-
-				required_expr = call;
-
-				for (Luau::AstNode* ancestor : ancestry)
-				{
-					Luau::AstStatLocal* statement = ancestor->as<Luau::AstStatLocal>();
-
-					if (statement == nullptr)
-					{
-						continue;
-					}
-
-					for (size_t index = 0; index < statement->values.size; ++index)
-					{
-						if (statement->values.data[index] == call && index < statement->vars.size)
-						{
-							required_local = statement->vars.data[index];
-						}
-					}
-
-					break;
-				}
-			}
-		}
-	}
-
-	if (required_expr == nullptr && target.getLocal() != nullptr)
-	{
-		required_local = target.getLocal();
-
-		for (auto it = ancestry.rbegin(); it != ancestry.rend(); ++it)
-		{
-			Luau::AstStatLocal* statement = (*it)->as<Luau::AstStatLocal>();
-
-			if (statement == nullptr)
-			{
-				continue;
-			}
-
-			for (size_t index = 0; index < statement->vars.size && index < statement->values.size; ++index)
-			{
-				if (statement->vars.data[index] == target.getLocal())
-				{
-					required_expr = statement->values.data[index];
-				}
-			}
-
-			break;
-		}
-	}
-
-	if (required_expr != nullptr)
-	{
-		const auto source_node = frontend.sourceNodes.find(name);
-
-		if (source_node != frontend.sourceNodes.end())
-		{
-			for (const auto& [required, location] : source_node->second->requireLocations)
-			{
-				if (location != required_expr->location)
-				{
-					continue;
-				}
-
-				const Luau::SourceModule* required_source = frontend.getSourceModule(required);
-
-				if (required_source == nullptr)
-				{
-					const auto known = definition_sources.find(required);
-
-					if (known != definition_sources.end())
-					{
-						required_source = &known->second;
-					}
-				}
-
-				if (required_source != nullptr)
-				{
-					require_alias = priv::get_return_alias(*required_source);
-				}
-
-				break;
-			}
-		}
-	}
-
-	if (require_alias)
+	if (require_reference)
 	{
 		symbol.reset();
 	}
 
-	if (!symbol && !require_alias)
+	if (!symbol)
 	{
 		symbol = (*type)->documentationSymbol;
 	}
@@ -399,22 +329,16 @@ json workspace::get_hover(const json& params)
 	options.functionTypeArguments = true;
 	options.hideNamedFunctionTypeParameters = false;
 	options.hideTableKind = true;
-	options.scope = scope;
+	options.hideTableAliasExpansions = true;
 
 	std::string text = Luau::toString(*type, options);
 
-	if (require_alias && required_local != nullptr && target.getLocal() == required_local)
+	if (alias)
 	{
-		text = priv::make_code_block(
-			std::string(required_local->isConst ? "const " : "local ") + required_local->name.value + ": " + *require_alias);
-	}
-	else if (require_alias)
-	{
-		text = priv::make_code_block(*require_alias);
-	}
-	else if (alias)
-	{
-		text = priv::make_code_block("type " + priv::to_string_type_fun(alias->name, alias->definition) + " = " + text);
+		Luau::ToStringOptions body = options;
+		body.hideTableAliasExpansions = false;
+		text =
+			priv::make_code_block("type " + priv::to_string_type_fun(alias->name, alias->definition) + " = " + Luau::toString(*type, body));
 	}
 	else if (const Luau::FunctionType* function = Luau::get<Luau::FunctionType>(*type))
 	{
@@ -431,7 +355,7 @@ json workspace::get_hover(const json& params)
 		const Luau::AstLocal* local = target.getLocal() != nullptr ? target.getLocal() : node->as<Luau::AstExprLocal>()->local;
 		text = priv::make_code_block(std::string(local->isConst ? "const " : "local ") + local->name.value + ": " + text);
 	}
-	else if (Luau::AstExprGlobal* global = node->as<Luau::AstExprGlobal>())
+	else if (Luau::AstExprGlobal* global = node->as<Luau::AstExprGlobal>(); global != nullptr && global->name != "require")
 	{
 		text = priv::make_code_block("type " + std::string(global->name.value) + " = " + text);
 	}
@@ -877,65 +801,6 @@ std::optional<Luau::ModuleName> find_imported_module(const Luau::ScopePtr& scope
 	}
 
 	return std::nullopt;
-}
-
-bool is_require_call(const Luau::AstExpr* expr)
-{
-	const Luau::AstExprCall* call = expr != nullptr ? expr->as<Luau::AstExprCall>() : nullptr;
-
-	if (call == nullptr || call->args.size < 1)
-	{
-		return false;
-	}
-
-	const Luau::AstExprGlobal* global = call->func->as<Luau::AstExprGlobal>();
-	return global != nullptr && global->name == "require";
-}
-
-std::optional<std::string> get_return_alias(const Luau::SourceModule& source)
-{
-	if (source.root == nullptr)
-	{
-		return std::nullopt;
-	}
-
-	const Luau::AstStatReturn* last = nullptr;
-
-	for (Luau::AstStat* statement : source.root->body)
-	{
-		if (const Luau::AstStatReturn* returned = statement->as<Luau::AstStatReturn>())
-		{
-			last = returned;
-		}
-	}
-
-	if (last == nullptr || last->list.size != 1)
-	{
-		return std::nullopt;
-	}
-
-	const Luau::AstExprLocal* local = last->list.data[0]->as<Luau::AstExprLocal>();
-
-	if (local == nullptr || local->local->annotation == nullptr)
-	{
-		return std::nullopt;
-	}
-
-	const Luau::AstTypeReference* reference = local->local->annotation->as<Luau::AstTypeReference>();
-
-	if (reference == nullptr)
-	{
-		return std::nullopt;
-	}
-
-	std::string name = reference->name.value;
-
-	if (reference->prefix)
-	{
-		name = std::string(reference->prefix->value) + "." + name;
-	}
-
-	return name;
 }
 
 std::optional<size_t> get_utf8_length(std::string_view text)

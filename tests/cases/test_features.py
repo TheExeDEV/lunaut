@@ -112,6 +112,24 @@ class FeatureTests(unittest.TestCase):
 		self.assertEqual(edit["newText"], 'local math2 = require("./lib/math2")\n')
 		self.assertEqual(edit["range"]["start"]["line"], 1)
 
+	def test_auto_import_keyword(self):
+		client = LspClient(FIXTURES / "basic", {"features": {"import_keyword": "const"}})
+
+		try:
+			uri, _ = client.open("imports.luau", "--!strict\nlocal x = mat\n")
+			items = client.at("textDocument/completion", uri, 1, 13)["items"]
+			math2 = next(item for item in items if item["label"] == "math2")
+			self.assertEqual(math2["additionalTextEdits"][0]["newText"], 'const math2 = require("./lib/math2")\n')
+
+			uri, diagnostics = client.open("unknown.luau", "--!strict\nprint(math2.square(2))\n")
+			actions = client.request(
+				"textDocument/codeAction",
+				{"textDocument": {"uri": uri}, "range": diagnostics[0]["range"], "context": {"diagnostics": diagnostics}},
+			)
+			self.assertEqual(actions[0]["edit"]["changes"][uri][0]["newText"], 'const math2 = require("./lib/math2")\n')
+		finally:
+			client.close()
+
 	def test_semantic_tokens(self):
 		data = self.client.request("textDocument/semanticTokens/full", {"textDocument": {"uri": self.hints_uri}})["data"]
 		tokens = decode_tokens(data)

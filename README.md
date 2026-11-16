@@ -254,6 +254,7 @@ All settings live in VS Code settings under `lunaut.*` (luau-lsp settings work t
 | `lunaut.documentationFiles` | `[]` | extra documentation files in the Roblox API docs format |
 | `lunaut.disabledGlobals` | `[]` | globals to remove, like `table` or `table.clone` |
 | `lunaut.completion.autoImports` | `true` | suggest modules and services that are not required yet |
+| `lunaut.completion.importKeyword` | `local` | keyword of inserted auto-imports: `local` or `const` |
 | `lunaut.semanticTokens.enabled` | `true` | semantic highlighting |
 | `lunaut.colors.enabled` | `true` | color picker for `Color3` |
 | `lunaut.completion.autocompleteEnd` | `true` | insert `end` or `until` after Enter on a block opener, adding a missing `then` or `do` |
@@ -460,6 +461,8 @@ Hover text follows luau-lsp:
 | a table field | `x: number` |
 | a string | `string (6 bytes)` |
 
+Named table types keep the name from the analyzer, so a variable of type `LuaObject` or `Scheduler` shows that name instead of the expanded table body. Clicking a type name in `type Name = ...` goes to its declaration, not to the body.
+
 Documentation follows under a `----------` line: the Roblox or Luau API docs for API members, otherwise the comment right above the declaration. Comments are read from any `.luau` file, including `.d.luau` definitions, and work for functions, type declarations, intersections and table fields. Moonwave comments are rendered with `@param`, `@return`, `@error` sections and `@deprecated`, `@yields`, `@since` labels:
 
 ```luau
@@ -480,7 +483,7 @@ Gray hints inside the code: `local result = scale(2, 3)` shows `: number` after 
 
 ### Completion and auto-imports
 
-Functions show their parameters next to the name and fill the call with placeholders: `add(${1:a}, ${2:b})`. Names of modules in the workspace and Roblox services that are not imported yet appear too; picking one adds the line at the top, after the existing imports:
+Functions show their parameters next to the name and fill the call with placeholders: `add(${1:a}, ${2:b})`. Fields and functions carry the comment above their declaration in the completion popup. Names of modules in the workspace and Roblox services that are not imported yet appear too; picking one adds the line at the top, after the existing imports:
 
 | Picked | Added |
 | --- | --- |
@@ -489,6 +492,8 @@ Functions show their parameters next to the name and fill the call with placehol
 | a sibling instance in Rojo | `local Helper = require(script.Parent.Helper)` |
 | another instance in Rojo | `local Util = require(game:GetService("ReplicatedStorage").Shared.Util)` |
 | a Roblox service | `local Players = game:GetService("Players")` |
+
+`lunaut.completion.importKeyword` switches the inserted keyword from `local` to `const`.
 
 ### Quick fixes
 

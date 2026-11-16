@@ -15,6 +15,12 @@ def hover_text(client, uri, text, needle, offset=0):
 	return "" if result is None else result["contents"]["value"]
 
 
+def completion_items(client, uri, text, needle, offset=0):
+	line, character = position_of(text, needle, offset)
+	result = client.request("textDocument/completion", {"textDocument": {"uri": uri}, "position": {"line": line, "character": character}})
+	return result["items"] if isinstance(result, dict) else result
+
+
 class DocumentationTests(unittest.TestCase):
 	@classmethod
 	def setUpClass(cls):
@@ -56,7 +62,7 @@ class DocumentationTests(unittest.TestCase):
 		self.assertTrue(location["uri"].endswith(".d.luau"), location)
 		self.assertEqual(location["range"]["start"]["line"], 1)
 
-	def test_type_alias_name_reveals_internals(self):
+	def test_type_alias_name_stays_at_declaration(self):
 		path = FIXTURES / "documentation" / "types" / "base.d.luau"
 		text = path.read_text(encoding="utf-8")
 		uri = to_uri(path)
@@ -68,7 +74,28 @@ class DocumentationTests(unittest.TestCase):
 		location = self.client.at("textDocument/definition", uri, line, character)
 		self.assertTrue(location["uri"].endswith("base.d.luau"), location)
 		self.assertEqual(location["range"]["start"]["line"], 1)
-		self.assertGreater(location["range"]["start"]["character"], len("export type Point"))
+		self.assertLessEqual(location["range"]["start"]["character"], len("export type Point"))
+
+	def test_local_imported_type_keeps_name(self):
+		value = hover_text(self.client, self.uri, self.main, "local object: LuaObject", len("local "))
+		self.assertIn("local object: LuaObject", value)
+		self.assertNotIn("name: string", value)
+
+	def test_completion_shows_field_and_function_comments(self):
+		items = completion_items(self.client, self.uri, self.main, "point.x", len("point."))
+		field = next(item for item in items if item["label"] == "x")
+		self.assertIn("Horizontal coordinate.", field["documentation"]["value"])
+		function = next(item for item in items if item["label"] == "move")
+		self.assertIn("Moves the point by the given offset.", function["documentation"]["value"])
+
+		items = completion_items(self.client, self.uri, self.main, "moving.speed", len("moving."))
+		field = next(item for item in items if item["label"] == "speed")
+		self.assertIn("Speed in studs per second.", field["documentation"]["value"])
+
+	def test_completion_shows_function_comment(self):
+		items = completion_items(self.client, self.uri, self.main, "add(1, 2)", 1)
+		function = next(item for item in items if item["label"] == "add")
+		self.assertIn("Adds two numbers.", function["documentation"]["value"])
 
 
 class RequireAliasTests(unittest.TestCase):
