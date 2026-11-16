@@ -30,7 +30,7 @@ workspace::workspace(client& owner, std::filesystem::path root, settingsinfo set
 	, root(std::move(root))
 	, settings(std::move(settings))
 	, resolver(this->root)
-	, frontend(&resolver, &resolver, priv::make_options(false, true))
+	, frontend(FFlag::LuauSolverV2 ? Luau::SolverMode::New : Luau::SolverMode::Old, &resolver, &resolver, priv::make_options(false, true))
 {
 	frontend.setLuauSolverMode(FFlag::LuauSolverV2 ? Luau::SolverMode::New : Luau::SolverMode::Old);
 	resolver.set_base_config(priv::get_base_luaurc(this->root, this->settings));

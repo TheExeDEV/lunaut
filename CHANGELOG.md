@@ -14,6 +14,10 @@
 - Requests are queued and can be cancelled; diagnostics of dependents are published after the reply
 - Configs for Neovim, Helix and Zed in `editors/`
 
+### Fixed
+
+- Build with Luau 0.743 and newer: `Luau::Frontend` now takes a `SolverMode` in its constructor, the old overload is gone
+
 ## [0.0.3] - 2026-11-06
 
 ### Changed
