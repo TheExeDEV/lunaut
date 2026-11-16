@@ -25,6 +25,7 @@ const std::unordered_map<std::string_view, request_handler> relevant_requests = 
 	{"textDocument/hover", &server::on_hover},
 	{"textDocument/completion", &server::on_completion},
 	{"textDocument/definition", &server::on_definition},
+	{"textDocument/typeDefinition", &server::on_type_definition},
 	{"textDocument/documentSymbol", &server::on_document_symbol},
 	{"textDocument/signatureHelp", &server::on_signature_help},
 	{"textDocument/references", &server::on_references},
@@ -285,6 +286,11 @@ json server::on_completion(const json& params)
 json server::on_definition(const json& params)
 {
 	return get_workspace(params["textDocument"].value("uri", "")).get_definition(params);
+}
+
+json server::on_type_definition(const json& params)
+{
+	return get_workspace(params["textDocument"].value("uri", "")).get_type_definition(params);
 }
 
 json server::on_document_symbol(const json& params)

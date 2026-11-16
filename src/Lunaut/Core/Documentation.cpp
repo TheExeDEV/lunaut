@@ -36,6 +36,7 @@ const std::vector<std::pair<std::string_view, std::string_view>> relevant_tags =
 
 std::string strip_comment(std::string text);
 std::vector<std::string> get_lines(const std::string& text);
+std::vector<std::string> collect_comment_lines(const Luau::SourceModule& source, const std::string& text, unsigned int line);
 std::string render_moonwave(const std::vector<std::string>& lines);
 
 }
@@ -182,71 +183,7 @@ std::optional<std::string> documentation::get_markdown(const std::string& symbol
 
 std::optional<std::string> documentation::get_comment_markdown(const Luau::SourceModule& source, const std::string& text, unsigned int line)
 {
-	if (line == 0)
-	{
-		return std::nullopt;
-	}
-
-	std::vector<std::string> file = priv::get_lines(text);
-	std::vector<const Luau::Comment*> attached;
-	unsigned int expected = line - 1;
-
-	for (auto it = source.commentLocations.rbegin(); it != source.commentLocations.rend(); ++it)
-	{
-		if (it->location.end.line > expected)
-		{
-			continue;
-		}
-
-		if (it->location.end.line != expected)
-		{
-			break;
-		}
-
-		attached.push_back(&*it);
-
-		if (it->location.begin.line == 0)
-		{
-			break;
-		}
-
-		expected = it->location.begin.line - 1;
-	}
-
-	if (attached.empty())
-	{
-		return std::nullopt;
-	}
-
-	std::reverse(attached.begin(), attached.end());
-	std::vector<std::string> lines;
-
-	for (const Luau::Comment* comment : attached)
-	{
-		std::string body;
-
-		for (unsigned int index = comment->location.begin.line; index <= comment->location.end.line && index < file.size(); ++index)
-		{
-			std::string current = file[index];
-			size_t begin = index == comment->location.begin.line ? comment->location.begin.column : 0;
-			size_t end =
-				index == comment->location.end.line ? std::min<size_t>(comment->location.end.column, current.size()) : current.size();
-			body += current.substr(std::min(begin, current.size()), end > begin ? end - begin : 0);
-			body += index == comment->location.end.line ? "" : "\n";
-		}
-
-		if (stdx::starts_with(body, "--!"))
-		{
-			continue;
-		}
-
-		for (const std::string& piece : stdx::split(priv::strip_comment(body), '\n'))
-		{
-			lines.push_back(piece);
-		}
-	}
-
-	std::string rendered = priv::render_moonwave(lines);
+	std::string rendered = priv::render_moonwave(priv::collect_comment_lines(source, text, line));
 
 	if (stdx::trim(rendered).empty())
 	{
@@ -254,6 +191,37 @@ std::optional<std::string> documentation::get_comment_markdown(const Luau::Sourc
 	}
 
 	return rendered;
+}
+
+std::optional<std::string>
+documentation::get_comment_parameter(const Luau::SourceModule& source, const std::string& text, unsigned int line, const std::string& name)
+{
+	for (const std::string& raw : priv::collect_comment_lines(source, text, line))
+	{
+		std::string trimmed = stdx::trim(raw);
+
+		if (!stdx::starts_with(trimmed, "@param"))
+		{
+			continue;
+		}
+
+		std::string rest = stdx::trim(trimmed.substr(6));
+		size_t space = rest.find(' ');
+
+		if (space == std::string::npos || rest.substr(0, space) != name)
+		{
+			continue;
+		}
+
+		std::string description = stdx::trim(rest.substr(space + 1));
+
+		if (!description.empty())
+		{
+			return description;
+		}
+	}
+
+	return std::nullopt;
 }
 
 namespace
@@ -298,6 +266,75 @@ std::vector<std::string> get_lines(const std::string& text)
 		if (!line.empty() && line.back() == '\r')
 		{
 			line.pop_back();
+		}
+	}
+
+	return lines;
+}
+
+std::vector<std::string> collect_comment_lines(const Luau::SourceModule& source, const std::string& text, unsigned int line)
+{
+	if (line == 0)
+	{
+		return {};
+	}
+
+	std::vector<std::string> file = get_lines(text);
+	std::vector<const Luau::Comment*> attached;
+	unsigned int expected = line - 1;
+
+	for (auto it = source.commentLocations.rbegin(); it != source.commentLocations.rend(); ++it)
+	{
+		if (it->location.end.line > expected)
+		{
+			continue;
+		}
+
+		if (it->location.end.line != expected)
+		{
+			break;
+		}
+
+		attached.push_back(&*it);
+
+		if (it->location.begin.line == 0)
+		{
+			break;
+		}
+
+		expected = it->location.begin.line - 1;
+	}
+
+	if (attached.empty())
+	{
+		return {};
+	}
+
+	std::reverse(attached.begin(), attached.end());
+	std::vector<std::string> lines;
+
+	for (const Luau::Comment* comment : attached)
+	{
+		std::string body;
+
+		for (unsigned int index = comment->location.begin.line; index <= comment->location.end.line && index < file.size(); ++index)
+		{
+			std::string current = file[index];
+			size_t begin = index == comment->location.begin.line ? comment->location.begin.column : 0;
+			size_t end =
+				index == comment->location.end.line ? std::min<size_t>(comment->location.end.column, current.size()) : current.size();
+			body += current.substr(std::min(begin, current.size()), end > begin ? end - begin : 0);
+			body += index == comment->location.end.line ? "" : "\n";
+		}
+
+		if (stdx::starts_with(body, "--!"))
+		{
+			continue;
+		}
+
+		for (const std::string& piece : stdx::split(strip_comment(body), '\n'))
+		{
+			lines.push_back(piece);
 		}
 	}
 

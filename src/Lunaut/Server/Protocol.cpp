@@ -30,6 +30,7 @@ json protocol::get_capabilities()
 		{"completionProvider", {{"triggerCharacters", {".", ":", "\"", "'", "/", "@", "\n"}}, {"resolveProvider", false}}},
 		{"signatureHelpProvider", {{"triggerCharacters", {"(", ","}}}},
 		{"definitionProvider", true},
+		{"typeDefinitionProvider", true},
 		{"documentSymbolProvider", true},
 		{"referencesProvider", true},
 		{"inlayHintProvider", true},

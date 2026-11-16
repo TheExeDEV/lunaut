@@ -567,6 +567,8 @@ public:
 	std::optional<std::string> get_markdown(const std::string& symbol) const;
 	std::optional<std::string> get_parameter_markdown(const std::string& symbol, size_t index) const;
 	static std::optional<std::string> get_comment_markdown(const Luau::SourceModule& source, const std::string& text, unsigned int line);
+	static std::optional<std::string>
+	get_comment_parameter(const Luau::SourceModule& source, const std::string& text, unsigned int line, const std::string& name);
 
 private:
 	json entries = json::object();
@@ -763,6 +765,7 @@ public:
 	json get_hover(const json& params);
 	json get_completion(const json& params);
 	json get_definition(const json& params);
+	json get_type_definition(const json& params);
 	json get_document_symbols(const json& params);
 	json get_signature_help(const json& params);
 	json get_references(const json& params);
@@ -797,6 +800,10 @@ private:
 	std::optional<std::string> get_type_documentation(Luau::TypeId type);
 	std::optional<Luau::TypeFun> find_type_alias(Luau::TypeId type, Luau::ModuleName& module, std::string& name) const;
 	std::optional<Luau::TypeFun> find_return_alias(Luau::TypeId type, std::string& name) const;
+	std::optional<Luau::TypeFun>
+	find_function_return_alias(const Luau::FunctionType& function, Luau::ModuleName& module, std::string& name) const;
+	std::optional<Luau::TypeFun> find_annotation_return_alias(
+		const Luau::ModuleName& module, const Luau::Location& location, const std::string& property, std::string& name) const;
 	std::optional<Luau::ModuleName> find_definition_module(Luau::TypeId type) const;
 	std::optional<Luau::ModuleName> find_definition_module(const Luau::Location& location) const;
 	std::vector<std::pair<Luau::ModuleName, Luau::Location>> find_references(
@@ -854,6 +861,7 @@ public:
 	json on_hover(const json& params);
 	json on_completion(const json& params);
 	json on_definition(const json& params);
+	json on_type_definition(const json& params);
 	json on_document_symbol(const json& params);
 	json on_signature_help(const json& params);
 	json on_references(const json& params);

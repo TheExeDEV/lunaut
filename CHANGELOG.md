@@ -8,6 +8,9 @@
 - Completion items carry the comment above the field or function they insert
 - Go to definition on type references, and the name in `type Name = ...` goes to the type declaration from the analyzer, not to its body
 - Hover keeps the analyzer's alias name for named table types such as `LuaObject` or `Scheduler` instead of expanding the table
+- Function hover keeps the annotated return alias, so `Line.new` is shown as `function library.new(wrap: string?): line` instead of an expanded, cyclic table
+- Hover links named types to their definition, and `textDocument/typeDefinition` navigates to the alias declaration
+- Signature help takes `@param` descriptions from the comment above the function
 - Type statistics over `lunaut/typeStats` and `lunaut stats [paths] [--json]`: totals, origins, kinds, hierarchy and aliases
 - Analyzer plugins: a versioned C ABI (`src/Lunaut/analyzer.h`) loads a custom Luau fork at runtime, supports the pre-0.743 and post-0.743 frontend APIs and reports incompatible plugins instead of crashing
 - `lunaut.analyzer.enabled`, `lunaut.analyzer.path` and `lunaut.analyzer.diagnostics`

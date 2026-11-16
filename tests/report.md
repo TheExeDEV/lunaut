@@ -1,9 +1,9 @@
 # Test report
 
-- Date: 2026-11-17 02:05:56
+- Date: 2026-11-17 02:28:28
 - Binary: `/home/ifmnb/Git/lunaut/build/lunaut`
 - Version: `lunaut 0.0.4 (Luau 0.747, GNU 16.2.1)`
-- Result: **123/123 passed** in 0.9s
+- Result: **127/127 passed** in 0.9s
 
 | Test | Status | Time |
 | --- | --- | --- |
@@ -31,17 +31,21 @@
 | `test_extended.DocumentationTests.test_intersection_comment_from_definition_file` | PASS | 0.00s |
 | `test_extended.DocumentationTests.test_intersection_comment_on_local_value` | PASS | 0.00s |
 | `test_extended.DocumentationTests.test_local_imported_type_keeps_name` | PASS | 0.00s |
+| `test_extended.DocumentationTests.test_signature_help_shows_source_parameter_comments` | PASS | 0.00s |
 | `test_extended.DocumentationTests.test_type_alias_comment_from_definition_file` | PASS | 0.00s |
 | `test_extended.DocumentationTests.test_type_alias_definition_jump` | PASS | 0.00s |
 | `test_extended.DocumentationTests.test_type_alias_name_stays_at_declaration` | PASS | 0.00s |
 | `test_extended.ProtectionTests.test_broken_edit_does_not_crash` | PASS | 0.01s |
 | `test_extended.ProtectionTests.test_malformed_request_does_not_crash` | PASS | 0.01s |
+| `test_extended.RequireAliasTests.test_function_return_preserves_annotated_alias` | PASS | 0.00s |
 | `test_extended.RequireAliasTests.test_inlay_hints_preserve_intersection_alias` | PASS | 0.00s |
 | `test_extended.RequireAliasTests.test_inlay_hints_preserve_table_aliases` | PASS | 0.00s |
 | `test_extended.RequireAliasTests.test_require_call_preserves_annotated_alias` | PASS | 0.00s |
 | `test_extended.RequireAliasTests.test_require_preserves_annotated_alias` | PASS | 0.00s |
 | `test_extended.RequireAliasTests.test_require_preserves_intersection_alias` | PASS | 0.00s |
 | `test_extended.RequireAliasTests.test_require_preserves_recursive_alias` | PASS | 0.00s |
+| `test_extended.RequireAliasTests.test_type_definition_of_function_result` | PASS | 0.00s |
+| `test_extended.RequireAliasTests.test_type_definition_of_required_alias` | PASS | 0.00s |
 | `test_extended.TypeStatsTests.test_stats_cli_json` | PASS | 0.01s |
 | `test_extended.TypeStatsTests.test_stats_cli_text` | PASS | 0.01s |
 | `test_extended.TypeStatsTests.test_type_stats_request` | PASS | 0.01s |
@@ -65,7 +69,7 @@
 | `test_features.LuauLspSettingsTests.test_settings_mapped_with_lunaut_priority` | PASS | 0.00s |
 | `test_features.LuauLspSettingsTests.test_vscode_flat_settings` | PASS | 0.01s |
 | `test_features.RobloxDocumentationTests.test_api_documentation_in_hover_and_completion` | PASS | 0.08s |
-| `test_features.RobloxDocumentationTests.test_service_auto_import` | PASS | 0.07s |
+| `test_features.RobloxDocumentationTests.test_service_auto_import` | PASS | 0.08s |
 | `test_fflags.FFlagTests.test_cli_override` | PASS | 0.00s |
 | `test_fflags.FFlagTests.test_flags_enabled_by_default` | PASS | 0.00s |
 | `test_fflags.FFlagTests.test_invalid_value` | PASS | 0.00s |
@@ -93,13 +97,13 @@
 | `test_navigation.NavigationTests.test_convert_quotes` | PASS | 0.00s |
 | `test_navigation.NavigationTests.test_document_highlight` | PASS | 0.00s |
 | `test_navigation.NavigationTests.test_document_links` | PASS | 0.00s |
-| `test_navigation.NavigationTests.test_formatting_with_stylua` | PASS | 0.02s |
+| `test_navigation.NavigationTests.test_formatting_with_stylua` | PASS | 0.03s |
 | `test_navigation.NavigationTests.test_formatting_without_stylua` | PASS | 0.01s |
 | `test_navigation.NavigationTests.test_outgoing_calls` | PASS | 0.00s |
 | `test_navigation.NavigationTests.test_sort_imports_and_annotation` | PASS | 0.00s |
 | `test_navigation.NavigationTests.test_workspace_symbols` | PASS | 0.00s |
-| `test_navigation.RojoNavigationTests.test_string_require_action` | PASS | 0.07s |
-| `test_navigation.RojoNavigationTests.test_studio_plugin_tree` | PASS | 0.08s |
+| `test_navigation.RojoNavigationTests.test_string_require_action` | PASS | 0.08s |
+| `test_navigation.RojoNavigationTests.test_studio_plugin_tree` | PASS | 0.07s |
 | `test_navigation.WorkspaceDiagnosticsTests.test_unopened_files_get_diagnostics` | PASS | 0.01s |
 | `test_references.NewSolverReferenceTests.test_local_references` | PASS | 0.00s |
 | `test_references.NewSolverReferenceTests.test_prepare_rename` | PASS | 0.00s |
@@ -127,6 +131,6 @@
 | `test_rojo.RojoTests.test_references_through_sourcemap` | PASS | 0.00s |
 | `test_rojo.RojoTests.test_required_types_flow` | PASS | 0.00s |
 | `test_rojo.RojoTests.test_roblox_magic_functions` | PASS | 0.00s |
-| `test_rojo.RojoTests.test_roblox_magic_new_solver` | PASS | 0.07s |
+| `test_rojo.RojoTests.test_roblox_magic_new_solver` | PASS | 0.06s |
 | `test_rojo.RojoTests.test_script_instance_type` | PASS | 0.00s |
 | `test_rojo.RojoTests.test_status` | PASS | 0.00s |

@@ -102,6 +102,16 @@ class DocumentationTests(unittest.TestCase):
 		function = next(item for item in items if item["label"] == "add")
 		self.assertIn("Adds two numbers.", function["documentation"]["value"])
 
+	def test_signature_help_shows_source_parameter_comments(self):
+		line, character = position_of(self.main, "multiply(1, 2)", len("multiply("))
+		result = self.client.request(
+			"textDocument/signatureHelp",
+			{"textDocument": {"uri": self.uri}, "position": {"line": line, "character": character}},
+		)
+		parameters = result["signatures"][0]["parameters"]
+		self.assertEqual(parameters[0]["documentation"]["value"], "Input value.")
+		self.assertEqual(parameters[1]["documentation"]["value"], "Multiplier.")
+
 
 class RequireAliasTests(unittest.TestCase):
 	@classmethod
@@ -121,7 +131,25 @@ class RequireAliasTests(unittest.TestCase):
 
 	def test_require_call_preserves_annotated_alias(self):
 		value = hover_text(self.client, self.uri, self.consumer, 'require("./config")')
-		self.assertEqual(value.strip(), "```luau\nConfig\n```")
+		self.assertIn("```luau\nConfig\n```", value)
+		self.assertIn("[Config](file:///", value)
+
+	def test_function_return_preserves_annotated_alias(self):
+		value = hover_text(self.client, self.uri, self.consumer, "factory()")
+		self.assertIn("function factory(): Shape", value)
+		self.assertIn("[Shape](file:///", value)
+
+	def test_type_definition_of_required_alias(self):
+		line, character = position_of(self.consumer, "local shape = require", len("local "))
+		location = self.client.at("textDocument/typeDefinition", self.uri, line, character)
+		self.assertTrue(location["uri"].endswith("shapes.luau"), location)
+		self.assertEqual(location["range"]["start"]["line"], 11)
+
+	def test_type_definition_of_function_result(self):
+		line, character = position_of(self.consumer, "made.count", 0)
+		location = self.client.at("textDocument/typeDefinition", self.uri, line, character)
+		self.assertTrue(location["uri"].endswith("factory.luau"), location)
+		self.assertEqual(location["range"]["start"]["line"], 2)
 
 	def test_require_preserves_intersection_alias(self):
 		value = hover_text(self.client, self.uri, self.consumer, "local shape = require", 6)
