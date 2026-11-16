@@ -276,6 +276,13 @@ struct diagnosticsinfo
 	bool workspace = false;
 };
 
+struct analyzerinfo
+{
+	bool enabled = false;
+	bool diagnostics = false;
+	std::string path;
+};
+
 struct settingsinfo
 {
 	enumitem_platform_variant platform = enumitem_platform_variant::Auto;
@@ -285,6 +292,7 @@ struct settingsinfo
 	robloxinfo roblox;
 	rojoinfo rojo;
 	diagnosticsinfo diagnostics;
+	analyzerinfo analyzer;
 	std::vector<std::string> ignore_globs;
 	bool analyze_lua_files = true;
 	std::string base_luaurc;
@@ -656,6 +664,7 @@ public:
 
 	const textdocument* get_document(const std::string& address) const;
 	textdocument* get_document(const std::string& address);
+	const std::unordered_map<std::string, textdocument>& get_documents() const;
 	void set_document(textdocument document);
 	void rem_document(const std::string& address);
 
@@ -679,6 +688,39 @@ private:
 	Luau::Config default_config;
 };
 
+class analyzerplugin
+{
+public:
+	~analyzerplugin();
+
+	bool load(const std::string& path);
+	void unload();
+
+	bool is_loaded() const;
+	const std::string& get_name() const;
+	const std::string& get_version() const;
+	const std::string& get_error() const;
+	const std::string& get_frontend_api() const;
+	json to_json() const;
+	std::optional<json> check(const std::string& module, const std::string& path, const std::string& source, const json& settings) const;
+
+private:
+	using info_function = const void* (*)();
+	using check_function = int (*)(const void*, void*);
+	using free_function = void (*)(const void*);
+
+	void* handle = nullptr;
+	info_function get_info = nullptr;
+	check_function run_check = nullptr;
+	free_function release = nullptr;
+	bool enabled = false;
+	bool loaded = false;
+	std::string name;
+	std::string version;
+	std::string error;
+	std::string frontend_api = "unknown";
+};
+
 class workspace
 {
 public:
@@ -692,6 +734,7 @@ public:
 	const settingsinfo& get_settings() const;
 	const std::vector<loadeddefinitioninfo>& get_definitions() const;
 	json get_status() const;
+	json get_type_stats();
 
 	void open_document(const std::string& address, const std::string& text, int version);
 	void update_document(const std::string& address, const json& changes, int version);
@@ -738,6 +781,8 @@ private:
 	unsigned int get_import_line(const Luau::ModuleName& name, const textdocument& document);
 	std::optional<std::string> get_comment_documentation(const Luau::ModuleName& name, const Luau::Location& location);
 	std::optional<std::string> get_type_documentation(Luau::TypeId type);
+	std::optional<Luau::ModuleName> find_definition_module(Luau::TypeId type) const;
+	std::optional<Luau::ModuleName> find_definition_module(const Luau::Location& location) const;
 	std::vector<std::pair<Luau::ModuleName, Luau::Location>> find_references(
 		const Luau::ModuleName& name,
 		Luau::Position position,
@@ -745,6 +790,7 @@ private:
 		std::optional<Luau::Location>& declaration);
 	void register_types();
 	void load_definitions();
+	void load_analyzer();
 	void apply_disabled_globals(Luau::GlobalTypes& globals);
 	Luau::CheckResult check_module(const Luau::ModuleName& name, bool for_autocomplete);
 	Luau::ModulePtr get_module(const Luau::ModuleName& name, bool for_autocomplete) const;
@@ -764,6 +810,11 @@ private:
 	json roblox_metadata = json::object();
 	std::vector<loadeddefinitioninfo> definitions;
 	std::set<std::string> definition_paths;
+	std::unordered_map<std::string, std::string> definition_module_paths;
+	std::unordered_map<std::string, Luau::SourceModule> definition_sources;
+	std::unordered_map<std::string, Luau::ModulePtr> definition_modules;
+	analyzerplugin analyzer;
+	bool analyzer_reported = false;
 	std::set<std::string> pending;
 	json plugin_tree = nullptr;
 	bool ready = false;
@@ -808,6 +859,7 @@ public:
 	json on_formatting(const json& params);
 	json on_range_formatting(const json& params);
 	json on_lunaut_status(const json& params);
+	json on_lunaut_type_stats(const json& params);
 	json on_lunaut_fflags(const json& params);
 	json on_lunaut_definitions(const json& params);
 	json on_lunaut_sourcemap(const json& params);
@@ -854,9 +906,10 @@ private:
 class console final : public client
 {
 public:
-	explicit console(bool verbose);
+	explicit console(bool verbose, bool json_output = false);
 
 	int invoke_analyze(const std::vector<std::string>& files, const optionsinfo& options);
+	int invoke_stats(const std::vector<std::string>& files, const optionsinfo& options);
 
 	void send_log(enumitem_message_type type, const std::string& message) override;
 	void send_window_message(enumitem_message_type type, const std::string& message) override;
@@ -864,6 +917,8 @@ public:
 
 private:
 	bool verbose = false;
+	bool json_output = false;
+	bool diagnostics_output = true;
 	size_t errors = 0;
 	size_t warnings = 0;
 };

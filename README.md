@@ -10,6 +10,10 @@ lunaut is your astronaut in Luau code: it checks types and lint while you type, 
 - Find all references (`Shift+F12`) and rename (`F2`) across files, for locals and module members
 - Inlay hints for variable types, parameter names, parameter and return types, each switchable in settings
 - Documentation in hover, completion and signature help: Roblox and Luau API docs and Moonwave comments in your code
+- Comments from any `.luau` file, including `.d.luau` definitions, for functions, type declarations, intersections and table fields
+- Click a type name to jump to its declaration, or to the type body in `type Name = ...`
+- Type statistics: totals, origins, type kinds, subtype relations and the type hierarchy, over LSP and from the CLI
+- Analyzer plugins: load a custom Luau fork at runtime, with an explicit report when the plugin is incompatible
 - Auto-imports: modules and Roblox services that are not required yet, with the `require` or `GetService` line added for you
 - Semantic highlighting, quick fixes, a color picker for `Color3` and folding with `--#region`
 - Reads luau-lsp settings (`luau-lsp.*`) as they are, so a project set up for luau-lsp works without changes
@@ -51,21 +55,22 @@ lunaut is your astronaut in Luau code: it checks types and lint while you type, 
 5. [Settings](#settings)
 6. [FFlags](#fflags)
 7. [Definition files and priorities](#definition-files-and-priorities)
-8. [Rojo](#rojo)
-9. [Editor features](#editor-features)
-10. [References and rename](#references-and-rename)
-11. [Requires and .luaurc](#requires-and-luaurc)
-12. [Command reference](#command-reference)
-13. [Custom LSP methods](#custom-lsp-methods)
-14. [Environment variables](#environment-variables)
-15. [Tests](#tests)
-16. [Luau updates](#luau-updates)
-17. [Releasing](#releasing)
-18. [Building from source](#building-from-source)
-19. [Source layout](#source-layout)
-20. [Limitations](#limitations)
-21. [Acknowledgements](#acknowledgements)
-22. [License](#license)
+8. [Analyzer plugins](#analyzer-plugins)
+9. [Rojo](#rojo)
+10. [Editor features](#editor-features)
+11. [References and rename](#references-and-rename)
+12. [Requires and .luaurc](#requires-and-luaurc)
+13. [Command reference](#command-reference)
+14. [Custom LSP methods](#custom-lsp-methods)
+15. [Environment variables](#environment-variables)
+16. [Tests](#tests)
+17. [Luau updates](#luau-updates)
+18. [Releasing](#releasing)
+19. [Building from source](#building-from-source)
+20. [Source layout](#source-layout)
+21. [Limitations](#limitations)
+22. [Acknowledgements](#acknowledgements)
+23. [License](#license)
 
 ---
 
@@ -130,6 +135,22 @@ src/main.luau:6:16: warning [FunctionUnused] FunctionUnused: Function 'unusedHel
 ```
 
 The exit code is `1` when there are errors, so it fits CI as is.
+
+Ask where the types come from:
+
+```bash
+lunaut stats src
+```
+
+```text
+Types: 28 total, 1 modules, 3 definition files
+  in modules: 21, in globals: 69
+  by kind: any 1, extern 5, function 27, never 1, primitive 6, table 11, ...
+Origins:
+  @base (Config) 3 types types/base.d.luau
+  @roblox (Roblox) 210 types globalTypes.d.luau
+  src/util (module) 14 internal, 8 interface
+```
 
 Open the folder in VS Code with the extension installed and the same diagnostics appear in the editor. For a Roblox project, put a `default.project.json` (or a `sourcemap.json`) in the root: lunaut switches to Roblox mode, downloads the API definitions and follows the instance tree.
 
@@ -240,6 +261,9 @@ All settings live in VS Code settings under `lunaut.*` (luau-lsp settings work t
 | `lunaut.format.enabled` | `true` | format documents and selections with StyLua |
 | `lunaut.format.styluaPath` | `stylua` | StyLua executable |
 | `lunaut.diagnostics.workspace` | `false` | diagnostics for every file in the workspace, not only open ones |
+| `lunaut.analyzer.enabled` | `false` | load the analyzer plugin from `lunaut.analyzer.path`; setting a path turns it on |
+| `lunaut.analyzer.path` | `""` | shared library with a custom Luau analyzer, see [Analyzer plugins](#analyzer-plugins) |
+| `lunaut.analyzer.diagnostics` | `false` | merge diagnostics returned by the analyzer plugin with the built-in ones |
 | `lunaut.rojo.watch` | `true` | VS Code only: keep `rojo sourcemap --watch` running instead of regenerating on every change |
 | `lunaut.studioPlugin.enabled` | `false` | VS Code only: accept the live DataModel from the Studio companion plugin |
 | `lunaut.studioPlugin.port` | `3667` | port of the Studio companion plugin |
@@ -343,6 +367,32 @@ A file listed twice is loaded once, with the first priority found. Every file ge
 
 ---
 
+## Analyzer plugins
+
+lunaut can hand type checking to a custom Luau fork, loaded at runtime as a shared library. This is for projects that patch Luau itself and need the server to use the same analyzer. Set `lunaut.analyzer.path` to the library and lunaut loads it on start and whenever the setting changes:
+
+```json
+{
+  "lunaut.analyzer.enabled": true,
+  "lunaut.analyzer.path": "./tools/libmy-luau-analyzer.so",
+  "lunaut.analyzer.diagnostics": true
+}
+```
+
+The plugin exports three C functions and one versioned info structure, declared in [`src/Lunaut/analyzer.h`](src/Lunaut/analyzer.h):
+
+| Symbol | Purpose |
+| --- | --- |
+| `lunaut_analyzer_info_v1` | returns `lunaut_analyzer_info`: ABI version, name, Luau version and frontend API |
+| `lunaut_analyzer_check_v1` | checks one module and returns a JSON array of LSP diagnostics |
+| `lunaut_analyzer_free_v1` | frees the diagnostics string, optional |
+
+The frontend API is `1` for Luau before 0.743 and `2` from 0.743 on. lunaut validates the ABI, the reported Luau version and the API pair; a plugin built for the wrong side of 0.743, an unknown ABI or a missing symbol is not loaded, and the reason is reported in `Lunaut: Show Status` and in the server log instead of crashing the server. `lunaut/status` shows the loaded analyzer under `analyzer` in every workspace.
+
+With `lunaut.analyzer.diagnostics` the plugin diagnostics are merged with the built-in ones. Without it the plugin only reports whether it is loaded and compatible.
+
+---
+
 ## Rojo
 
 In Roblox mode lunaut reads `sourcemap.json`. Each script in it gets a virtual name like `game/ReplicatedStorage/Shared/Util`, so these all resolve to the same module:
@@ -407,9 +457,10 @@ Hover text follows luau-lsp:
 | a function | `function Util.double(value: number): number`, methods as `function Part:Clone(): Part` |
 | a global | `type game = DataModel` |
 | a type name | `type Vector<T> = { x: T, y: T }` |
+| a table field | `x: number` |
 | a string | `string (6 bytes)` |
 
-Documentation follows under a `----------` line: the Roblox or Luau API docs for API members, otherwise the comment right above the declaration. Moonwave comments are rendered with `@param`, `@return`, `@error` sections and `@deprecated`, `@yields`, `@since` labels:
+Documentation follows under a `----------` line: the Roblox or Luau API docs for API members, otherwise the comment right above the declaration. Comments are read from any `.luau` file, including `.d.luau` definitions, and work for functions, type declarations, intersections and table fields. Moonwave comments are rendered with `@param`, `@return`, `@error` sections and `@deprecated`, `@yields`, `@since` labels:
 
 ```luau
 --[=[
@@ -471,6 +522,16 @@ Pressing Enter after `function ...`, `if ... then`, `for ... do`, `while ... do`
 | document links | the path in `require("./util")` or `require("@alias/x")` is clickable |
 | workspace symbols | `Ctrl+T` finds functions, locals and module members in every file |
 | call hierarchy | *Show Call Hierarchy* lists callers and callees of a function, across modules |
+| type names | a type reference jumps to its declaration; the name in `type Name = ...` jumps to the type body, so the internals are one click away |
+
+### Type statistics
+
+`lunaut stats` and the `lunaut/typeStats` request report how many types the workspace holds and where they come from: definition files (`@base`, `@roblox`), modules, and globals. The report also groups types by kind, lists exported aliases and their kinds, and shows the hierarchy of extern types (`Car extends Vehicle`). Type origins include internal and interface type counts for every module, and plugins can report their own analyzer status in the same payload.
+
+```bash
+lunaut stats src
+lunaut stats src --json
+```
 
 ### Colors, folding, highlighting
 
@@ -540,6 +601,7 @@ Inside `require("...")` completion lists the aliases and `./`, `../` first, then
 | --- | --- |
 | `lunaut` / `lunaut lsp` | language server on stdio |
 | `lunaut analyze [paths]` | checks files and folders (default `.`), prints diagnostics, exit code `1` on errors |
+| `lunaut stats [paths] [--json]` | reports type statistics for files and folders (default `.`): totals, origins, kinds, hierarchy and aliases |
 | `lunaut flags` | lists every Luau FFlag with its value and source |
 | `lunaut version` | version, Luau version and compiler |
 | `lunaut help` | usage |
@@ -553,6 +615,7 @@ Options for every command:
 | `--definition=[@name=]path[#priority]` | load a definition file, can repeat |
 | `--settings=file` | extra settings in `.vscode/settings.json` format, applied last |
 | `--verbose` | print the server log to stderr |
+| `--json` | print `flags` or `stats` as JSON |
 
 ---
 
@@ -563,6 +626,7 @@ Besides the standard protocol the server answers:
 | Method | Params | Result |
 | --- | --- | --- |
 | `lunaut/status` | `{}` | version, Luau version, solver, workspaces with platform, sourcemap and definitions |
+| `lunaut/typeStats` | `{}` | type totals, origins, kinds, hierarchy and aliases for every workspace |
 | `lunaut/fflags` | `{ "filter"?: string }` | `[{ name, value, kind, source }]` |
 | `lunaut/definitions` | `{}` | `[{ root, definitions: [{ name, path, priority, success, message, source }] }]` |
 | `lunaut/sourcemap` | `{ "regenerate"?: bool }` | regenerates and reloads the sourcemap of every Roblox workspace |

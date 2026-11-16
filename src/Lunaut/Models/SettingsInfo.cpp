@@ -55,6 +55,9 @@ const std::unordered_map<std::string_view, std::string_view> relevant_vscode_key
 	{"lunaut.format.enabled", "/features/formatting"},
 	{"lunaut.format.styluaPath", "/features/stylua"},
 	{"lunaut.diagnostics.workspace", "/diagnostics/workspace"},
+	{"lunaut.analyzer.enabled", "/analyzer/enabled"},
+	{"lunaut.analyzer.path", "/analyzer/path"},
+	{"lunaut.analyzer.diagnostics", "/analyzer/diagnostics"},
 	{"luau-lsp.completion.autocompleteEnd", "/features/autocomplete_end"},
 	{"luau-lsp.autocompleteEnd", "/features/autocomplete_end"},
 	{"luau-lsp.format.convertQuotes", "/features/convert_quotes"},
@@ -171,6 +174,15 @@ settingsinfo settingsinfo::from_json(const json& data, const settingsinfo& base)
 		priv::read(diagnostics, "lint", info.diagnostics.lint);
 		priv::read(diagnostics, "include_dependents", info.diagnostics.include_dependents);
 		priv::read(diagnostics, "workspace", info.diagnostics.workspace);
+	}
+
+	if (data.contains("analyzer") && data["analyzer"].is_object())
+	{
+		const json& analyzer = data["analyzer"];
+		priv::read(analyzer, "path", info.analyzer.path);
+		info.analyzer.enabled = !info.analyzer.path.empty();
+		priv::read(analyzer, "enabled", info.analyzer.enabled);
+		priv::read(analyzer, "diagnostics", info.analyzer.diagnostics);
 	}
 
 	if (data.contains("inlay_hints") && data["inlay_hints"].is_object())
@@ -344,6 +356,7 @@ json settingsinfo::to_json() const
 		  {"executable", rojo.executable}}},
 		{"diagnostics",
 		 {{"lint", diagnostics.lint}, {"include_dependents", diagnostics.include_dependents}, {"workspace", diagnostics.workspace}}},
+		{"analyzer", {{"enabled", analyzer.enabled}, {"diagnostics", analyzer.diagnostics}, {"path", analyzer.path}}},
 		{"ignore_globs", ignore_globs},
 		{"analyze_lua_files", analyze_lua_files},
 		{"base_luaurc", base_luaurc},

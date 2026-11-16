@@ -6,6 +6,7 @@
 #include "core.d.hpp"
 
 #include "Luau/AstQuery.h"
+#include "Luau/Scope.h"
 
 namespace lunaut
 {
@@ -21,6 +22,8 @@ struct target
 };
 
 std::optional<target> find_property(const Luau::Module& module, Luau::AstExprIndexName* index, const Luau::ModuleName& current);
+std::optional<Luau::ModuleName> find_imported_module(const Luau::ScopePtr& scope, const std::string& alias);
+std::optional<Luau::ModuleName> get_type_module(Luau::TypeId type);
 
 }
 }
@@ -39,11 +42,11 @@ json workspace::get_definition(const json& params)
 	Luau::ModuleName name = resolver.get_module_name(address);
 	check_module(name, false);
 
-	const auto node = frontend.sourceNodes.find(name);
+	const auto source_node = frontend.sourceNodes.find(name);
 
-	if (node != frontend.sourceNodes.end())
+	if (source_node != frontend.sourceNodes.end())
 	{
-		for (const auto& [required, location] : node->second->requireLocations)
+		for (const auto& [required, location] : source_node->second->requireLocations)
 		{
 			if (location.containsClosed(position))
 			{
@@ -69,7 +72,72 @@ json workspace::get_definition(const json& params)
 		return nullptr;
 	}
 
-	Luau::ExprOrLocal found = Luau::findExprOrLocalAtPosition(*source, position);
+	Luau::ExprOrLocal type_target = Luau::findExprOrLocalAtPosition(*source, position);
+	std::vector<Luau::AstNode*> ancestry = Luau::findAstAncestryOfPosition(*source, position, true);
+	Luau::AstNode* node = ancestry.empty() ? nullptr : ancestry.back();
+	Luau::ScopePtr scope = Luau::findScopeAtPosition(*module, position);
+
+	if (Luau::AstStatTypeAlias* statement = node != nullptr ? node->as<Luau::AstStatTypeAlias>() : nullptr)
+	{
+		if (statement->nameLocation.containsClosed(position))
+		{
+			return get_location(name, statement->type->location);
+		}
+	}
+
+	if (Luau::AstTypeReference* reference = node != nullptr ? node->as<Luau::AstTypeReference>() : nullptr)
+	{
+		if (scope != nullptr)
+		{
+			std::string alias = reference->prefix ? std::string(reference->prefix->value) : "";
+			std::optional<Luau::TypeFun> definition =
+				reference->prefix ? scope->lookupImportedType(alias, reference->name.value) : scope->lookupType(reference->name.value);
+
+			if (!definition && !reference->prefix && frontend.globals.globalScope != nullptr)
+			{
+				definition = frontend.globals.globalScope->lookupType(reference->name.value);
+			}
+
+			if (definition && definition->definitionLocation)
+			{
+				Luau::ModuleName origin = name;
+
+				if (reference->prefix)
+				{
+					origin = priv::find_imported_module(scope, alias).value_or(name);
+				}
+				else if (std::optional<Luau::ModuleName> owner = find_definition_module(*definition->definitionLocation))
+				{
+					origin = *owner;
+				}
+				else if (std::optional<Luau::ModuleName> owner = priv::get_type_module(definition->type))
+				{
+					origin = *owner;
+				}
+				else if (std::optional<Luau::ModuleName> owner = find_definition_module(definition->type))
+				{
+					origin = *owner;
+				}
+
+				return get_location(origin, *definition->definitionLocation);
+			}
+
+			if (!reference->prefix)
+			{
+				for (Luau::Scope* current = scope.get(); current != nullptr; current = current->parent.get())
+				{
+					const auto found_alias = current->typeAliasLocations.find(reference->name.value);
+
+					if (found_alias != current->typeAliasLocations.end())
+					{
+						return get_location(name, found_alias->second);
+					}
+				}
+			}
+		}
+	}
+
+	Luau::ExprOrLocal found = type_target;
 
 	if (Luau::AstLocal* local = found.getLocal())
 	{
@@ -103,6 +171,44 @@ namespace
 {
 namespace priv
 {
+
+std::optional<Luau::ModuleName> find_imported_module(const Luau::ScopePtr& scope, const std::string& alias)
+{
+	for (Luau::Scope* current = scope.get(); current != nullptr; current = current->parent.get())
+	{
+		const auto found = current->importedModules.find(alias);
+
+		if (found != current->importedModules.end())
+		{
+			return found->second;
+		}
+	}
+
+	return std::nullopt;
+}
+
+std::optional<Luau::ModuleName> get_type_module(Luau::TypeId type)
+{
+	Luau::TypeId followed = Luau::follow(type);
+
+	if (const Luau::TableType* table = Luau::get<Luau::TableType>(followed); table != nullptr && !table->definitionModuleName.empty())
+	{
+		return table->definitionModuleName;
+	}
+
+	if (const Luau::MetatableType* metatable = Luau::get<Luau::MetatableType>(followed))
+	{
+		return get_type_module(metatable->table);
+	}
+
+	if (const Luau::ExternType* extern_type = Luau::get<Luau::ExternType>(followed);
+		extern_type != nullptr && !extern_type->definitionModuleName.empty())
+	{
+		return extern_type->definitionModuleName;
+	}
+
+	return std::nullopt;
+}
 
 std::optional<target> find_property(const Luau::Module& module, Luau::AstExprIndexName* index, const Luau::ModuleName& current)
 {

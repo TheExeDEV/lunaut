@@ -211,6 +211,11 @@ textdocument* fileresolver::get_document(const std::string& address)
 	return found == documents.end() ? nullptr : &found->second;
 }
 
+const std::unordered_map<std::string, textdocument>& fileresolver::get_documents() const
+{
+	return documents;
+}
+
 void fileresolver::set_document(textdocument document)
 {
 	std::string path = uri::to_path(document.get_uri());

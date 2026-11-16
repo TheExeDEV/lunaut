@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### Added
+
+- Comments from any `.luau` file, including `.d.luau` definitions, in hover, completion and signature help, for functions, type declarations, intersections and table fields
+- Go to definition on type references, and the name in `type Name = ...` jumps to the type body
+- Type statistics over `lunaut/typeStats` and `lunaut stats [paths] [--json]`: totals, origins, kinds, hierarchy and aliases
+- Analyzer plugins: a versioned C ABI (`src/Lunaut/analyzer.h`) loads a custom Luau fork at runtime, supports the pre-0.743 and post-0.743 frontend APIs and reports incompatible plugins instead of crashing
+- `lunaut.analyzer.enabled`, `lunaut.analyzer.path` and `lunaut.analyzer.diagnostics`
+- `require` of a module that returns an annotated local keeps the alias type in hover instead of the table internals
+
+### Fixed
+
+- Malformed LSP params and exceptions while checking or publishing diagnostics are caught, so the server keeps running
+- Hover on a table field shows `name: type` and its comment
+
 ## [0.0.4] - 2026-11-16
 
 ### Changed

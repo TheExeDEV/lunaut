@@ -53,6 +53,11 @@ void workspace::initialize()
 
 	register_types();
 
+	if (settings.analyzer.enabled)
+	{
+		load_analyzer();
+	}
+
 	if (settings.features.documentation)
 	{
 		std::vector<std::filesystem::path> files;
@@ -129,6 +134,7 @@ json workspace::get_status() const
 		{"solver", FFlag::LuauSolverV2 ? "new" : "old"},
 		{"sourcemap", {{"loaded", map.is_loaded()}, {"nodes", map.count()}}},
 		{"definitions", loaded},
+		{"analyzer", analyzer.to_json()},
 		{"settings", settings.to_json()},
 	};
 }
@@ -183,7 +189,18 @@ void workspace::flush_diagnostics()
 
 	for (const std::string& address : current)
 	{
-		publish_diagnostics(address);
+		try
+		{
+			publish_diagnostics(address);
+		}
+		catch (const std::exception& error)
+		{
+			owner.send_log(enumitem_message_type::Error, "diagnostics for " + address + " failed: " + error.what());
+		}
+		catch (...)
+		{
+			owner.send_log(enumitem_message_type::Error, "diagnostics for " + address + " failed");
+		}
 	}
 }
 
@@ -326,6 +343,7 @@ void workspace::set_settings(settingsinfo next)
 	bool definitions_changed = json(next.to_json()["definitions"]) != json(settings.to_json()["definitions"]) ||
 		next.roblox.security_level != settings.roblox.security_level;
 	bool rojo_changed = json(next.to_json()["rojo"]) != json(settings.to_json()["rojo"]);
+	bool analyzer_changed = json(next.to_json()["analyzer"]) != json(settings.to_json()["analyzer"]);
 
 	bool base_changed = next.base_luaurc != settings.base_luaurc;
 	settings = std::move(next);
@@ -343,6 +361,16 @@ void workspace::set_settings(settingsinfo next)
 	if (definitions_changed && ready)
 	{
 		owner.send_window_message(enumitem_message_type::Info, "Definitions settings changed, restart lunaut to apply them");
+	}
+
+	if (analyzer_changed && ready)
+	{
+		analyzer.unload();
+
+		if (settings.analyzer.enabled)
+		{
+			load_analyzer();
+		}
 	}
 
 #if FFLAG_ROJO
@@ -475,6 +503,9 @@ void workspace::load_definitions()
 {
 	definitions.clear();
 	definition_paths.clear();
+	definition_module_paths.clear();
+	definition_sources.clear();
+	definition_modules.clear();
 
 	std::set<std::string> packages;
 	json metadata = json::object();
@@ -539,6 +570,9 @@ void workspace::load_definitions()
 			owner.send_window_message(enumitem_message_type::Error, "Failed to load definitions file " + info.path + ": " + loaded.message);
 		}
 
+		definition_module_paths[loaded.name] = info.path;
+		definition_sources.emplace(loaded.name, std::move(result.sourceModule));
+		definition_modules.emplace(loaded.name, std::move(result.module));
 		definitions.push_back(loaded);
 	}
 
@@ -555,6 +589,21 @@ void workspace::load_definitions()
 	{
 		robloxmagic::apply(frontend.globalsForAutocomplete, metadata);
 	}
+}
+
+void workspace::load_analyzer()
+{
+	if (analyzer.load(settings.analyzer.path))
+	{
+		owner.send_log(
+			enumitem_message_type::Info,
+			"loaded analyzer " + analyzer.get_name() + " (Luau " + analyzer.get_version() + ", frontend API " +
+				analyzer.get_frontend_api() + "): " + settings.analyzer.path);
+		return;
+	}
+
+	owner.send_window_message(
+		enumitem_message_type::Error, "Failed to load analyzer " + settings.analyzer.path + ": " + analyzer.get_error());
 }
 
 Luau::CheckResult workspace::check_module(const Luau::ModuleName& name, bool for_autocomplete)
@@ -614,7 +663,17 @@ bool workspace::is_ignored(const std::string& path) const
 
 std::optional<textdocument> workspace::get_text_for(const Luau::ModuleName& name) const
 {
-	std::optional<std::string> path = resolver.get_real_path(name);
+	std::optional<std::string> path;
+	const auto known = definition_module_paths.find(name);
+
+	if (known != definition_module_paths.end())
+	{
+		path = known->second;
+	}
+	else
+	{
+		path = resolver.get_real_path(name);
+	}
 
 	if (!path)
 	{

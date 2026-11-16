@@ -1808,6 +1808,21 @@
           "default": false,
           "markdownDescription": "Show diagnostics for every file in the workspace, not only open ones."
         },
+        "lunaut.analyzer.enabled": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Load the analyzer plugin from `lunaut.analyzer.path`."
+        },
+        "lunaut.analyzer.path": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Shared library with a custom Luau analyzer. Setting a path turns `lunaut.analyzer.enabled` on."
+        },
+        "lunaut.analyzer.diagnostics": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Merge diagnostics returned by the analyzer plugin with the built-in ones."
+        },
         "lunaut.rojo.watch": {
           "type": "boolean",
           "default": true,

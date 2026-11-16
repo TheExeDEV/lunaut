@@ -46,7 +46,7 @@ file(GLOB_RECURSE LUNAUT_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/
 
 add_executable(lunaut ${LUNAUT_SOURCES})
 target_include_directories(lunaut PRIVATE src/Lunaut "${CMAKE_BINARY_DIR}/generated")
-target_link_libraries(lunaut PRIVATE Luau.Analysis Luau.Ast Luau.Config Luau.Compiler Luau.VM nlohmann_json::nlohmann_json)
+target_link_libraries(lunaut PRIVATE Luau.Analysis Luau.Ast Luau.Config Luau.Compiler Luau.VM nlohmann_json::nlohmann_json ${CMAKE_DL_LIBS})
 target_compile_definitions(lunaut PRIVATE LUNAUT_DEBUG=$<BOOL:${LUNAUT_DEBUG}>)
 
 if(MSVC)
