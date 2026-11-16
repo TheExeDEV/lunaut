@@ -143,6 +143,15 @@ class RequireAliasTests(unittest.TestCase):
 		self.assertEqual(shape["label"], ": Shape")
 		self.assertNotIn("textEdits", shape)
 
+	def test_inlay_hints_preserve_table_aliases(self):
+		hints = self.client.request(
+			"textDocument/inlayHint",
+			{"textDocument": {"uri": self.uri}, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 99, "character": 0}}},
+		)
+		labels = {hint["position"]["line"]: hint["label"] for hint in hints if hint["kind"] == 1}
+		self.assertEqual(labels[1], ": Config")
+		self.assertEqual(labels[3], ": Node")
+
 
 class TypeStatsTests(unittest.TestCase):
 	def test_type_stats_request(self):

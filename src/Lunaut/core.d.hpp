@@ -796,6 +796,7 @@ private:
 	std::optional<std::string> get_comment_documentation(const Luau::ModuleName& name, const Luau::Location& location);
 	std::optional<std::string> get_type_documentation(Luau::TypeId type);
 	std::optional<Luau::TypeFun> find_type_alias(Luau::TypeId type, Luau::ModuleName& module, std::string& name) const;
+	std::optional<Luau::TypeFun> find_return_alias(Luau::TypeId type, std::string& name) const;
 	std::optional<Luau::ModuleName> find_definition_module(Luau::TypeId type) const;
 	std::optional<Luau::ModuleName> find_definition_module(const Luau::Location& location) const;
 	std::vector<std::pair<Luau::ModuleName, Luau::Location>> find_references(

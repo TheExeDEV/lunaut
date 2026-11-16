@@ -42,6 +42,7 @@ std::string to_string_named_function(
 	const Luau::ToStringOptions& base);
 std::optional<Luau::Property> find_property(Luau::TypeId owner, const std::string& name, Luau::TypeId& base);
 bool is_same_type(Luau::TypeId left, Luau::TypeId right);
+void flatten_intersection(Luau::TypeId type, std::vector<Luau::TypeId>& parts);
 std::optional<named_type> get_reference_alias(const Luau::ScopePtr& scope, const Luau::AstType* annotation);
 std::optional<Luau::ModuleName> get_definition_module(Luau::TypeId type);
 std::optional<Luau::ModuleName> find_imported_module(const Luau::ScopePtr& scope, const std::string& alias);
@@ -319,15 +320,13 @@ json workspace::get_hover(const json& params)
 
 	type = Luau::follow(*type);
 
-	if (!alias && !value_alias && Luau::get<Luau::IntersectionType>(*type))
+	if (!alias && !value_alias)
 	{
-		Luau::ModuleName module_name;
 		std::string type_name;
 
-		if (std::optional<Luau::TypeFun> definition = find_type_alias(*type, module_name, type_name))
+		if (std::optional<Luau::TypeFun> definition = find_return_alias(*type, type_name))
 		{
 			value_alias = priv::named_type{type_name, *definition};
-			value_alias_module = module_name;
 		}
 	}
 
@@ -546,6 +545,90 @@ std::optional<Luau::TypeFun> workspace::find_type_alias(Luau::TypeId type, Luau:
 	return std::nullopt;
 }
 
+std::optional<Luau::TypeFun> workspace::find_return_alias(Luau::TypeId type, std::string& name) const
+{
+	Luau::TypeId followed = Luau::follow(type);
+
+	struct candidate
+	{
+		Luau::ModulePtr module;
+		const Luau::AstType* annotation;
+		Luau::TypeId type;
+	};
+
+	std::vector<candidate> candidates;
+
+	for (const auto& [module_name, source_node] : frontend.sourceNodes)
+	{
+		const Luau::SourceModule* source = frontend.getSourceModule(module_name);
+		Luau::ModulePtr module = frontend.moduleResolver.getModule(module_name);
+
+		if (source == nullptr || module == nullptr || source->root == nullptr)
+		{
+			continue;
+		}
+
+		for (Luau::AstStat* statement : source->root->body)
+		{
+			Luau::AstStatReturn* statement_return = statement->as<Luau::AstStatReturn>();
+
+			if (statement_return == nullptr || statement_return->list.size != 1)
+			{
+				continue;
+			}
+
+			Luau::AstExprLocal* expression = statement_return->list.data[0]->as<Luau::AstExprLocal>();
+
+			if (expression == nullptr || expression->local->annotation == nullptr)
+			{
+				continue;
+			}
+
+			const Luau::TypeId* resolved = module->astResolvedTypes.find(expression->local->annotation);
+
+			if (resolved == nullptr)
+			{
+				continue;
+			}
+
+			Luau::TypeId annotation_type = Luau::follow(*resolved);
+
+			if (annotation_type == followed)
+			{
+				Luau::ScopePtr scope = Luau::findScopeAtPosition(*module, expression->local->annotation->location.begin);
+
+				if (std::optional<priv::named_type> alias = priv::get_reference_alias(scope, expression->local->annotation))
+				{
+					name = alias->name;
+					return alias->definition;
+				}
+			}
+			else
+			{
+				candidates.push_back({module, expression->local->annotation, annotation_type});
+			}
+		}
+	}
+
+	for (const candidate& entry : candidates)
+	{
+		if (!priv::is_same_type(followed, entry.type))
+		{
+			continue;
+		}
+
+		Luau::ScopePtr scope = Luau::findScopeAtPosition(*entry.module, entry.annotation->location.begin);
+
+		if (std::optional<priv::named_type> alias = priv::get_reference_alias(scope, entry.annotation))
+		{
+			name = alias->name;
+			return alias->definition;
+		}
+	}
+
+	return std::nullopt;
+}
+
 std::optional<Luau::ModuleName> workspace::find_definition_module(Luau::TypeId type) const
 {
 	Luau::ModuleName module;
@@ -567,22 +650,14 @@ workspace::get_type_alias_name(Luau::TypeId type, const Luau::ScopePtr& scope, c
 		return reference->name;
 	}
 
-	Luau::TypeId followed = Luau::follow(type);
-
-	if (Luau::get<Luau::IntersectionType>(followed) == nullptr)
-	{
-		return std::nullopt;
-	}
-
-	Luau::ModuleName module;
 	std::string name;
 
-	if (!find_type_alias(followed, module, name))
+	if (find_return_alias(type, name))
 	{
-		return std::nullopt;
+		return name;
 	}
 
-	return name;
+	return std::nullopt;
 }
 
 std::optional<std::string> workspace::get_type_documentation(Luau::TypeId type)
@@ -624,6 +699,23 @@ std::string make_code_block(const std::string& code)
 	return "```luau\n" + code + "\n```";
 }
 
+void flatten_intersection(Luau::TypeId type, std::vector<Luau::TypeId>& parts)
+{
+	type = Luau::follow(type);
+
+	if (const Luau::IntersectionType* intersection = Luau::get<Luau::IntersectionType>(type))
+	{
+		for (Luau::TypeId part : intersection->parts)
+		{
+			flatten_intersection(part, parts);
+		}
+
+		return;
+	}
+
+	parts.push_back(type);
+}
+
 bool is_same_type(Luau::TypeId left, Luau::TypeId right)
 {
 	if (left == right)
@@ -631,11 +723,12 @@ bool is_same_type(Luau::TypeId left, Luau::TypeId right)
 		return true;
 	}
 
-	const Luau::IntersectionType* left_intersection = Luau::get<Luau::IntersectionType>(left);
-	const Luau::IntersectionType* right_intersection = Luau::get<Luau::IntersectionType>(right);
+	std::vector<Luau::TypeId> left_parts;
+	std::vector<Luau::TypeId> right_parts;
+	flatten_intersection(left, left_parts);
+	flatten_intersection(right, right_parts);
 
-	if (left_intersection == nullptr || right_intersection == nullptr ||
-		left_intersection->parts.size() != right_intersection->parts.size())
+	if (left_parts.empty() || left_parts.size() != right_parts.size())
 	{
 		return false;
 	}
@@ -643,17 +736,28 @@ bool is_same_type(Luau::TypeId left, Luau::TypeId right)
 	Luau::ToStringOptions options;
 	options.hideTableAliasExpansions = true;
 
-	for (size_t index = 0; index < left_intersection->parts.size(); ++index)
+	std::vector<bool> matched(right_parts.size(), false);
+
+	for (Luau::TypeId left_part : left_parts)
 	{
-		if (left_intersection->parts[index] == right_intersection->parts[index])
+		bool found = false;
+
+		for (size_t index = 0; index < right_parts.size(); ++index)
 		{
-			continue;
+			if (matched[index])
+			{
+				continue;
+			}
+
+			if (left_part == right_parts[index] || Luau::toString(left_part, options) == Luau::toString(right_parts[index], options))
+			{
+				matched[index] = true;
+				found = true;
+				break;
+			}
 		}
 
-		const std::string left_text = Luau::toString(left_intersection->parts[index], options);
-		const std::string right_text = Luau::toString(right_intersection->parts[index], options);
-
-		if (left_text != right_text)
+		if (!found)
 		{
 			return false;
 		}
