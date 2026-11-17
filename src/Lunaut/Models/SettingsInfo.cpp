@@ -50,6 +50,7 @@ const std::unordered_map<std::string_view, std::string_view> relevant_vscode_key
 	{"lunaut.inlayHints.autoRequire", "/inlay_hints/auto_require"},
 	{"lunaut.typeDisplay.aliases", "/features/alias_types"},
 	{"lunaut.typeDisplay.refine", "/features/refine_types"},
+	{"lunaut.typeDisplay.unknownError", "/features/unknown_error"},
 	{"lunaut.hover.documentation", "/features/documentation"},
 	{"lunaut.completion.autoImports", "/features/auto_imports"},
 	{"lunaut.completion.importKeyword", "/features/import_keyword"},
@@ -230,6 +231,7 @@ settingsinfo settingsinfo::from_json(const json& data, const settingsinfo& base)
 		priv::read(features, "stylua", info.features.stylua);
 		priv::read(features, "alias_types", info.features.alias_types);
 		priv::read(features, "refine_types", info.features.refine_types);
+		priv::read(features, "unknown_error", info.features.unknown_error);
 	}
 
 	priv::read(data, "documentation_files", info.documentation_files);
@@ -406,6 +408,7 @@ json settingsinfo::to_json() const
 			 {"stylua", features.stylua},
 			 {"alias_types", features.alias_types},
 			 {"refine_types", features.refine_types},
+			 {"unknown_error", features.unknown_error},
 		 }},
 	};
 }

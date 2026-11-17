@@ -498,6 +498,76 @@ class NormalizedAliasTests(unittest.TestCase):
 		self.assertNotIn("|", value)
 
 
+class DisplayDefinitionTests(unittest.TestCase):
+	@classmethod
+	def setUpClass(cls):
+		cls.client = LspClient(FIXTURES / "display")
+		cls.consumer = (FIXTURES / "display" / "consumer.luau").read_text(encoding="utf-8")
+		cls.service = (FIXTURES / "display" / "service.luau").read_text(encoding="utf-8")
+		cls.broken = (FIXTURES / "display" / "broken.luau").read_text(encoding="utf-8")
+		cls.consumer_uri, _ = cls.client.open("consumer.luau")
+		cls.service_uri, _ = cls.client.open("service.luau")
+		cls.broken_uri, _ = cls.client.open("broken.luau")
+
+	@classmethod
+	def tearDownClass(cls):
+		cls.client.close()
+
+	def test_nested_alias_has_definition(self):
+		value = hover_text(self.client, self.service_uri, self.service, "const result", len("const "))
+		self.assertIn("const result: {observer_var}", value)
+		self.assertIn("[observer_var](file:///", value)
+
+	def test_union_member_has_definition(self):
+		value = hover_text(self.client, self.service_uri, self.service, "local viewed", len("local "))
+		self.assertIn("local viewed: line | string", value)
+		self.assertIn("[line](file:///", value)
+
+	def test_function_value_has_definition(self):
+		value = hover_text(self.client, self.service_uri, self.service, "= function(self: scheduler", 2)
+		self.assertIn("**Definitions**", value)
+		self.assertIn("[function](file:///", value)
+
+	def test_variadic_tail_uses_alias(self):
+		value = hover_text(self.client, self.consumer_uri, self.consumer, "local write = FuncDB.write", len("local write = FuncDB."))
+		self.assertIn("...tval", value)
+		self.assertNotIn("where t1", value)
+		self.assertNotIn("read read", value)
+
+	def test_inlay_return_uses_alias(self):
+		hints = self.client.request(
+			"textDocument/inlayHint",
+			{
+				"textDocument": {"uri": self.service_uri},
+				"range": {"start": {"line": 0, "character": 0}, "end": {"line": 99, "character": 0}},
+			},
+		)
+		labels = [hint["label"] for hint in hints if hint["kind"] == 1]
+		self.assertIn(": {observer_var}", labels)
+
+	def test_definition_prefers_implementation(self):
+		line, character = position_of(self.consumer, "Service:whose()", len("Service:"))
+		result = self.client.at("textDocument/definition", self.consumer_uri, line, character)
+		expected_line, _ = position_of(self.service, "whose = function", 1)
+		self.assertTrue(result["uri"].endswith("/service.luau"), result)
+		self.assertEqual(result["range"]["start"]["line"], expected_line)
+
+	def test_unknown_error_setting_replaces_error_type(self):
+		value = hover_text(self.client, self.broken_uri, self.broken, "local broken", len("local "))
+		self.assertIn("local broken: unknown", value)
+		self.assertNotIn("*error-type*", value)
+
+	def test_unknown_error_can_be_disabled(self):
+		client = LspClient(FIXTURES / "display", {"vscode": {"lunaut.typeDisplay.unknownError": False}})
+
+		try:
+			uri, _ = client.open("broken.luau")
+			value = hover_text(client, uri, self.broken, "local broken", len("local "))
+			self.assertIn("local broken: *error-type*", value)
+		finally:
+			client.close()
+
+
 class NegatedInlayTests(unittest.TestCase):
 	def test_negated_type_is_not_insertable(self):
 		text = (FIXTURES / "negated" / "main.luau").read_text(encoding="utf-8")

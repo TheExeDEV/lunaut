@@ -89,7 +89,8 @@ class FeatureTests(unittest.TestCase):
 	def test_hover_line_comment_documentation(self):
 		line, character = position_of(self.documented, 'greet("', 1)
 		value = self.client.at("textDocument/hover", self.documented_uri, line, character)["contents"]["value"]
-		self.assertTrue(value.endswith("----------\nGreets someone by name."), value)
+		self.assertIn("----------\nGreets someone by name.", value)
+		self.assertIn("**Definitions**", value)
 
 	def test_hover_string_length(self):
 		line, character = position_of(self.documented, '"lunaut"', 2)

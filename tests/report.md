@@ -1,9 +1,9 @@
 # Test report
 
-- Date: 2026-11-18 02:08:21
+- Date: 2026-11-18 02:44:43
 - Binary: `/home/ifmnb/Git/lunaut/build/lunaut`
 - Version: `lunaut 0.0.4 (Luau 0.747, GNU 16.2.1)`
-- Result: **160/160 passed** in 12.6s
+- Result: **168/168 passed** in 12.7s
 
 | Test | Status | Time |
 | --- | --- | --- |
@@ -31,15 +31,23 @@
 | `test_extended.AliasRecoveryTests.test_optional_return_preserves_alias` | PASS | 0.00s |
 | `test_extended.AliasRecoveryTests.test_optional_union_return_preserves_alias` | PASS | 0.00s |
 | `test_extended.AliasRecoveryTests.test_vararg_return_preserves_alias` | PASS | 0.00s |
-| `test_extended.AnalyzerTests.test_analyzer_diagnostics_are_merged` | PASS | 0.03s |
+| `test_extended.AnalyzerTests.test_analyzer_diagnostics_are_merged` | PASS | 0.04s |
 | `test_extended.AnalyzerTests.test_compatible_analyzer_is_loaded` | PASS | 0.03s |
-| `test_extended.AnalyzerTests.test_incompatible_abi_is_reported` | PASS | 0.04s |
+| `test_extended.AnalyzerTests.test_incompatible_abi_is_reported` | PASS | 0.03s |
 | `test_extended.AnalyzerTests.test_pre_0743_analyzer_is_supported` | PASS | 0.03s |
 | `test_extended.AnalyzerTests.test_version_and_api_mismatch_is_reported` | PASS | 0.03s |
 | `test_extended.AutoRequireTests.test_auto_require_inserts_import_and_annotation` | PASS | 0.07s |
 | `test_extended.AutoRequireTests.test_disabled_auto_require_does_not_offer_edits` | PASS | 0.07s |
 | `test_extended.DiagnosticsDelayTests.test_delay_setting_round_trip` | PASS | 0.02s |
 | `test_extended.DiagnosticsDelayTests.test_zero_delay_publishes_without_waiting` | PASS | 0.01s |
+| `test_extended.DisplayDefinitionTests.test_definition_prefers_implementation` | PASS | 0.00s |
+| `test_extended.DisplayDefinitionTests.test_function_value_has_definition` | PASS | 0.00s |
+| `test_extended.DisplayDefinitionTests.test_inlay_return_uses_alias` | PASS | 0.00s |
+| `test_extended.DisplayDefinitionTests.test_nested_alias_has_definition` | PASS | 0.00s |
+| `test_extended.DisplayDefinitionTests.test_union_member_has_definition` | PASS | 0.00s |
+| `test_extended.DisplayDefinitionTests.test_unknown_error_can_be_disabled` | PASS | 0.07s |
+| `test_extended.DisplayDefinitionTests.test_unknown_error_setting_replaces_error_type` | PASS | 0.00s |
+| `test_extended.DisplayDefinitionTests.test_variadic_tail_uses_alias` | PASS | 0.00s |
 | `test_extended.DocumentationTests.test_completion_shows_field_and_function_comments` | PASS | 0.00s |
 | `test_extended.DocumentationTests.test_completion_shows_function_comment` | PASS | 0.00s |
 | `test_extended.DocumentationTests.test_field_comment_from_definition_file` | PASS | 0.00s |
@@ -59,7 +67,7 @@
 | `test_extended.NormalizedAliasTests.test_primitive_does_not_become_any_alias` | PASS | 0.00s |
 | `test_extended.NormalizedAliasTests.test_primitive_does_not_become_string_alias` | PASS | 0.00s |
 | `test_extended.ProtectionTests.test_broken_edit_does_not_crash` | PASS | 2.01s |
-| `test_extended.ProtectionTests.test_malformed_request_does_not_crash` | PASS | 0.02s |
+| `test_extended.ProtectionTests.test_malformed_request_does_not_crash` | PASS | 0.01s |
 | `test_extended.RequireAliasTests.test_function_return_preserves_annotated_alias` | PASS | 0.00s |
 | `test_extended.RequireAliasTests.test_inlay_hints_preserve_defaulted_generic_alias` | PASS | 0.00s |
 | `test_extended.RequireAliasTests.test_inlay_hints_preserve_intersection_alias` | PASS | 0.00s |

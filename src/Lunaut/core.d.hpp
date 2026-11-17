@@ -286,6 +286,7 @@ struct featuresinfo
 	std::string stylua = "stylua";
 	bool alias_types = true;
 	bool refine_types = true;
+	bool unknown_error = true;
 };
 
 struct diagnosticsinfo
@@ -349,6 +350,13 @@ struct loadeddefinitioninfo
 	enumitem_definition_source source = enumitem_definition_source::Config;
 
 	json to_json() const;
+};
+
+struct typelinkinfo
+{
+	std::string name;
+	Luau::ModuleName module;
+	Luau::Location location;
 };
 
 struct typedisplayinfo
@@ -808,7 +816,10 @@ public:
 		const Luau::ScopePtr& scope,
 		const Luau::AstType* annotation,
 		const Luau::AstExpr* initializer = nullptr,
-		size_t max_length = 0) const;
+		size_t max_length = 0,
+		std::vector<typelinkinfo>* links = nullptr) const;
+	typedisplayinfo
+	get_type_display(Luau::TypePackId pack, const Luau::Module& module, const Luau::ScopePtr& scope, size_t max_length = 0) const;
 	std::string get_import_symbol(const Luau::ModuleName& name) const;
 	std::optional<std::string>
 	get_import_statement(const Luau::ModuleName& from, const Luau::ModuleName& target, const std::string& symbol = std::string()) const;
@@ -844,6 +855,7 @@ private:
 		std::string& alias,
 		std::string* display = nullptr) const;
 	std::optional<std::string> get_type_documentation(Luau::TypeId type);
+	std::optional<Luau::Location> find_property_implementation(const Luau::ModuleName& name, const std::string& property) const;
 	std::string render_type_display(
 		Luau::TypeId type,
 		const Luau::ModuleName& module_name,
@@ -851,7 +863,10 @@ private:
 		size_t max_length,
 		bool named_function = false,
 		bool hide_self = false,
-		const std::string* return_alias = nullptr) const;
+		const std::string* return_alias = nullptr,
+		std::vector<typelinkinfo>* links = nullptr) const;
+	std::string render_type_pack_display(
+		Luau::TypePackId pack, const Luau::ModuleName& module_name, const Luau::ScopePtr& scope, size_t max_length) const;
 	std::string format_alias_display(const Luau::ModuleName& module, const std::string& name) const;
 	std::optional<Luau::TypeFun> find_type_alias(
 		Luau::TypeId type,

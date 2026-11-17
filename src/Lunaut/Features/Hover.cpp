@@ -62,6 +62,7 @@ std::optional<Luau::ModuleName> get_definition_module(Luau::TypeId type);
 std::optional<Luau::ModuleName> find_imported_module(const Luau::ScopePtr& scope, const std::string& alias);
 std::optional<size_t> get_utf8_length(std::string_view text);
 bool is_reserved_word_at(std::string_view text, const Luau::Position& position);
+std::string replace_unknown_error(const std::string& text, bool enabled);
 
 }
 }
@@ -111,6 +112,7 @@ json workspace::get_hover(const json& params)
 	std::optional<priv::named_type> return_alias;
 	std::optional<Luau::ModuleName> return_alias_module;
 	std::optional<priv::location_info> origin;
+	std::optional<priv::location_info> function_definition;
 	std::optional<std::string> index_name;
 	bool require_reference = false;
 	std::optional<std::string> symbol = Luau::getDocumentationSymbolAtPosition(*source, *module, position);
@@ -450,7 +452,8 @@ json workspace::get_hover(const json& params)
 		}
 	}
 
-	typedisplayinfo display_info = get_type_display(*type, *module, scope, display_annotation, display_expression);
+	std::vector<typelinkinfo> type_links;
+	typedisplayinfo display_info = get_type_display(*type, *module, scope, display_annotation, display_expression, 0, &type_links);
 	const std::string display = display_info.text;
 
 	if (alias)
@@ -465,26 +468,42 @@ json workspace::get_hover(const json& params)
 		std::optional<Luau::AstName> local_name = target.getName();
 		std::string function_name = target.getLocal() != nullptr && local_name ? std::string(local_name->value) : "";
 
+		if (function->definition && function->definition->definitionModuleName)
+		{
+			function_definition =
+				priv::location_info{*function->definition->definitionModuleName, function->definition->definitionLocation};
+		}
+
 		if (function->generics.empty() && function->genericPacks.empty())
 		{
 			std::string alias_name;
+			std::string alias_display;
 			Luau::ModuleName alias_module;
 
-			if (std::optional<Luau::TypeFun> definition = find_function_return_alias(*function, alias_module, alias_name))
+			if (std::optional<Luau::TypeFun> definition = find_function_return_alias(*function, alias_module, alias_name, &alias_display))
 			{
-				return_alias = priv::named_type{alias_name, *definition};
-				return_alias_module = alias_module;
+				return_alias = priv::named_type{alias_name, *definition, alias_display};
+
+				if (definition->definitionLocation)
+				{
+					return_alias_module = find_definition_module(*definition->definitionLocation).value_or(alias_module);
+				}
+				else
+				{
+					return_alias_module = alias_module;
+				}
 			}
 		}
 
 		if (!return_alias && origin && index_name)
 		{
 			std::string alias_name;
+			std::string alias_display;
 
 			if (std::optional<Luau::TypeFun> definition =
-					find_annotation_return_alias(origin->module, origin->location, *index_name, alias_name))
+					find_annotation_return_alias(origin->module, origin->location, *index_name, alias_name, &alias_display))
 			{
-				return_alias = priv::named_type{alias_name, *definition};
+				return_alias = priv::named_type{alias_name, *definition, alias_display};
 
 				if (definition->definitionLocation)
 				{
@@ -504,9 +523,21 @@ json workspace::get_hover(const json& params)
 			}
 		}
 
-		std::string signature =
-			render_type_display(*type, module->name, scope, 0, true, hide_self, return_alias ? &return_alias->name : nullptr);
+		const std::string* return_display = nullptr;
+
+		if (return_alias)
+		{
+			return_display = return_alias->display.empty() ? &return_alias->name : &return_alias->display;
+		}
+
+		std::vector<typelinkinfo> signature_links;
+		std::string signature = render_type_display(*type, module->name, scope, 0, true, hide_self, return_display, &signature_links);
 		text = priv::make_code_block(priv::to_string_named_function(*module, function_name, function_expr, signature));
+
+		for (const typelinkinfo& link : signature_links)
+		{
+			type_links.push_back(link);
+		}
 	}
 	else if (index_name)
 	{
@@ -621,6 +652,30 @@ json workspace::get_hover(const json& params)
 	if (return_alias && return_alias->definition.definitionLocation && return_alias_module)
 	{
 		add_definition(return_alias->name, *return_alias_module, *return_alias->definition.definitionLocation);
+	}
+
+	for (const typelinkinfo& link : type_links)
+	{
+		add_definition(link.name, link.module, link.location);
+	}
+
+	if (function_definition)
+	{
+		std::string label = index_name.value_or("");
+
+		if (label.empty())
+		{
+			if (const Luau::AstExprGlobal* global = node->as<Luau::AstExprGlobal>())
+			{
+				label = global->name.value;
+			}
+			else if (target.getLocal() != nullptr)
+			{
+				label = target.getLocal()->name.value;
+			}
+		}
+
+		add_definition(label.empty() ? "function" : label, function_definition->module, function_definition->location);
 	}
 
 	if (!definitions.empty())
@@ -1892,7 +1947,8 @@ std::string workspace::render_type_display(
 	size_t max_length,
 	bool named_function,
 	bool hide_self,
-	const std::string* return_alias) const
+	const std::string* return_alias,
+	std::vector<typelinkinfo>* links) const
 {
 	Luau::TypeId followed = Luau::follow(type);
 
@@ -1935,11 +1991,11 @@ std::string workspace::render_type_display(
 					}
 				}
 
-				return text;
+				return priv::replace_unknown_error(text, settings.features.unknown_error);
 			}
 		}
 
-		return Luau::toString(followed, plain);
+		return priv::replace_unknown_error(Luau::toString(followed, plain), settings.features.unknown_error);
 	}
 
 	Luau::ToStringOptions options;
@@ -1959,6 +2015,24 @@ std::string workspace::render_type_display(
 	size_t alias_budget = 160;
 	size_t render_budget = 768;
 	int depth = 0;
+
+	auto record_link = [&](const std::string& name, const Luau::ModuleName& module, const std::optional<Luau::Location>& location)
+	{
+		if (links == nullptr || !location)
+		{
+			return;
+		}
+
+		for (const typelinkinfo& existing : *links)
+		{
+			if (existing.module == module && existing.location == *location)
+			{
+				return;
+			}
+		}
+
+		links->push_back({name, module, *location});
+	};
 
 	auto fallback = [&](Luau::TypeId value)
 	{
@@ -2005,9 +2079,10 @@ std::string workspace::render_type_display(
 			Luau::ModuleName module;
 			std::string name;
 
-			if (find_type_alias(value, module, name, module_name))
+			if (std::optional<Luau::TypeFun> definition = find_type_alias(value, module, name, module_name))
 			{
 				result = format_alias_display(module, name);
+				record_link(name, module, definition->definitionLocation);
 			}
 			else if (const Luau::UnionType* union_type = Luau::get<Luau::UnionType>(value))
 			{
@@ -2035,9 +2110,10 @@ std::string workspace::render_type_display(
 				{
 					std::string only_name;
 
-					if (find_type_alias(only, module, only_name, module_name))
+					if (std::optional<Luau::TypeFun> definition = find_type_alias(only, module, only_name, module_name))
 					{
 						result = format_alias_display(module, only_name) + (optional ? "?" : "");
+						record_link(only_name, module, definition->definitionLocation);
 					}
 				}
 			}
@@ -2046,6 +2122,8 @@ std::string workspace::render_type_display(
 		alias_cache[value] = result;
 		return result;
 	};
+
+	std::function<std::string(Luau::TypePackId)> render_pack;
 
 	std::function<std::string(Luau::TypeId)> render = [&](Luau::TypeId value) -> std::string
 	{
@@ -2233,6 +2311,10 @@ std::string workspace::render_type_display(
 			{
 				result =
 					format_alias_display(table->definitionModuleName.empty() ? module_name : table->definitionModuleName, *table->name);
+				record_link(
+					*table->name,
+					table->definitionModuleName.empty() ? module_name : table->definitionModuleName,
+					table->definitionLocation);
 
 				if (!table->instantiatedTypeParams.empty() || !table->instantiatedTypePackParams.empty())
 				{
@@ -2410,7 +2492,7 @@ std::string workspace::render_type_display(
 					result += ", ";
 				}
 
-				result += fallback_pack(*arguments_tail);
+				result += render_pack(*arguments_tail);
 			}
 
 			result += named_function && depth == 1 ? "): " : ") -> ";
@@ -2453,7 +2535,7 @@ std::string workspace::render_type_display(
 							result += ", ";
 						}
 
-						result += fallback_pack(*returns_tail);
+						result += render_pack(*returns_tail);
 					}
 
 					result += ")";
@@ -2478,6 +2560,66 @@ std::string workspace::render_type_display(
 		return result;
 	};
 
+	render_pack = [&](Luau::TypePackId pack) -> std::string
+	{
+		Luau::TypePackId followed_pack = Luau::follow(pack);
+
+		if (const Luau::VariadicTypePack* variadic = Luau::get<Luau::VariadicTypePack>(followed_pack))
+		{
+			if (variadic->hidden)
+			{
+				return std::string();
+			}
+
+			std::string inner = render(variadic->ty);
+			Luau::TypeId followed_type = Luau::follow(variadic->ty);
+			bool wrap = !resolve_alias(followed_type) &&
+				(Luau::get<Luau::UnionType>(followed_type) != nullptr || Luau::get<Luau::IntersectionType>(followed_type) != nullptr);
+
+			return "..." + (wrap ? "(" + inner + ")" : inner);
+		}
+
+		if (const Luau::GenericTypePack* generic = Luau::get<Luau::GenericTypePack>(followed_pack))
+		{
+			return "..." + generic->name;
+		}
+
+		if (const Luau::FreeTypePack* free = Luau::get<Luau::FreeTypePack>(followed_pack))
+		{
+			return "..." + std::to_string(free->index);
+		}
+
+		auto [head, tail] = Luau::flatten(pack);
+		std::string text;
+
+		for (size_t index = 0; index < head.size(); ++index)
+		{
+			if (index != 0)
+			{
+				text += ", ";
+			}
+
+			text += render(head[index]);
+		}
+
+		if (tail)
+		{
+			std::string rest = render_pack(*tail);
+
+			if (!rest.empty())
+			{
+				if (!text.empty())
+				{
+					text += ", ";
+				}
+
+				text += std::move(rest);
+			}
+		}
+
+		return text;
+	};
+
 	std::string result = render(followed);
 
 	if (result.empty())
@@ -2485,7 +2627,7 @@ std::string workspace::render_type_display(
 		result = fallback(followed);
 	}
 
-	return result;
+	return priv::replace_unknown_error(result, settings.features.unknown_error);
 }
 
 typedisplayinfo workspace::get_type_display(
@@ -2494,7 +2636,8 @@ typedisplayinfo workspace::get_type_display(
 	const Luau::ScopePtr& scope,
 	const Luau::AstType* annotation,
 	const Luau::AstExpr* initializer,
-	size_t max_length) const
+	size_t max_length,
+	std::vector<typelinkinfo>* links) const
 {
 	typedisplayinfo info;
 	Luau::TypeId followed = Luau::follow(type);
@@ -2522,7 +2665,7 @@ typedisplayinfo workspace::get_type_display(
 
 				if (table_like)
 				{
-					info.text = render_type_display(left, module.name, scope, max_length);
+					info.text = render_type_display(left, module.name, scope, max_length, false, false, nullptr, links);
 				}
 				else if (const Luau::UnionType* left_union = Luau::get<Luau::UnionType>(left))
 				{
@@ -2545,7 +2688,7 @@ typedisplayinfo workspace::get_type_display(
 					{
 						if (values.size() == 1)
 						{
-							info.text = render_type_display(values.front(), module.name, scope, max_length);
+							info.text = render_type_display(values.front(), module.name, scope, max_length, false, false, nullptr, links);
 						}
 						else if (!values.empty())
 						{
@@ -2558,7 +2701,7 @@ typedisplayinfo workspace::get_type_display(
 									joined += " | ";
 								}
 
-								joined += render_type_display(values[index], module.name, scope, max_length);
+								joined += render_type_display(values[index], module.name, scope, max_length, false, false, nullptr, links);
 							}
 
 							info.text = joined;
@@ -2651,6 +2794,11 @@ typedisplayinfo workspace::get_type_display(
 			info.module = find_definition_module(definition.type);
 		}
 
+		if (links != nullptr && definition.definitionLocation && info.module)
+		{
+			links->push_back({info.name, *info.module, *definition.definitionLocation});
+		}
+
 		if (info.module)
 		{
 			info.show_as_module = definition_show_as_module.count(*info.module) != 0;
@@ -2692,13 +2840,85 @@ typedisplayinfo workspace::get_type_display(
 		return info;
 	}
 
-	info.text = render_type_display(followed, module.name, scope, max_length);
+	info.text = render_type_display(followed, module.name, scope, max_length, false, false, nullptr, links);
 
 	if (max_length > 0 && info.text.size() > max_length)
 	{
 		info.truncated = true;
 	}
 
+	return info;
+}
+
+std::string workspace::render_type_pack_display(
+	Luau::TypePackId pack, const Luau::ModuleName& module_name, const Luau::ScopePtr& scope, size_t max_length) const
+{
+	Luau::TypePackId followed = Luau::follow(pack);
+
+	if (const Luau::VariadicTypePack* variadic = Luau::get<Luau::VariadicTypePack>(followed))
+	{
+		if (variadic->hidden)
+		{
+			return std::string();
+		}
+
+		std::string inner = render_type_display(variadic->ty, module_name, scope, max_length);
+		Luau::TypeId followed_type = Luau::follow(variadic->ty);
+		Luau::ModuleName alias_module;
+		std::string alias_name;
+		bool aliased = find_type_alias(followed_type, alias_module, alias_name, module_name).has_value();
+		bool wrap = !aliased &&
+			(Luau::get<Luau::UnionType>(followed_type) != nullptr || Luau::get<Luau::IntersectionType>(followed_type) != nullptr);
+		return "..." + (wrap ? "(" + inner + ")" : inner);
+	}
+
+	if (const Luau::GenericTypePack* generic = Luau::get<Luau::GenericTypePack>(followed))
+	{
+		return "..." + generic->name;
+	}
+
+	if (const Luau::FreeTypePack* free = Luau::get<Luau::FreeTypePack>(followed))
+	{
+		return "..." + std::to_string(free->index);
+	}
+
+	auto [head, tail] = Luau::flatten(followed);
+	std::string text;
+
+	for (size_t index = 0; index < head.size(); ++index)
+	{
+		if (index != 0)
+		{
+			text += ", ";
+		}
+
+		text += render_type_display(head[index], module_name, scope, max_length);
+	}
+
+	if (tail)
+	{
+		std::string rest = render_type_pack_display(*tail, module_name, scope, max_length);
+
+		if (!rest.empty())
+		{
+			if (!text.empty())
+			{
+				text += ", ";
+			}
+
+			text += std::move(rest);
+		}
+	}
+
+	bool wrap = tail ? !head.empty() : head.size() > 1;
+	return wrap ? "(" + text + ")" : text;
+}
+
+typedisplayinfo
+workspace::get_type_display(Luau::TypePackId pack, const Luau::Module& module, const Luau::ScopePtr& scope, size_t max_length) const
+{
+	typedisplayinfo info;
+	info.text = render_type_pack_display(pack, module.name, scope, max_length);
 	return info;
 }
 
@@ -4352,6 +4572,35 @@ bool is_reserved_word_at(std::string_view text, const Luau::Position& position)
 
 		return false;
 	}
+}
+
+std::string replace_unknown_error(const std::string& text, bool enabled)
+{
+	if (!enabled)
+	{
+		return text;
+	}
+
+	constexpr std::string_view marker = "*error-type*";
+	std::string result;
+	size_t offset = 0;
+
+	while (true)
+	{
+		size_t found = text.find(marker, offset);
+
+		if (found == std::string::npos)
+		{
+			result.append(text, offset, std::string::npos);
+			break;
+		}
+
+		result.append(text, offset, found - offset);
+		result += "unknown";
+		offset = found + marker.size();
+	}
+
+	return result;
 }
 
 std::optional<size_t> get_utf8_length(std::string_view text)

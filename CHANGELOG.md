@@ -16,6 +16,7 @@
 - `lunaut.analyzer.enabled`, `lunaut.analyzer.path` and `lunaut.analyzer.diagnostics`
 - `lunaut.completion.importKeyword`: insert auto-imports with `local` or `const`
 - `lunaut.typeDisplay.aliases` and `lunaut.typeDisplay.refine`: turn off alias names or display simplification to get the analyzer's raw expanded types
+- `lunaut.typeDisplay.unknownError`: display `*error-type*` as `unknown` in hovers and type hints, enabled by default
 - `lunaut.inlayHints.autoRequire`: when an insertable hint refers to a type from another module, insert the missing `require` together with the `Module.type` annotation
 - `lunaut.diagnostics.delay`: wait this many milliseconds after the last change before checking and publishing diagnostics, `1000` by default
 - `"show_as_module": true` on a `lunaut.definitions` entry: display its types as if they came from a required module, for example `core.pointer`; the former `@core.pointer` spelling is still accepted in annotations
@@ -37,6 +38,10 @@
 - Reading input no longer flushes standard output concurrently with JSON-RPC writes, which corrupted frames and hung shutdown
 - A union of the same alias represented as an intersection and as its merged table (for example `enumitem_shared_net_variant` from `variant or SharedNetVariant.Safe`) keeps the alias name instead of `alias | { ... }`
 - Function types containing a variadic tail no longer render a doubled ellipsis such as `(......any)`
+- Inlay return hints and function hovers render variadic tails through the alias-aware renderer, so `FuncDB:write` shows `...tval` instead of a structural `...argument | string | t1 where t1 = { ... }`
+- Hover Definitions include every alias resolved while rendering, so a `const result = {}` inferred as `{observer_var}`, a `work_list | string` union, an intersection and `class.type` all link to their aliases
+- Function hovers and function values add a Definition for the function itself
+- Go to definition on a required module's function or method prefers its implementation (`Scheduler:whose()` goes to `Scheduler.luau`) and falls back to the type declaration, including intersection-typed owners
 - Hovering a reserved word such as `local`, `const`, `if`, `return` or `end` shows nothing instead of a type
 - Hovering the `function` keyword shows the normalized function type, with parameter and return aliases such as `line | string` instead of expanded structural tables
 - Function hover normalizes parameter and return aliases the same way as locals, and hides inferred variadic tails that have no source `...`

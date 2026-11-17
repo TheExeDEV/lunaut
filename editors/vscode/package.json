@@ -1549,6 +1549,11 @@
           "default": true,
           "markdownDescription": "Simplify displayed types: fold duplicate union members, keep optionals as `?`, and hide empty fallbacks such as `value or {}`."
         },
+        "lunaut.typeDisplay.unknownError": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Display `*error-type*` as `unknown` in hovers and type hints."
+        },
         "lunaut.hover.documentation": {
           "type": "boolean",
           "default": true,

@@ -58,13 +58,13 @@ struct hint_collector final : Luau::AstVisitor
 
 bool is_literal(const Luau::AstExpr* expr);
 std::string get_argument_text(const Luau::AstExpr* expr);
-Luau::ToStringResult to_return_string(Luau::TypePackId pack, Luau::ToStringOptions& options);
 bool is_identifier(const std::string& name);
 bool is_qualified_name(const std::string& name);
 std::string last_name_part(const std::string& name);
 std::string name_prefix(const std::string& name);
 bool raw_annotation_visible(const Luau::ScopePtr& scope, const std::string& text);
 std::optional<std::string> find_imported_symbol(const Luau::ScopePtr& scope, const Luau::ModuleName& module);
+std::string replace_error_type(const std::string& text);
 
 }
 }
@@ -196,7 +196,12 @@ bool hint_collector::visit(Luau::AstExprFunction* node)
 	if (info.function_return_types && node->returnAnnotation == nullptr && node->argLocation && node->body->body.size > 0 &&
 		is_visible(node->argLocation->end))
 	{
-		add_type(node->argLocation->end, to_return_string(function->retTypes, options));
+		Luau::ScopePtr scope = Luau::findScopeAtPosition(module, node->location.begin);
+		typedisplayinfo display =
+			owner.get_type_display(function->retTypes, module, scope, static_cast<size_t>(std::max(10, info.max_length)));
+		Luau::ToStringResult text{display.text};
+		text.truncated = display.truncated;
+		add_type(node->argLocation->end, text);
 	}
 
 	if (!info.parameter_types)
@@ -385,15 +390,17 @@ void hint_collector::add_type(Luau::Position position, const Luau::ToStringResul
 		return;
 	}
 
+	std::string name = owner.get_settings().features.unknown_error ? replace_error_type(text.name) : text.name;
+
 	json hint = {
 		{"position", document.to_lsp_position(position)},
-		{"label", ": " + text.name},
+		{"label", ": " + name},
 		{"kind", kind_type},
 	};
 
 	// Negation is only valid when it is produced by a declared type function. A raw
 	// `A & ~B` in an annotation is not valid Luau, so never offer it as an edit.
-	const bool negated = text.name.find('~') != std::string::npos;
+	const bool negated = name.find('~') != std::string::npos;
 
 	if (info.insertable && !text.invalid && !text.truncated && !text.error && !text.cycle && !negated)
 	{
@@ -404,7 +411,7 @@ void hint_collector::add_type(Luau::Position position, const Luau::ToStringResul
 		else
 		{
 			json at = document.to_lsp_position(position);
-			hint["textEdits"] = {{{"range", {{"start", at}, {"end", at}}}, {"newText", ": " + text.name}}};
+			hint["textEdits"] = {{{"range", {{"start", at}, {"end", at}}}, {"newText", ": " + name}}};
 		}
 	}
 
@@ -595,22 +602,30 @@ std::string get_argument_text(const Luau::AstExpr* expr)
 	return {};
 }
 
-Luau::ToStringResult to_return_string(Luau::TypePackId pack, Luau::ToStringOptions& options)
+std::string replace_error_type(const std::string& text)
 {
-	size_t count = Luau::size(pack);
-	bool tail = !Luau::finite(pack);
-	bool wrap = Luau::get<Luau::TypePack>(Luau::follow(pack)) != nullptr && (tail ? count != 0 : count > 1);
-	Luau::ToStringResult text = Luau::toStringDetailed(pack, options);
+	constexpr std::string_view marker = "*error-type*";
+	std::string result;
+	size_t offset = 0;
 
-	if (wrap || text.name.empty())
+	while (true)
 	{
-		text.name = "(" + text.name + ")";
+		size_t found = text.find(marker, offset);
+
+		if (found == std::string::npos)
+		{
+			result.append(text, offset, std::string::npos);
+			break;
+		}
+
+		result.append(text, offset, found - offset);
+		result += "unknown";
+		offset = found + marker.size();
 	}
 
-	return text;
+	return result;
 }
 
 }
 }
-
 }
