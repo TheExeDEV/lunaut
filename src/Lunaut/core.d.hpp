@@ -772,7 +772,12 @@ public:
 	json get_prepare_rename(const json& params);
 	json get_rename(const json& params);
 	json get_inlay_hints(const json& params);
-	std::optional<std::string> get_type_alias_name(Luau::TypeId type, const Luau::ScopePtr& scope, const Luau::AstType* annotation) const;
+	std::optional<std::string> get_type_alias_name(
+		Luau::TypeId type,
+		const Luau::Module& module,
+		const Luau::ScopePtr& scope,
+		const Luau::AstType* annotation,
+		const Luau::AstExpr* initializer = nullptr) const;
 	json get_semantic_tokens(const json& params);
 	json get_code_actions(const json& params);
 	json get_document_colors(const json& params);
@@ -798,12 +803,28 @@ private:
 	unsigned int get_import_line(const Luau::ModuleName& name, const textdocument& document);
 	std::optional<std::string> get_comment_documentation(const Luau::ModuleName& name, const Luau::Location& location);
 	std::optional<std::string> get_type_documentation(Luau::TypeId type);
-	std::optional<Luau::TypeFun> find_type_alias(Luau::TypeId type, Luau::ModuleName& module, std::string& name) const;
-	std::optional<Luau::TypeFun> find_return_alias(Luau::TypeId type, std::string& name) const;
+	std::optional<Luau::TypeFun> find_type_alias(
+		Luau::TypeId type,
+		Luau::ModuleName& module,
+		std::string& name,
+		const std::optional<Luau::ModuleName>& preferred = std::nullopt) const;
 	std::optional<Luau::TypeFun>
-	find_function_return_alias(const Luau::FunctionType& function, Luau::ModuleName& module, std::string& name) const;
+	find_display_alias(Luau::TypeId type, const std::optional<Luau::ModuleName>& preferred, std::string& name, std::string& display) const;
+	std::optional<Luau::TypeFun> find_expression_alias(
+		const Luau::Module& module,
+		const Luau::ScopePtr& scope,
+		const Luau::AstExpr* expression,
+		std::string& name,
+		std::string& display) const;
+	std::optional<Luau::TypeFun> find_return_alias(Luau::TypeId type, std::string& name) const;
+	std::optional<Luau::TypeFun> find_function_return_alias(
+		const Luau::FunctionType& function, Luau::ModuleName& module, std::string& name, std::string* display = nullptr) const;
 	std::optional<Luau::TypeFun> find_annotation_return_alias(
-		const Luau::ModuleName& module, const Luau::Location& location, const std::string& property, std::string& name) const;
+		const Luau::ModuleName& module,
+		const Luau::Location& location,
+		const std::string& property,
+		std::string& name,
+		std::string* display = nullptr) const;
 	std::optional<Luau::ModuleName> find_definition_module(Luau::TypeId type) const;
 	std::optional<Luau::ModuleName> find_definition_module(const Luau::Location& location) const;
 	std::vector<std::pair<Luau::ModuleName, Luau::Location>> find_references(

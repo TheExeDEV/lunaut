@@ -1,9 +1,9 @@
 # Test report
 
-- Date: 2026-11-17 21:05:42
+- Date: 2026-11-17 21:49:20
 - Binary: `/home/ifmnb/Git/lunaut/build/lunaut`
 - Version: `lunaut 0.0.4 (Luau 0.747, GNU 16.2.1)`
-- Result: **131/131 passed** in 1.0s
+- Result: **137/137 passed** in 1.0s
 
 | Test | Status | Time |
 | --- | --- | --- |
@@ -19,6 +19,12 @@
 | `test_definitions.DefinitionTests.test_cli_duplicate_keeps_config_priority` | PASS | 0.01s |
 | `test_definitions.DefinitionTests.test_priority_order_loads_dependent_files` | PASS | 0.01s |
 | `test_definitions.DefinitionTests.test_wrong_priority_fails` | PASS | 0.01s |
+| `test_extended.AliasRecoveryTests.test_inlay_hints_preserve_optional_and_local_aliases` | PASS | 0.00s |
+| `test_extended.AliasRecoveryTests.test_inline_type_argument_preserves_alias` | PASS | 0.00s |
+| `test_extended.AliasRecoveryTests.test_local_alias_from_indexer` | PASS | 0.00s |
+| `test_extended.AliasRecoveryTests.test_local_alias_from_return_annotation` | PASS | 0.00s |
+| `test_extended.AliasRecoveryTests.test_optional_return_preserves_alias` | PASS | 0.00s |
+| `test_extended.AliasRecoveryTests.test_optional_union_return_preserves_alias` | PASS | 0.00s |
 | `test_extended.AnalyzerTests.test_analyzer_diagnostics_are_merged` | PASS | 0.03s |
 | `test_extended.AnalyzerTests.test_compatible_analyzer_is_loaded` | PASS | 0.03s |
 | `test_extended.AnalyzerTests.test_incompatible_abi_is_reported` | PASS | 0.03s |

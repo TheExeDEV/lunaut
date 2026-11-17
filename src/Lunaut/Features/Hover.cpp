@@ -31,6 +31,7 @@ struct named_type
 {
 	std::string name;
 	Luau::TypeFun definition;
+	std::string display;
 };
 
 std::string make_code_block(const std::string& code);
@@ -46,6 +47,8 @@ std::string to_string_named_function(
 std::optional<Luau::Property> find_property(Luau::TypeId owner, const std::string& name, Luau::TypeId& base);
 bool is_same_type(Luau::TypeId left, Luau::TypeId right);
 void flatten_intersection(Luau::TypeId type, std::vector<Luau::TypeId>& parts);
+void collect_origin_modules(Luau::TypeId type, std::set<Luau::ModuleName>& modules);
+const Luau::AstExpr* find_initializer(const Luau::SourceModule& source, const Luau::AstLocal* local);
 std::optional<named_type> get_reference_alias(const Luau::ScopePtr& scope, const Luau::AstType* annotation);
 std::optional<Luau::ModuleName> get_definition_module(Luau::TypeId type);
 std::optional<Luau::ModuleName> find_imported_module(const Luau::ScopePtr& scope, const std::string& alias);
@@ -327,11 +330,50 @@ json workspace::get_hover(const json& params)
 
 	if (!alias && !value_alias)
 	{
-		std::string type_name;
+		const Luau::AstExpr* expression = target.getExpr();
 
-		if (std::optional<Luau::TypeFun> definition = find_return_alias(*type, type_name))
+		if (expression == nullptr)
 		{
-			value_alias = priv::named_type{type_name, *definition};
+			const Luau::AstLocal* local = target.getLocal();
+
+			if (local == nullptr && node->is<Luau::AstExprLocal>())
+			{
+				local = node->as<Luau::AstExprLocal>()->local;
+			}
+
+			if (local != nullptr)
+			{
+				expression = priv::find_initializer(*source, local);
+			}
+		}
+
+		std::string alias_name;
+		std::string alias_display;
+
+		if (expression != nullptr)
+		{
+			if (std::optional<Luau::TypeFun> definition = find_expression_alias(*module, scope, expression, alias_name, alias_display))
+			{
+				value_alias = priv::named_type{alias_name, *definition, alias_display};
+			}
+		}
+
+		if (!value_alias)
+		{
+			std::string type_name;
+
+			if (std::optional<Luau::TypeFun> definition = find_return_alias(*type, type_name))
+			{
+				value_alias = priv::named_type{type_name, *definition, type_name};
+			}
+		}
+
+		if (!value_alias)
+		{
+			if (std::optional<Luau::TypeFun> definition = find_display_alias(*type, name, alias_name, alias_display))
+			{
+				value_alias = priv::named_type{alias_name, *definition, alias_display};
+			}
 		}
 	}
 
@@ -368,7 +410,7 @@ json workspace::get_hover(const json& params)
 
 	std::string text = Luau::toString(*type, options);
 	std::string display_text = Luau::toString(*type, display_options);
-	const std::string display = value_alias ? value_alias->name : display_text;
+	const std::string display = value_alias ? (value_alias->display.empty() ? value_alias->name : value_alias->display) : display_text;
 
 	if (alias)
 	{
@@ -795,45 +837,366 @@ std::optional<Luau::ModuleName> workspace::find_definition_module(const Luau::Lo
 	return std::nullopt;
 }
 
-std::optional<Luau::TypeFun> workspace::find_type_alias(Luau::TypeId type, Luau::ModuleName& module, std::string& name) const
+std::optional<Luau::TypeFun> workspace::find_type_alias(
+	Luau::TypeId type, Luau::ModuleName& module, std::string& name, const std::optional<Luau::ModuleName>& preferred) const
 {
 	Luau::TypeId followed = Luau::follow(type);
+	std::set<Luau::ModuleName> origins;
+	priv::collect_origin_modules(followed, origins);
 
-	for (const auto& [source_name, source_node] : frontend.sourceNodes)
+	const Luau::TableType* root_table = Luau::get<Luau::TableType>(followed);
+
+	struct candidate
 	{
-		Luau::ModulePtr source_module = frontend.moduleResolver.getModule(source_name);
+		Luau::ModuleName module;
+		std::string name;
+		Luau::TypeFun definition;
+		bool local;
+		int score;
+	};
 
-		if (!source_module)
+	std::vector<candidate> candidates;
+	std::set<std::string> seen;
+
+	auto score =
+		[&](const Luau::ModuleName& candidate_module, const std::string& candidate_name, const Luau::TypeFun& definition, bool local)
+	{
+		int value = 0;
+
+		if (origins.count(candidate_module))
 		{
-			continue;
+			value += 100;
 		}
 
-		for (const auto& [alias, definition] : source_module->exportedTypeBindings)
+		if (preferred && candidate_module == *preferred)
+		{
+			value += 80;
+		}
+
+		if (root_table != nullptr && root_table->name && candidate_name == *root_table->name)
+		{
+			value += 60;
+		}
+
+		if (root_table != nullptr && !root_table->definitionModuleName.empty() && candidate_module == root_table->definitionModuleName)
+		{
+			value += 50;
+		}
+
+		if (root_table != nullptr && definition.definitionLocation && *definition.definitionLocation == root_table->definitionLocation)
+		{
+			value += 200;
+		}
+
+		if (local)
+		{
+			value += 10;
+		}
+
+		return value;
+	};
+
+	auto add = [&](const Luau::ModuleName& candidate_module, const std::string& candidate_name, const Luau::TypeFun& definition, bool local)
+	{
+		std::string key = candidate_module + "\n" + candidate_name;
+
+		if (definition.definitionLocation)
+		{
+			key += "\n" + std::to_string(definition.definitionLocation->begin.line) + ":" +
+				std::to_string(definition.definitionLocation->begin.column);
+		}
+
+		if (!seen.insert(key).second)
+		{
+			return;
+		}
+
+		candidates.push_back(
+			{candidate_module, candidate_name, definition, local, score(candidate_module, candidate_name, definition, local)});
+	};
+
+	auto scan = [&](const Luau::ModuleName& candidate_module, const Luau::ModulePtr& candidate_module_ptr)
+	{
+		if (!candidate_module_ptr)
+		{
+			return;
+		}
+
+		for (const auto& [alias, definition] : candidate_module_ptr->exportedTypeBindings)
 		{
 			if (priv::is_same_type(followed, Luau::follow(definition.type)))
 			{
-				module = source_name;
-				name = alias;
-				return definition;
+				add(candidate_module, alias, definition, false);
 			}
 		}
+
+		const Luau::SourceModule* candidate_source = frontend.getSourceModule(candidate_module);
+
+		if (candidate_source == nullptr)
+		{
+			auto known = definition_sources.find(candidate_module);
+
+			if (known != definition_sources.end())
+			{
+				candidate_source = &known->second;
+			}
+		}
+
+		if (candidate_source == nullptr || candidate_source->root == nullptr)
+		{
+			return;
+		}
+
+		for (Luau::AstStat* statement : candidate_source->root->body)
+		{
+			Luau::AstStatTypeAlias* type_alias = statement->as<Luau::AstStatTypeAlias>();
+
+			if (type_alias == nullptr || candidate_module_ptr->exportedTypeBindings.count(type_alias->name.value) != 0)
+			{
+				continue;
+			}
+
+			const Luau::TypeId* resolved = candidate_module_ptr->astResolvedTypes.find(type_alias->type);
+
+			if (resolved == nullptr || !priv::is_same_type(followed, Luau::follow(*resolved)))
+			{
+				continue;
+			}
+
+			Luau::TypeFun definition;
+			definition.type = *resolved;
+			definition.definitionLocation = type_alias->location;
+			add(candidate_module, type_alias->name.value, definition, true);
+		}
+	};
+
+	for (const auto& [source_name, source_node] : frontend.sourceNodes)
+	{
+		scan(source_name, frontend.moduleResolver.getModule(source_name));
 	}
 
 	for (const auto& [definition_name, definition_module] : definition_modules)
 	{
-		if (!definition_module)
+		scan(definition_name, definition_module);
+	}
+
+	if (candidates.empty())
+	{
+		return std::nullopt;
+	}
+
+	const candidate* best = &candidates.front();
+
+	for (const candidate& entry : candidates)
+	{
+		if (entry.score > best->score)
+		{
+			best = &entry;
+		}
+	}
+
+	module = best->module;
+	name = best->name;
+	return best->definition;
+}
+
+std::optional<Luau::TypeFun> workspace::find_display_alias(
+	Luau::TypeId type, const std::optional<Luau::ModuleName>& preferred, std::string& name, std::string& display) const
+{
+	Luau::TypeId followed = Luau::follow(type);
+	Luau::ModuleName alias_module;
+
+	if (const Luau::UnionType* union_type = Luau::get<Luau::UnionType>(followed))
+	{
+		if (std::optional<Luau::TypeFun> definition = find_type_alias(followed, alias_module, name, preferred))
+		{
+			display = name;
+			return definition;
+		}
+
+		std::vector<Luau::TypeId> options;
+		bool optional = false;
+
+		for (Luau::TypeId part : union_type->options)
+		{
+			if (Luau::isNil(part))
+			{
+				optional = true;
+			}
+			else
+			{
+				options.push_back(Luau::follow(part));
+			}
+		}
+
+		for (Luau::TypeId option : options)
+		{
+			if (std::optional<Luau::TypeFun> definition = find_type_alias(option, alias_module, name, preferred))
+			{
+				display = optional ? name + "?" : name;
+				return definition;
+			}
+		}
+
+		return std::nullopt;
+	}
+
+	if (const Luau::IntersectionType* intersection = Luau::get<Luau::IntersectionType>(followed))
+	{
+		if (std::optional<Luau::TypeFun> definition = find_type_alias(followed, alias_module, name, preferred))
+		{
+			display = name;
+			return definition;
+		}
+
+		Luau::TypeId best_part = nullptr;
+		Luau::TypeFun best_definition;
+		std::string best_name;
+		size_t best_size = 0;
+
+		for (Luau::TypeId part : intersection->parts)
+		{
+			std::vector<Luau::TypeId> parts;
+			priv::flatten_intersection(part, parts);
+
+			if (parts.size() <= best_size)
+			{
+				continue;
+			}
+
+			std::string part_name;
+
+			if (std::optional<Luau::TypeFun> definition = find_type_alias(part, alias_module, part_name, preferred))
+			{
+				best_part = part;
+				best_definition = *definition;
+				best_name = part_name;
+				best_size = parts.size();
+			}
+		}
+
+		if (best_part != nullptr)
+		{
+			name = best_name;
+			display = best_name;
+			return best_definition;
+		}
+
+		return std::nullopt;
+	}
+
+	if (std::optional<Luau::TypeFun> definition = find_type_alias(followed, alias_module, name, preferred))
+	{
+		display = name;
+		return definition;
+	}
+
+	return std::nullopt;
+}
+
+std::optional<Luau::TypeFun> workspace::find_expression_alias(
+	const Luau::Module& module, const Luau::ScopePtr& scope, const Luau::AstExpr* expression, std::string& name, std::string& display) const
+{
+	if (expression == nullptr)
+	{
+		return std::nullopt;
+	}
+
+	if (const Luau::AstExprTypeAssertion* assertion = expression->as<Luau::AstExprTypeAssertion>())
+	{
+		if (std::optional<priv::named_type> alias = priv::get_reference_alias(scope, assertion->annotation))
+		{
+			name = alias->name;
+			display = alias->display.empty() ? alias->name : alias->display;
+			return alias->definition;
+		}
+	}
+
+	const Luau::AstExprCall* call = expression->as<Luau::AstExprCall>();
+
+	if (call == nullptr)
+	{
+		return std::nullopt;
+	}
+
+	if (const Luau::TypeId* found = module.astTypes.find(call->func))
+	{
+		const Luau::FunctionType* function = Luau::get<Luau::FunctionType>(Luau::follow(*found));
+
+		if (function != nullptr)
+		{
+			Luau::ModuleName alias_module;
+
+			if (std::optional<Luau::TypeFun> definition = find_function_return_alias(*function, alias_module, name, &display))
+			{
+				return definition;
+			}
+
+			if (const Luau::AstExprIndexName* index = call->func->as<Luau::AstExprIndexName>())
+			{
+				if (const Luau::TypeId* owner = module.astTypes.find(index->expr))
+				{
+					Luau::TypeId base = Luau::follow(*owner);
+
+					if (std::optional<Luau::Property> property = priv::find_property(base, index->index.value, base))
+					{
+						if (property->readTy)
+						{
+							std::optional<Luau::ModuleName> owner_module = priv::get_definition_module(base);
+
+							if (owner_module)
+							{
+								std::optional<Luau::Location> property_location = property->typeLocation;
+
+								if (!property_location)
+								{
+									property_location = property->location;
+								}
+
+								if (property_location)
+								{
+									if (std::optional<Luau::TypeFun> definition = find_annotation_return_alias(
+											*owner_module, *property_location, index->index.value, name, &display))
+									{
+										return definition;
+									}
+								}
+							}
+
+							const Luau::FunctionType* property_function = Luau::get<Luau::FunctionType>(Luau::follow(*property->readTy));
+
+							if (property_function != nullptr && property_function->definition &&
+								property_function->definition->definitionModuleName)
+							{
+								if (std::optional<Luau::TypeFun> definition = find_annotation_return_alias(
+										*property_function->definition->definitionModuleName,
+										property_function->definition->definitionLocation,
+										index->index.value,
+										name,
+										&display))
+								{
+									return definition;
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	for (const Luau::AstTypeOrPack& argument : call->typeArguments)
+	{
+		if (argument.type == nullptr)
 		{
 			continue;
 		}
 
-		for (const auto& [alias, definition] : definition_module->exportedTypeBindings)
+		if (std::optional<priv::named_type> alias = priv::get_reference_alias(scope, argument.type))
 		{
-			if (priv::is_same_type(followed, Luau::follow(definition.type)))
-			{
-				module = definition_name;
-				name = alias;
-				return definition;
-			}
+			name = alias->name;
+			display = alias->display.empty() ? alias->name : alias->display;
+			return alias->definition;
 		}
 	}
 
@@ -844,6 +1207,8 @@ std::optional<Luau::TypeFun> workspace::find_return_alias(Luau::TypeId type, std
 {
 	Luau::TypeId followed = Luau::follow(type);
 	std::optional<Luau::ModuleName> preferred = priv::get_definition_module(followed);
+	std::set<Luau::ModuleName> origins;
+	priv::collect_origin_modules(followed, origins);
 	std::optional<priv::named_type> exact;
 	std::optional<Luau::ModuleName> exact_module;
 
@@ -931,6 +1296,28 @@ std::optional<Luau::TypeFun> workspace::find_return_alias(Luau::TypeId type, std
 			return std::nullopt;
 		}
 
+		if (!origins.empty())
+		{
+			std::set<Luau::ModuleName> candidate_origins;
+			priv::collect_origin_modules(entry.type, candidate_origins);
+
+			bool related = candidate_origins.empty();
+
+			for (const Luau::ModuleName& candidate_origin : candidate_origins)
+			{
+				if (origins.count(candidate_origin) != 0)
+				{
+					related = true;
+					break;
+				}
+			}
+
+			if (!related)
+			{
+				return std::nullopt;
+			}
+		}
+
 		Luau::ScopePtr scope = Luau::findScopeAtPosition(*entry.module, entry.annotation->location.begin);
 
 		if (std::optional<priv::named_type> alias = priv::get_reference_alias(scope, entry.annotation))
@@ -975,8 +1362,8 @@ std::optional<Luau::TypeFun> workspace::find_return_alias(Luau::TypeId type, std
 	return std::nullopt;
 }
 
-std::optional<Luau::TypeFun>
-workspace::find_function_return_alias(const Luau::FunctionType& function, Luau::ModuleName& module_name, std::string& name) const
+std::optional<Luau::TypeFun> workspace::find_function_return_alias(
+	const Luau::FunctionType& function, Luau::ModuleName& module_name, std::string& name, std::string* display) const
 {
 	if (!function.definition || !function.definition->definitionModuleName)
 	{
@@ -987,6 +1374,26 @@ workspace::find_function_return_alias(const Luau::FunctionType& function, Luau::
 
 	const Luau::SourceModule* source = frontend.getSourceModule(module_name);
 	Luau::ModulePtr module = frontend.moduleResolver.getModule(module_name);
+
+	if (source == nullptr)
+	{
+		auto known = definition_sources.find(module_name);
+
+		if (known != definition_sources.end())
+		{
+			source = &known->second;
+		}
+	}
+
+	if (module == nullptr)
+	{
+		auto known = definition_modules.find(module_name);
+
+		if (known != definition_modules.end())
+		{
+			module = known->second;
+		}
+	}
 
 	if (source == nullptr || module == nullptr || source->root == nullptr)
 	{
@@ -1017,6 +1424,12 @@ workspace::find_function_return_alias(const Luau::FunctionType& function, Luau::
 		if (std::optional<priv::named_type> alias = priv::get_reference_alias(scope, annotation))
 		{
 			name = alias->name;
+
+			if (display != nullptr)
+			{
+				*display = alias->display.empty() ? alias->name : alias->display;
+			}
+
 			return alias->definition;
 		}
 
@@ -1027,10 +1440,34 @@ workspace::find_function_return_alias(const Luau::FunctionType& function, Luau::
 }
 
 std::optional<Luau::TypeFun> workspace::find_annotation_return_alias(
-	const Luau::ModuleName& module_name, const Luau::Location& location, const std::string& property, std::string& name) const
+	const Luau::ModuleName& module_name,
+	const Luau::Location& location,
+	const std::string& property,
+	std::string& name,
+	std::string* display) const
 {
 	const Luau::SourceModule* source = frontend.getSourceModule(module_name);
 	Luau::ModulePtr module = frontend.moduleResolver.getModule(module_name);
+
+	if (source == nullptr)
+	{
+		auto known = definition_sources.find(module_name);
+
+		if (known != definition_sources.end())
+		{
+			source = &known->second;
+		}
+	}
+
+	if (module == nullptr)
+	{
+		auto known = definition_modules.find(module_name);
+
+		if (known != definition_modules.end())
+		{
+			module = known->second;
+		}
+	}
 
 	if (source == nullptr || module == nullptr || source->root == nullptr)
 	{
@@ -1085,6 +1522,12 @@ std::optional<Luau::TypeFun> workspace::find_annotation_return_alias(
 	if (std::optional<priv::named_type> alias = priv::get_reference_alias(scope, annotation))
 	{
 		name = alias->name;
+
+		if (display != nullptr)
+		{
+			*display = alias->display.empty() ? alias->name : alias->display;
+		}
+
 		return alias->definition;
 	}
 
@@ -1104,19 +1547,34 @@ std::optional<Luau::ModuleName> workspace::find_definition_module(Luau::TypeId t
 	return module;
 }
 
-std::optional<std::string>
-workspace::get_type_alias_name(Luau::TypeId type, const Luau::ScopePtr& scope, const Luau::AstType* annotation) const
+std::optional<std::string> workspace::get_type_alias_name(
+	Luau::TypeId type,
+	const Luau::Module& module,
+	const Luau::ScopePtr& scope,
+	const Luau::AstType* annotation,
+	const Luau::AstExpr* initializer) const
 {
 	if (std::optional<priv::named_type> reference = priv::get_reference_alias(scope, annotation))
 	{
-		return reference->name;
+		return reference->display.empty() ? reference->name : reference->display;
 	}
 
 	std::string name;
+	std::string display;
+
+	if (initializer != nullptr && find_expression_alias(module, scope, initializer, name, display))
+	{
+		return display;
+	}
 
 	if (find_return_alias(type, name))
 	{
 		return name;
+	}
+
+	if (find_display_alias(type, module.name, name, display))
+	{
+		return display;
 	}
 
 	return std::nullopt;
@@ -1294,7 +1752,7 @@ bool type_equality::equals_property(const Luau::Property& left, const Luau::Prop
 
 bool type_equality::equals_table(const Luau::TableType& left, const Luau::TableType& right)
 {
-	if (bool(left.name) != bool(right.name) || (left.name && *left.name != *right.name))
+	if (left.name && right.name && *left.name != *right.name)
 	{
 		return false;
 	}
@@ -1577,11 +2035,150 @@ bool is_same_type(Luau::TypeId left, Luau::TypeId right)
 	return equality.equals(left, right);
 }
 
+void collect_origin_modules(Luau::TypeId type, std::set<Luau::ModuleName>& modules)
+{
+	std::set<Luau::TypeId> visited;
+	std::vector<Luau::TypeId> pending{type};
+
+	while (!pending.empty())
+	{
+		Luau::TypeId current = Luau::follow(pending.back());
+		pending.pop_back();
+
+		if (!visited.insert(current).second)
+		{
+			continue;
+		}
+
+		if (const Luau::TableType* table = Luau::get<Luau::TableType>(current))
+		{
+			if (!table->definitionModuleName.empty())
+			{
+				modules.insert(table->definitionModuleName);
+			}
+
+			continue;
+		}
+
+		if (const Luau::ExternType* extern_type = Luau::get<Luau::ExternType>(current))
+		{
+			if (!extern_type->definitionModuleName.empty())
+			{
+				modules.insert(extern_type->definitionModuleName);
+			}
+
+			continue;
+		}
+
+		if (const Luau::UnionType* union_type = Luau::get<Luau::UnionType>(current))
+		{
+			pending.insert(pending.end(), union_type->options.begin(), union_type->options.end());
+			continue;
+		}
+
+		if (const Luau::IntersectionType* intersection = Luau::get<Luau::IntersectionType>(current))
+		{
+			pending.insert(pending.end(), intersection->parts.begin(), intersection->parts.end());
+			continue;
+		}
+
+		if (const Luau::MetatableType* metatable = Luau::get<Luau::MetatableType>(current))
+		{
+			pending.push_back(metatable->table);
+			pending.push_back(metatable->metatable);
+			continue;
+		}
+
+		if (const Luau::FunctionType* function = Luau::get<Luau::FunctionType>(current))
+		{
+			if (function->definition && function->definition->definitionModuleName)
+			{
+				modules.insert(*function->definition->definitionModuleName);
+			}
+
+			continue;
+		}
+
+		if (const Luau::TypeFunctionInstanceType* instance = Luau::get<Luau::TypeFunctionInstanceType>(current))
+		{
+			pending.insert(pending.end(), instance->typeArguments.begin(), instance->typeArguments.end());
+		}
+	}
+}
+
+const Luau::AstExpr* find_initializer(const Luau::SourceModule& source, const Luau::AstLocal* local)
+{
+	if (local == nullptr)
+	{
+		return nullptr;
+	}
+
+	std::vector<Luau::AstNode*> ancestry = Luau::findAstAncestryOfPosition(source, local->location.begin, true);
+
+	for (Luau::AstNode* node : ancestry)
+	{
+		Luau::AstStatLocal* statement = node->as<Luau::AstStatLocal>();
+
+		if (statement == nullptr)
+		{
+			continue;
+		}
+
+		for (size_t index = 0; index < statement->vars.size && index < statement->values.size; ++index)
+		{
+			if (statement->vars.data[index] == local)
+			{
+				return statement->values.data[index];
+			}
+		}
+	}
+
+	return nullptr;
+}
+
 std::optional<named_type> get_reference_alias(const Luau::ScopePtr& scope, const Luau::AstType* annotation)
 {
 	if (annotation == nullptr)
 	{
 		return std::nullopt;
+	}
+
+	if (const Luau::AstTypeUnion* union_type = annotation->as<Luau::AstTypeUnion>())
+	{
+		const Luau::AstType* option = nullptr;
+		bool optional = false;
+
+		for (Luau::AstType* part : union_type->types)
+		{
+			if (part->is<Luau::AstTypeOptional>() ||
+				(part->as<Luau::AstTypeReference>() != nullptr && !part->as<Luau::AstTypeReference>()->prefix &&
+				 part->as<Luau::AstTypeReference>()->name == "nil"))
+			{
+				optional = true;
+				continue;
+			}
+
+			if (option != nullptr)
+			{
+				return std::nullopt;
+			}
+
+			option = part;
+		}
+
+		if (option == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		std::optional<named_type> alias = get_reference_alias(scope, option);
+
+		if (alias && optional)
+		{
+			alias->display = (alias->display.empty() ? alias->name : alias->display) + "?";
+		}
+
+		return alias;
 	}
 
 	const Luau::AstTypeReference* reference = annotation->as<Luau::AstTypeReference>();
@@ -1595,6 +2192,11 @@ std::optional<named_type> get_reference_alias(const Luau::ScopePtr& scope, const
 																: scope->lookupType(reference->name.value);
 
 	if (!definition)
+	{
+		return std::nullopt;
+	}
+
+	if (Luau::get<Luau::GenericType>(Luau::follow(definition->type)) != nullptr)
 	{
 		return std::nullopt;
 	}

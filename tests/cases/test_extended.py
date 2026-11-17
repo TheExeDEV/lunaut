@@ -222,6 +222,58 @@ class GenericAliasLoopTests(unittest.TestCase):
 		self.assertEqual(entry["label"], ": marked")
 
 
+class AliasRecoveryTests(unittest.TestCase):
+	@classmethod
+	def setUpClass(cls):
+		cls.client = LspClient(FIXTURES / "aliases")
+		cls.consumer = (FIXTURES / "aliases" / "consumer.luau").read_text(encoding="utf-8")
+		cls.service = (FIXTURES / "aliases" / "service.luau").read_text(encoding="utf-8")
+		cls.uri, _ = cls.client.open("consumer.luau")
+		cls.service_uri, _ = cls.client.open("service.luau")
+
+	@classmethod
+	def tearDownClass(cls):
+		cls.client.close()
+
+	def test_optional_return_preserves_alias(self):
+		value = hover_text(self.client, self.uri, self.consumer, "local scheduler = Service:whose()", len("local "))
+		self.assertIn("local scheduler: scheduler?", value)
+		self.assertIn("[scheduler](file:///", value)
+
+	def test_optional_union_return_preserves_alias(self):
+		value = hover_text(self.client, self.uri, self.consumer, "local status = Service:get_status()", len("local "))
+		self.assertIn("local status: status?", value)
+		self.assertIn("[status](file:///", value)
+
+	def test_local_alias_from_return_annotation(self):
+		value = hover_text(self.client, self.uri, self.consumer, "local event = Service:get_event", len("local "))
+		self.assertIn("local event: net_event", value)
+		self.assertIn("[net_event](file:///", value)
+
+	def test_local_alias_from_indexer(self):
+		value = hover_text(self.client, self.service_uri, self.service, 'local existing = events["data"]', len("local "))
+		self.assertIn("local existing: net_event", value)
+		self.assertIn("[net_event](file:///", value)
+
+	def test_inline_type_argument_preserves_alias(self):
+		value = hover_text(
+			self.client, self.uri, self.consumer, "local casted = Service:as<<Service.scheduler>>(nil)", len("local ")
+		)
+		self.assertIn("local casted: Service.scheduler", value)
+		self.assertIn("[Service.scheduler](file:///", value)
+
+	def test_inlay_hints_preserve_optional_and_local_aliases(self):
+		hints = self.client.request(
+			"textDocument/inlayHint",
+			{"textDocument": {"uri": self.uri}, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 99, "character": 0}}},
+		)
+		labels = {hint["position"]["line"]: hint["label"] for hint in hints if hint["kind"] == 1}
+		self.assertEqual(labels[4], ": scheduler?")
+		self.assertEqual(labels[5], ": net_event")
+		self.assertEqual(labels[6], ": status?")
+		self.assertEqual(labels[7], ": Service.scheduler")
+
+
 class TypeStatsTests(unittest.TestCase):
 	def test_type_stats_request(self):
 		client = LspClient(FIXTURES / "definitions")

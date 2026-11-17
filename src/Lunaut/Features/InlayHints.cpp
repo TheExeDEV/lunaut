@@ -36,7 +36,8 @@ struct hint_collector final : Luau::AstVisitor
 	bool visit(Luau::AstExprFunction* node) override;
 	bool visit(Luau::AstExprCall* node) override;
 
-	void add_variable(Luau::AstLocal* local, std::optional<Luau::TypeId> type, const Luau::ScopePtr& scope);
+	void add_variable(
+		Luau::AstLocal* local, std::optional<Luau::TypeId> type, const Luau::ScopePtr& scope, const Luau::AstExpr* initializer = nullptr);
 	void add_type(Luau::Position position, const Luau::ToStringResult& text);
 	bool is_visible(Luau::Position position) const;
 
@@ -145,7 +146,7 @@ bool hint_collector::visit(Luau::AstStatLocal* node)
 			}
 		}
 
-		add_variable(local, type, scope);
+		add_variable(local, type, scope, i < node->values.size ? node->values.data[i] : nullptr);
 	}
 
 	return true;
@@ -265,7 +266,8 @@ bool hint_collector::visit(Luau::AstExprCall* node)
 	return true;
 }
 
-void hint_collector::add_variable(Luau::AstLocal* local, std::optional<Luau::TypeId> type, const Luau::ScopePtr& scope)
+void hint_collector::add_variable(
+	Luau::AstLocal* local, std::optional<Luau::TypeId> type, const Luau::ScopePtr& scope, const Luau::AstExpr* initializer)
 {
 	if (!type || local->name == "_" || !is_visible(local->location.end))
 	{
@@ -279,7 +281,7 @@ void hint_collector::add_variable(Luau::AstLocal* local, std::optional<Luau::Typ
 		return;
 	}
 
-	if (std::optional<std::string> alias = owner.get_type_alias_name(followed, scope, local->annotation))
+	if (std::optional<std::string> alias = owner.get_type_alias_name(followed, module, scope, local->annotation, initializer))
 	{
 		Luau::ToStringResult text{*alias};
 

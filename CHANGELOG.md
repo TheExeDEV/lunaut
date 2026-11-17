@@ -24,6 +24,8 @@
 - Required modules keep the alias name from the module's annotated return (`service`, `scheduler`, `basis`, `obbvolume`, `luaobject`, ...) instead of an expanded or cyclic type, in both hover and inlay hints
 - Annotated returns of generic aliases with defaults (`enumitem<T = enumobject?>`, `wrapper<T = number>`) keep the alias name too
 - Loop variables over a function that returns a generic alias (`enumitem`, `marked`, ...) keep the alias name instead of an expanded, mutually recursive table
+- Hover and inlay hints keep alias names for optional returns (`scheduler?`, `enumitem?`), local non-exported aliases (`net_event`), inline type arguments (`as<<scheduler>>`), casts and union or intersection values, instead of expanding the structural type
+- Alias lookup prefers aliases from the type's own module, so structurally identical aliases from other files no longer win, while `textDocument/typeDefinition` still points at the right declaration
 - Definition files are stored with absolute paths, so hover links resolve for files opened outside the workspace root
 - Reading input no longer flushes standard output concurrently with JSON-RPC writes, which corrupted frames and hung shutdown
 
