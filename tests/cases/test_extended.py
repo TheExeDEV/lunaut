@@ -465,6 +465,39 @@ class UnionAliasTests(unittest.TestCase):
 			client.close()
 
 
+class NormalizedAliasTests(unittest.TestCase):
+	@classmethod
+	def setUpClass(cls):
+		cls.client = LspClient(FIXTURES / "alias-norm")
+		cls.text = (FIXTURES / "alias-norm" / "main.luau").read_text(encoding="utf-8")
+		cls.uri, _ = cls.client.open("main.luau")
+
+	@classmethod
+	def tearDownClass(cls):
+		cls.client.close()
+
+	def test_primitive_does_not_become_any_alias(self):
+		value = hover_text(self.client, self.uri, self.text, "const action", len("const "))
+		self.assertIn("const action: any", value)
+		self.assertNotIn("AdReward", value)
+
+	def test_primitive_does_not_become_string_alias(self):
+		value = hover_text(self.client, self.uri, self.text, "const id", len("const "))
+		self.assertIn("const id: string", value)
+		self.assertNotIn("ContentId", value)
+
+	def test_function_keyword_hover_uses_local_aliases(self):
+		value = hover_text(self.client, self.uri, self.text, "local function compare", len("local "))
+		self.assertIn("function(left: first, right: second", value)
+		self.assertIn("): boolean", value)
+		self.assertNotIn("name: string", value)
+
+	def test_defaulted_union_alias_is_not_expanded(self):
+		value = hover_text(self.client, self.uri, self.text, "const result", len("const "))
+		self.assertIn("observer_var", value)
+		self.assertNotIn("|", value)
+
+
 class NegatedInlayTests(unittest.TestCase):
 	def test_negated_type_is_not_insertable(self):
 		text = (FIXTURES / "negated" / "main.luau").read_text(encoding="utf-8")

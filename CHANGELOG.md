@@ -38,6 +38,10 @@
 - A union of the same alias represented as an intersection and as its merged table (for example `enumitem_shared_net_variant` from `variant or SharedNetVariant.Safe`) keeps the alias name instead of `alias | { ... }`
 - Function types containing a variadic tail no longer render a doubled ellipsis such as `(......any)`
 - Hovering a reserved word such as `local`, `const`, `if`, `return` or `end` shows nothing instead of a type
+- Hovering the `function` keyword shows the normalized function type, with parameter and return aliases such as `line | string` instead of expanded structural tables
+- Function hover normalizes parameter and return aliases the same way as locals, and hides inferred variadic tails that have no source `...`
+- Primitive-like types never take a structural alias, so `any` no longer displays as `AdReward` and `string` as `ContentId`
+- Defaulted generic aliases are compared through their defaults, so union aliases such as `observer_var` stay named instead of expanding to `(...) -> () | observer | thread`
 - Inlay hints with a negated type are not offered as an insertable annotation, because `~` is not valid annotation syntax
 - `show_as_module` annotations accept `Module.Type` and `@Module.Type`, and resolve to the same type as the bare global name
 - Changes are debounced and changed modules are checked in one queued batch on up to eight threads, so an edit no longer rechecks the whole module synchronously for every keystroke

@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <map>
 #include <set>
 
 namespace lunaut
@@ -40,15 +41,12 @@ struct named_type
 std::string make_code_block(const std::string& code);
 std::optional<std::string> get_type_name(Luau::TypeId type);
 std::string to_string_type_fun(const std::string& name, const Luau::TypeFun& definition);
-std::string to_string_named_function(
-	const Luau::Module& module,
-	const Luau::FunctionType& function,
-	const std::string& name,
-	Luau::AstExpr* expr,
-	const Luau::ToStringOptions& base,
-	const std::string* return_alias = nullptr);
+std::string
+to_string_named_function(const Luau::Module& module, const std::string& name, Luau::AstExpr* expr, const std::string& signature);
 std::optional<Luau::Property> find_property(Luau::TypeId owner, const std::string& name, Luau::TypeId& base);
+bool is_primitive_like(Luau::TypeId type);
 bool is_same_type(Luau::TypeId left, Luau::TypeId right);
+bool is_same_type(Luau::TypeId left, Luau::TypeId right, const Luau::TypeFun& definition);
 bool may_be_same_type(Luau::TypeId left, Luau::TypeId right);
 void flatten_intersection(Luau::TypeId type, std::vector<Luau::TypeId>& parts);
 void collect_origin_modules(Luau::TypeId type, std::set<Luau::ModuleName>& modules);
@@ -495,9 +493,20 @@ json workspace::get_hover(const json& params)
 			}
 		}
 
-		text = priv::make_code_block(
-			priv::to_string_named_function(
-				*module, *function, function_name, target.getExpr(), options, return_alias ? &return_alias->name : nullptr));
+		Luau::AstExpr* function_expr = target.getExpr();
+		bool hide_self = false;
+
+		if (function_expr != nullptr)
+		{
+			if (Luau::AstExprIndexName* index = function_expr->as<Luau::AstExprIndexName>())
+			{
+				hide_self = index->op == ':';
+			}
+		}
+
+		std::string signature =
+			render_type_display(*type, module->name, scope, 0, true, hide_self, return_alias ? &return_alias->name : nullptr);
+		text = priv::make_code_block(priv::to_string_named_function(*module, function_name, function_expr, signature));
 	}
 	else if (index_name)
 	{
@@ -999,6 +1008,16 @@ std::optional<Luau::TypeFun> workspace::find_type_alias(
 	Luau::TypeId type, Luau::ModuleName& module, std::string& name, const std::optional<Luau::ModuleName>& preferred) const
 {
 	Luau::TypeId followed = Luau::follow(type);
+
+	// A primitive already has a canonical name. Matching it against an alias such as
+	// the Roblox globals' `type AdReward = any` or `type ContentId = string` would
+	// replace that canonical name with an unrelated one, so structural alias recovery
+	// never applies to primitives.
+	if (priv::is_primitive_like(followed))
+	{
+		return std::nullopt;
+	}
+
 	std::set<Luau::ModuleName> origins;
 	priv::collect_origin_modules(followed, origins);
 	std::vector<priv::location_info> locations;
@@ -1101,10 +1120,21 @@ std::optional<Luau::TypeFun> workspace::find_type_alias(
 			return;
 		}
 
-		for (const auto& [alias, definition] : candidate_module_ptr->exportedTypeBindings)
+		auto matches = [&](const Luau::TypeFun& definition) -> bool
 		{
 			Luau::TypeId candidate_type = Luau::follow(definition.type);
-			bool same = priv::may_be_same_type(followed, candidate_type) && priv::is_same_type(followed, candidate_type);
+
+			if (!priv::may_be_same_type(followed, candidate_type))
+			{
+				return false;
+			}
+
+			return priv::is_same_type(followed, candidate_type, definition);
+		};
+
+		for (const auto& [alias, definition] : candidate_module_ptr->exportedTypeBindings)
+		{
+			bool same = matches(definition);
 			bool located =
 				match_locations && priv::definition_location_score(candidate_module, definition.definitionLocation, locations) > 0;
 
@@ -1151,7 +1181,16 @@ std::optional<Luau::TypeFun> workspace::find_type_alias(
 			definition.type = *resolved;
 			definition.definitionLocation = type_alias->location;
 
-			bool same = priv::may_be_same_type(followed, Luau::follow(*resolved)) && priv::is_same_type(followed, Luau::follow(*resolved));
+			if (Luau::ScopePtr alias_scope = Luau::findScopeAtPosition(*candidate_module_ptr, type_alias->location.begin))
+			{
+				if (std::optional<Luau::TypeFun> bound = alias_scope->lookupType(type_alias->name.value))
+				{
+					definition.typeParams = bound->typeParams;
+					definition.typePackParams = bound->typePackParams;
+				}
+			}
+
+			bool same = matches(definition);
 			bool located =
 				match_locations && priv::definition_location_score(candidate_module, definition.definitionLocation, locations) > 0;
 
@@ -1234,6 +1273,12 @@ std::optional<Luau::TypeFun> workspace::find_display_alias(
 	Luau::TypeId type, const std::optional<Luau::ModuleName>& preferred, std::string& name, std::string& display) const
 {
 	Luau::TypeId followed = Luau::follow(type);
+
+	if (priv::is_primitive_like(followed))
+	{
+		return std::nullopt;
+	}
+
 	Luau::ModuleName alias_module;
 
 	if (const Luau::UnionType* union_type = Luau::get<Luau::UnionType>(followed))
@@ -1468,6 +1513,12 @@ std::optional<Luau::TypeFun> workspace::find_expression_alias(
 std::optional<Luau::TypeFun> workspace::find_return_alias(Luau::TypeId type, std::string& name) const
 {
 	Luau::TypeId followed = Luau::follow(type);
+
+	if (priv::is_primitive_like(followed))
+	{
+		return std::nullopt;
+	}
+
 	std::optional<Luau::ModuleName> preferred = priv::get_definition_module(followed);
 	std::set<Luau::ModuleName> origins;
 	priv::collect_origin_modules(followed, origins);
@@ -1834,8 +1885,14 @@ std::string workspace::format_alias_display(const Luau::ModuleName& module, cons
 	return qualifier + "." + name;
 }
 
-std::string
-workspace::render_type_display(Luau::TypeId type, const Luau::ModuleName& module_name, const Luau::ScopePtr& scope, size_t max_length) const
+std::string workspace::render_type_display(
+	Luau::TypeId type,
+	const Luau::ModuleName& module_name,
+	const Luau::ScopePtr& scope,
+	size_t max_length,
+	bool named_function,
+	bool hide_self,
+	const std::string* return_alias) const
 {
 	Luau::TypeId followed = Luau::follow(type);
 
@@ -1844,11 +1901,44 @@ workspace::render_type_display(Luau::TypeId type, const Luau::ModuleName& module
 		Luau::ToStringOptions plain;
 		plain.exhaustive = false;
 		plain.hideTableKind = true;
+
 		if (max_length > 0)
 		{
 			plain.maxTypeLength = max_length;
 			plain.maxTableLength = max_length;
 		}
+
+		if (named_function)
+		{
+			if (const Luau::FunctionType* function = Luau::get<Luau::FunctionType>(followed))
+			{
+				plain.useLineBreaks = false;
+				plain.functionTypeArguments = true;
+				plain.hideFunctionSelfArgument = hide_self && function->hasSelf;
+
+				std::string text = Luau::toStringNamedFunction("", *function, plain);
+				size_t found = 0;
+
+				while ((found = text.find("_: ", found)) != std::string::npos)
+				{
+					text.erase(found, 3);
+				}
+
+				if (return_alias != nullptr)
+				{
+					size_t arrow = text.rfind("): ");
+
+					if (arrow != std::string::npos)
+					{
+						text.erase(arrow + 3);
+						text += *return_alias;
+					}
+				}
+
+				return text;
+			}
+		}
+
 		return Luau::toString(followed, plain);
 	}
 
@@ -1877,6 +1967,25 @@ workspace::render_type_display(Luau::TypeId type, const Luau::ModuleName& module
 	auto fallback_pack = [&](Luau::TypePackId value)
 	{
 		return Luau::toString(value, options);
+	};
+
+	// `Luau::toString` hides a variadic tail marked hidden and skips empty tails.
+	// Function display must do the same or inferred packs leak `...any` into signatures.
+	auto visible_tail = [](const std::optional<Luau::TypePackId>& pack) -> std::optional<Luau::TypePackId>
+	{
+		if (!pack)
+		{
+			return std::nullopt;
+		}
+
+		Luau::TypePackId followed_tail = Luau::follow(*pack);
+
+		if (const Luau::VariadicTypePack* variadic = Luau::get<Luau::VariadicTypePack>(followed_tail))
+		{
+			return variadic->hidden ? std::nullopt : pack;
+		}
+
+		return Luau::isEmpty(followed_tail) ? std::nullopt : pack;
 	};
 
 	std::function<std::optional<std::string>(Luau::TypeId)> resolve_alias = [&](Luau::TypeId value) -> std::optional<std::string>
@@ -1942,9 +2051,14 @@ workspace::render_type_display(Luau::TypeId type, const Luau::ModuleName& module
 	{
 		value = Luau::follow(value);
 
-		if (std::optional<std::string> alias = resolve_alias(value))
+		// A named function keeps its signature even when the whole function type has
+		// an alias; only the nested types are normalized.
+		if (!(named_function && depth == 0))
 		{
-			return *alias;
+			if (std::optional<std::string> alias = resolve_alias(value))
+			{
+				return *alias;
+			}
 		}
 
 		if (render_budget == 0)
@@ -2262,14 +2376,24 @@ workspace::render_type_display(Luau::TypeId type, const Luau::ModuleName& module
 			}
 
 			auto [arguments, tail] = Luau::flatten(function->argTypes);
+			std::optional<Luau::TypePackId> arguments_tail = visible_tail(tail);
 			result += "(";
+
+			bool first_argument = true;
 
 			for (size_t index = 0; index < arguments.size(); ++index)
 			{
-				if (index != 0)
+				if (hide_self && depth == 1 && index == 0 && function->hasSelf)
+				{
+					continue;
+				}
+
+				if (!first_argument)
 				{
 					result += ", ";
 				}
+
+				first_argument = false;
 
 				if (index < function->argNames.size() && function->argNames[index] && !function->argNames[index]->name.empty())
 				{
@@ -2279,53 +2403,61 @@ workspace::render_type_display(Luau::TypeId type, const Luau::ModuleName& module
 				result += render(arguments[index]);
 			}
 
-			if (tail)
+			if (arguments_tail)
 			{
-				if (!arguments.empty())
+				if (!first_argument)
 				{
 					result += ", ";
 				}
 
-				result += fallback_pack(*tail);
+				result += fallback_pack(*arguments_tail);
 			}
 
-			result += ") -> ";
+			result += named_function && depth == 1 ? "): " : ") -> ";
 
-			auto [returns, return_tail] = Luau::flatten(function->retTypes);
-
-			if (returns.empty() && !return_tail)
+			if (named_function && depth == 1 && return_alias != nullptr)
 			{
-				result += "()";
-			}
-			else if (returns.size() == 1 && !return_tail)
-			{
-				result += render(returns.front());
+				result += *return_alias;
 			}
 			else
 			{
-				result += "(";
+				auto [returns, return_tail] = Luau::flatten(function->retTypes);
+				std::optional<Luau::TypePackId> returns_tail = visible_tail(return_tail);
 
-				for (size_t index = 0; index < returns.size(); ++index)
+				if (returns.empty() && !returns_tail)
 				{
-					if (index != 0)
+					result += "()";
+				}
+				else if (returns.size() == 1 && !returns_tail)
+				{
+					result += render(returns.front());
+				}
+				else
+				{
+					result += "(";
+
+					for (size_t index = 0; index < returns.size(); ++index)
 					{
-						result += ", ";
+						if (index != 0)
+						{
+							result += ", ";
+						}
+
+						result += render(returns[index]);
 					}
 
-					result += render(returns[index]);
-				}
-
-				if (return_tail)
-				{
-					if (!returns.empty())
+					if (returns_tail)
 					{
-						result += ", ";
+						if (!returns.empty())
+						{
+							result += ", ";
+						}
+
+						result += fallback_pack(*returns_tail);
 					}
 
-					result += fallback_pack(*return_tail);
+					result += ")";
 				}
-
-				result += ")";
 			}
 		}
 		else if (const Luau::MetatableType* metatable = Luau::get<Luau::MetatableType>(value))
@@ -2649,6 +2781,11 @@ struct type_equality
 	std::set<std::pair<Luau::TypePackId, Luau::TypePackId>> active_packs;
 	std::map<std::pair<Luau::TypeId, Luau::TypeId>, bool> type_results;
 	std::map<std::pair<Luau::TypePackId, Luau::TypePackId>, bool> pack_results;
+	std::map<Luau::TypeId, Luau::TypeId> type_substitutions;
+	std::map<Luau::TypePackId, Luau::TypePackId> pack_substitutions;
+	std::map<std::string, Luau::TypeId> named_type_substitutions;
+	std::map<std::string, Luau::TypePackId> named_pack_substitutions;
+	bool any_unknown_equivalent = false;
 
 	bool equals(Luau::TypeId left, Luau::TypeId right);
 	bool equals_pack(Luau::TypePackId left, Luau::TypePackId right);
@@ -2664,6 +2801,42 @@ bool type_equality::equals(Luau::TypeId left, Luau::TypeId right)
 {
 	left = Luau::follow(left);
 	right = Luau::follow(right);
+
+	// Type aliases with defaulted parameters are compared through their default
+	// instantiation. `observer_var` is stored as `observer_var<T>` but appears in
+	// checked code as `observer_var<unknown>`, so substituting the defaults lets the
+	// display recover the alias instead of expanding the union.
+	if (!type_substitutions.empty())
+	{
+		if (auto found = type_substitutions.find(left); found != type_substitutions.end())
+		{
+			left = Luau::follow(found->second);
+		}
+
+		if (auto found = type_substitutions.find(right); found != type_substitutions.end())
+		{
+			right = Luau::follow(found->second);
+		}
+	}
+
+	if (!named_type_substitutions.empty())
+	{
+		auto substitute = [&](Luau::TypeId value) -> Luau::TypeId
+		{
+			if (const Luau::GenericType* generic = Luau::get<Luau::GenericType>(value))
+			{
+				if (auto found = named_type_substitutions.find(generic->name); found != named_type_substitutions.end())
+				{
+					return Luau::follow(found->second);
+				}
+			}
+
+			return value;
+		};
+
+		left = substitute(left);
+		right = substitute(right);
+	}
 
 	if (left == right)
 	{
@@ -2694,6 +2867,38 @@ bool type_equality::equals_pack(Luau::TypePackId left, Luau::TypePackId right)
 {
 	left = Luau::follow(left);
 	right = Luau::follow(right);
+
+	if (!pack_substitutions.empty())
+	{
+		if (auto found = pack_substitutions.find(left); found != pack_substitutions.end())
+		{
+			left = Luau::follow(found->second);
+		}
+
+		if (auto found = pack_substitutions.find(right); found != pack_substitutions.end())
+		{
+			right = Luau::follow(found->second);
+		}
+	}
+
+	if (!named_pack_substitutions.empty())
+	{
+		auto substitute = [&](Luau::TypePackId value) -> Luau::TypePackId
+		{
+			if (const Luau::GenericTypePack* generic = Luau::get<Luau::GenericTypePack>(value))
+			{
+				if (auto found = named_pack_substitutions.find(generic->name); found != named_pack_substitutions.end())
+				{
+					return Luau::follow(found->second);
+				}
+			}
+
+			return value;
+		};
+
+		left = substitute(left);
+		right = substitute(right);
+	}
 
 	if (left == right)
 	{
@@ -2944,6 +3149,20 @@ bool type_equality::equals_unordered(const std::vector<Luau::TypeId>& left, cons
 
 bool type_equality::compare(Luau::TypeId left, Luau::TypeId right)
 {
+	// Luau stores an unbound generic's default as `unknown`, while the checked
+	// type that the default produces is often `any`. Inside a default-parameter
+	// comparison the two describe the same "no constraint" slot.
+	if (any_unknown_equivalent)
+	{
+		bool left_blank = Luau::get<Luau::AnyType>(left) != nullptr || Luau::get<Luau::UnknownType>(left) != nullptr;
+		bool right_blank = Luau::get<Luau::AnyType>(right) != nullptr || Luau::get<Luau::UnknownType>(right) != nullptr;
+
+		if (left_blank && right_blank)
+		{
+			return true;
+		}
+	}
+
 	if (Luau::get<Luau::IntersectionType>(left) != nullptr)
 	{
 		if (Luau::get<Luau::IntersectionType>(right) == nullptr)
@@ -3122,6 +3341,15 @@ bool type_equality::compare(Luau::TypeId left, Luau::TypeId right)
 	return Luau::get<Luau::ErrorType>(left) != nullptr && Luau::get<Luau::ErrorType>(right) != nullptr;
 }
 
+bool is_primitive_like(Luau::TypeId type)
+{
+	type = Luau::follow(type);
+
+	return Luau::get<Luau::AnyType>(type) != nullptr || Luau::get<Luau::UnknownType>(type) != nullptr ||
+		Luau::get<Luau::NeverType>(type) != nullptr || Luau::get<Luau::NoRefineType>(type) != nullptr ||
+		Luau::get<Luau::ErrorType>(type) != nullptr || Luau::get<Luau::PrimitiveType>(type) != nullptr;
+}
+
 bool is_same_type(Luau::TypeId left, Luau::TypeId right)
 {
 	if (left == right)
@@ -3138,6 +3366,53 @@ bool is_same_type(Luau::TypeId left, Luau::TypeId right)
 	}
 
 	type_equality equality;
+	return equality.equals(left, right);
+}
+
+bool is_same_type(Luau::TypeId left, Luau::TypeId right, const Luau::TypeFun& definition)
+{
+	type_equality equality;
+
+	for (const Luau::GenericTypeDefinition& parameter : definition.typeParams)
+	{
+		if (!parameter.defaultValue)
+		{
+			continue;
+		}
+
+		Luau::TypeId generic = Luau::follow(parameter.ty);
+		Luau::TypeId value = Luau::follow(*parameter.defaultValue);
+		equality.type_substitutions[generic] = value;
+
+		if (const Luau::GenericType* named = Luau::get<Luau::GenericType>(generic))
+		{
+			equality.named_type_substitutions[named->name] = value;
+		}
+	}
+
+	for (const Luau::GenericTypePackDefinition& parameter : definition.typePackParams)
+	{
+		if (!parameter.defaultValue)
+		{
+			continue;
+		}
+
+		Luau::TypePackId generic = Luau::follow(parameter.tp);
+		Luau::TypePackId value = Luau::follow(*parameter.defaultValue);
+		equality.pack_substitutions[generic] = value;
+
+		if (const Luau::GenericTypePack* named = Luau::get<Luau::GenericTypePack>(generic))
+		{
+			equality.named_pack_substitutions[named->name] = value;
+		}
+	}
+
+	if (equality.type_substitutions.empty() && equality.pack_substitutions.empty())
+	{
+		return is_same_type(left, right);
+	}
+
+	equality.any_unknown_equivalent = true;
 	return equality.equals(left, right);
 }
 
@@ -3868,59 +4143,26 @@ std::string to_string_type_fun(const std::string& name, const Luau::TypeFun& def
 	return output + ">";
 }
 
-std::string to_string_named_function(
-	const Luau::Module& module,
-	const Luau::FunctionType& function,
-	const std::string& name,
-	Luau::AstExpr* expr,
-	const Luau::ToStringOptions& base,
-	const std::string* return_alias)
+std::string to_string_named_function(const Luau::Module& module, const std::string& name, Luau::AstExpr* expr, const std::string& signature)
 {
-	Luau::ToStringOptions options = base;
-	options.useLineBreaks = false;
-
-	auto render = [&function, &options, return_alias]()
-	{
-		std::string text = Luau::toStringNamedFunction("", function, options);
-		size_t found = 0;
-
-		while ((found = text.find("_: ", found)) != std::string::npos)
-		{
-			text.erase(found, 3);
-		}
-
-		if (return_alias != nullptr)
-		{
-			size_t arrow = text.rfind("): ");
-
-			if (arrow != std::string::npos)
-			{
-				text.erase(arrow + 3);
-				text += *return_alias;
-			}
-		}
-
-		return text;
-	};
-
 	if (!name.empty())
 	{
-		return "function " + name + render();
+		return "function " + name + signature;
 	}
 
 	if (expr == nullptr || expr->is<Luau::AstExprGroup>() || expr->is<Luau::AstExprFunction>())
 	{
-		return "function" + render();
+		return "function" + signature;
 	}
 
 	if (Luau::AstExprLocal* local = expr->as<Luau::AstExprLocal>())
 	{
-		return "function " + std::string(local->local->name.value) + render();
+		return "function " + std::string(local->local->name.value) + signature;
 	}
 
 	if (Luau::AstExprGlobal* global = expr->as<Luau::AstExprGlobal>())
 	{
-		return "function " + std::string(global->name.value) + render();
+		return "function " + std::string(global->name.value) + signature;
 	}
 
 	const Luau::TypeId* parent = nullptr;
@@ -3931,7 +4173,6 @@ std::string to_string_named_function(
 	{
 		parent = module.astTypes.find(index->expr);
 		method = std::string(1, index->op) + index->index.value;
-		options.hideFunctionSelfArgument = index->op == ':';
 		base_name = stdx::trim(Luau::toString(index->expr));
 	}
 	else if (Luau::AstExprIndexExpr* index = expr->as<Luau::AstExprIndexExpr>())
@@ -3943,7 +4184,7 @@ std::string to_string_named_function(
 
 	if (parent == nullptr)
 	{
-		return "function" + method + render();
+		return "function" + method + signature;
 	}
 
 	if (std::optional<std::string> type_name = get_type_name(*parent))
@@ -3951,7 +4192,7 @@ std::string to_string_named_function(
 		base_name = *type_name;
 	}
 
-	return "function " + base_name + method + render();
+	return "function " + base_name + method + signature;
 }
 
 std::optional<Luau::Property> find_property(Luau::TypeId owner, const std::string& name, Luau::TypeId& base)
@@ -4097,7 +4338,9 @@ bool is_reserved_word_at(std::string_view text, const Luau::Position& position)
 
 		if (token.type >= Luau::Lexeme::Reserved_BEGIN && token.type < Luau::Lexeme::Reserved_END)
 		{
-			return true;
+			// The `function` keyword itself is meaningful: hovering it shows the type
+			// of the function it introduces.
+			return token.type != Luau::Lexeme::ReservedFunction;
 		}
 
 		if (token.type == Luau::Lexeme::Name)

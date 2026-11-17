@@ -1,9 +1,9 @@
 # Test report
 
-- Date: 2026-11-18 01:16:28
+- Date: 2026-11-18 02:08:21
 - Binary: `/home/ifmnb/Git/lunaut/build/lunaut`
 - Version: `lunaut 0.0.4 (Luau 0.747, GNU 16.2.1)`
-- Result: **156/156 passed** in 12.5s
+- Result: **160/160 passed** in 12.6s
 
 | Test | Status | Time |
 | --- | --- | --- |
@@ -33,7 +33,7 @@
 | `test_extended.AliasRecoveryTests.test_vararg_return_preserves_alias` | PASS | 0.00s |
 | `test_extended.AnalyzerTests.test_analyzer_diagnostics_are_merged` | PASS | 0.03s |
 | `test_extended.AnalyzerTests.test_compatible_analyzer_is_loaded` | PASS | 0.03s |
-| `test_extended.AnalyzerTests.test_incompatible_abi_is_reported` | PASS | 0.03s |
+| `test_extended.AnalyzerTests.test_incompatible_abi_is_reported` | PASS | 0.04s |
 | `test_extended.AnalyzerTests.test_pre_0743_analyzer_is_supported` | PASS | 0.03s |
 | `test_extended.AnalyzerTests.test_version_and_api_mismatch_is_reported` | PASS | 0.03s |
 | `test_extended.AutoRequireTests.test_auto_require_inserts_import_and_annotation` | PASS | 0.07s |
@@ -54,6 +54,10 @@
 | `test_extended.GenericAliasLoopTests.test_inlay_hints_preserve_generic_alias_on_loop_variable` | PASS | 0.00s |
 | `test_extended.GenericAliasLoopTests.test_loop_variable_preserves_generic_alias` | PASS | 0.00s |
 | `test_extended.NegatedInlayTests.test_negated_type_is_not_insertable` | PASS | 0.01s |
+| `test_extended.NormalizedAliasTests.test_defaulted_union_alias_is_not_expanded` | PASS | 0.00s |
+| `test_extended.NormalizedAliasTests.test_function_keyword_hover_uses_local_aliases` | PASS | 0.00s |
+| `test_extended.NormalizedAliasTests.test_primitive_does_not_become_any_alias` | PASS | 0.00s |
+| `test_extended.NormalizedAliasTests.test_primitive_does_not_become_string_alias` | PASS | 0.00s |
 | `test_extended.ProtectionTests.test_broken_edit_does_not_crash` | PASS | 2.01s |
 | `test_extended.ProtectionTests.test_malformed_request_does_not_crash` | PASS | 0.02s |
 | `test_extended.RequireAliasTests.test_function_return_preserves_annotated_alias` | PASS | 0.00s |

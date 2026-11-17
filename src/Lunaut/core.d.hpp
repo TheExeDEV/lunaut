@@ -844,8 +844,14 @@ private:
 		std::string& alias,
 		std::string* display = nullptr) const;
 	std::optional<std::string> get_type_documentation(Luau::TypeId type);
-	std::string
-	render_type_display(Luau::TypeId type, const Luau::ModuleName& module_name, const Luau::ScopePtr& scope, size_t max_length) const;
+	std::string render_type_display(
+		Luau::TypeId type,
+		const Luau::ModuleName& module_name,
+		const Luau::ScopePtr& scope,
+		size_t max_length,
+		bool named_function = false,
+		bool hide_self = false,
+		const std::string* return_alias = nullptr) const;
 	std::string format_alias_display(const Luau::ModuleName& module, const std::string& name) const;
 	std::optional<Luau::TypeFun> find_type_alias(
 		Luau::TypeId type,
