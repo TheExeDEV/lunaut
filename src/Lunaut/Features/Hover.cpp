@@ -10,6 +10,8 @@
 #include "Luau/Scope.h"
 #include "Luau/ToString.h"
 
+#include <set>
+
 namespace lunaut
 {
 namespace
@@ -1176,40 +1178,194 @@ void flatten_intersection(Luau::TypeId type, std::vector<Luau::TypeId>& parts)
 	parts.push_back(type);
 }
 
-bool is_same_type(Luau::TypeId left, Luau::TypeId right)
+struct type_equality
 {
+	std::set<std::pair<Luau::TypeId, Luau::TypeId>> active_types;
+	std::set<std::pair<Luau::TypePackId, Luau::TypePackId>> active_packs;
+
+	bool equals(Luau::TypeId left, Luau::TypeId right);
+	bool equals_pack(Luau::TypePackId left, Luau::TypePackId right);
+	bool equals_table(const Luau::TableType& left, const Luau::TableType& right);
+	bool equals_function(const Luau::FunctionType& left, const Luau::FunctionType& right);
+	bool equals_property(const Luau::Property& left, const Luau::Property& right);
+	bool equals_unordered(const std::vector<Luau::TypeId>& left, const std::vector<Luau::TypeId>& right);
+	bool compare(Luau::TypeId left, Luau::TypeId right);
+};
+
+bool type_equality::equals(Luau::TypeId left, Luau::TypeId right)
+{
+	left = Luau::follow(left);
+	right = Luau::follow(right);
+
 	if (left == right)
 	{
 		return true;
 	}
 
-	std::vector<Luau::TypeId> left_parts;
-	std::vector<Luau::TypeId> right_parts;
-	flatten_intersection(left, left_parts);
-	flatten_intersection(right, right_parts);
+	const std::pair<Luau::TypeId, Luau::TypeId> key{left, right};
 
-	if (left_parts.empty() || left_parts.size() != right_parts.size())
+	if (!active_types.insert(key).second)
+	{
+		return true;
+	}
+
+	bool result = compare(left, right);
+	active_types.erase(key);
+	return result;
+}
+
+bool type_equality::equals_pack(Luau::TypePackId left, Luau::TypePackId right)
+{
+	left = Luau::follow(left);
+	right = Luau::follow(right);
+
+	if (left == right)
+	{
+		return true;
+	}
+
+	const std::pair<Luau::TypePackId, Luau::TypePackId> key{left, right};
+
+	if (!active_packs.insert(key).second)
+	{
+		return true;
+	}
+
+	bool result = false;
+
+	if (const Luau::TypePack* left_pack = Luau::get<Luau::TypePack>(left))
+	{
+		const Luau::TypePack* right_pack = Luau::get<Luau::TypePack>(right);
+
+		if (right_pack != nullptr && left_pack->head.size() == right_pack->head.size() && bool(left_pack->tail) == bool(right_pack->tail))
+		{
+			result = true;
+
+			for (size_t index = 0; index < left_pack->head.size() && result; ++index)
+			{
+				result = equals(left_pack->head[index], right_pack->head[index]);
+			}
+
+			if (result && left_pack->tail)
+			{
+				result = equals_pack(*left_pack->tail, *right_pack->tail);
+			}
+		}
+	}
+	else if (const Luau::VariadicTypePack* left_variadic = Luau::get<Luau::VariadicTypePack>(left))
+	{
+		const Luau::VariadicTypePack* right_variadic = Luau::get<Luau::VariadicTypePack>(right);
+		result = right_variadic != nullptr && equals(left_variadic->ty, right_variadic->ty);
+	}
+	else if (const Luau::GenericTypePack* left_generic = Luau::get<Luau::GenericTypePack>(left))
+	{
+		const Luau::GenericTypePack* right_generic = Luau::get<Luau::GenericTypePack>(right);
+		result = right_generic != nullptr && !left_generic->name.empty() && left_generic->name == right_generic->name;
+	}
+	else if (const Luau::FreeTypePack* left_free = Luau::get<Luau::FreeTypePack>(left))
+	{
+		const Luau::FreeTypePack* right_free = Luau::get<Luau::FreeTypePack>(right);
+		result = right_free != nullptr && left_free->index == right_free->index;
+	}
+
+	active_packs.erase(key);
+	return result;
+}
+
+bool type_equality::equals_property(const Luau::Property& left, const Luau::Property& right)
+{
+	if (bool(left.readTy) != bool(right.readTy) || bool(left.writeTy) != bool(right.writeTy))
 	{
 		return false;
 	}
 
-	Luau::ToStringOptions options;
-	options.hideTableAliasExpansions = true;
+	if (left.readTy && !equals(*left.readTy, *right.readTy))
+	{
+		return false;
+	}
 
-	std::vector<bool> matched(right_parts.size(), false);
+	if (left.writeTy && !equals(*left.writeTy, *right.writeTy))
+	{
+		return false;
+	}
 
-	for (Luau::TypeId left_part : left_parts)
+	return true;
+}
+
+bool type_equality::equals_table(const Luau::TableType& left, const Luau::TableType& right)
+{
+	if (bool(left.name) != bool(right.name) || (left.name && *left.name != *right.name))
+	{
+		return false;
+	}
+
+	if (left.props.size() != right.props.size() || bool(left.indexer) != bool(right.indexer))
+	{
+		return false;
+	}
+
+	if (left.indexer && right.indexer)
+	{
+		if (left.indexer->isReadOnly != right.indexer->isReadOnly)
+		{
+			return false;
+		}
+
+		if (!equals(left.indexer->indexType, right.indexer->indexType) ||
+			!equals(left.indexer->indexResultType, right.indexer->indexResultType))
+		{
+			return false;
+		}
+	}
+
+	Luau::TableType::Props::const_iterator left_property = left.props.begin();
+	Luau::TableType::Props::const_iterator right_property = right.props.begin();
+
+	while (left_property != left.props.end())
+	{
+		if (left_property->first != right_property->first || !equals_property(left_property->second, right_property->second))
+		{
+			return false;
+		}
+
+		++left_property;
+		++right_property;
+	}
+
+	return true;
+}
+
+bool type_equality::equals_function(const Luau::FunctionType& left, const Luau::FunctionType& right)
+{
+	if (left.generics.size() != right.generics.size() || left.genericPacks.size() != right.genericPacks.size())
+	{
+		return false;
+	}
+
+	return equals_pack(left.argTypes, right.argTypes) && equals_pack(left.retTypes, right.retTypes);
+}
+
+bool type_equality::equals_unordered(const std::vector<Luau::TypeId>& left, const std::vector<Luau::TypeId>& right)
+{
+	if (left.size() != right.size())
+	{
+		return false;
+	}
+
+	std::vector<bool> matched(right.size(), false);
+
+	for (Luau::TypeId left_part : left)
 	{
 		bool found = false;
 
-		for (size_t index = 0; index < right_parts.size(); ++index)
+		for (size_t index = 0; index < right.size(); ++index)
 		{
 			if (matched[index])
 			{
 				continue;
 			}
 
-			if (left_part == right_parts[index] || Luau::toString(left_part, options) == Luau::toString(right_parts[index], options))
+			if (equals(left_part, right[index]))
 			{
 				matched[index] = true;
 				found = true;
@@ -1224,6 +1380,201 @@ bool is_same_type(Luau::TypeId left, Luau::TypeId right)
 	}
 
 	return true;
+}
+
+bool type_equality::compare(Luau::TypeId left, Luau::TypeId right)
+{
+	if (Luau::get<Luau::IntersectionType>(left) != nullptr)
+	{
+		if (Luau::get<Luau::IntersectionType>(right) == nullptr)
+		{
+			return false;
+		}
+
+		std::vector<Luau::TypeId> left_parts;
+		std::vector<Luau::TypeId> right_parts;
+		flatten_intersection(left, left_parts);
+		flatten_intersection(right, right_parts);
+		return equals_unordered(left_parts, right_parts);
+	}
+
+	if (const Luau::UnionType* left_union = Luau::get<Luau::UnionType>(left))
+	{
+		const Luau::UnionType* right_union = Luau::get<Luau::UnionType>(right);
+		return right_union != nullptr && equals_unordered(left_union->options, right_union->options);
+	}
+
+	if (const Luau::TableType* left_table = Luau::get<Luau::TableType>(left))
+	{
+		const Luau::TableType* right_table = Luau::get<Luau::TableType>(right);
+		return right_table != nullptr && equals_table(*left_table, *right_table);
+	}
+
+	if (const Luau::FunctionType* left_function = Luau::get<Luau::FunctionType>(left))
+	{
+		const Luau::FunctionType* right_function = Luau::get<Luau::FunctionType>(right);
+		return right_function != nullptr && equals_function(*left_function, *right_function);
+	}
+
+	if (const Luau::MetatableType* left_metatable = Luau::get<Luau::MetatableType>(left))
+	{
+		const Luau::MetatableType* right_metatable = Luau::get<Luau::MetatableType>(right);
+
+		return right_metatable != nullptr && equals(left_metatable->table, right_metatable->table) &&
+			equals(left_metatable->metatable, right_metatable->metatable);
+	}
+
+	if (const Luau::PrimitiveType* left_primitive = Luau::get<Luau::PrimitiveType>(left))
+	{
+		const Luau::PrimitiveType* right_primitive = Luau::get<Luau::PrimitiveType>(right);
+		return right_primitive != nullptr && left_primitive->type == right_primitive->type;
+	}
+
+	if (const Luau::SingletonType* left_singleton = Luau::get<Luau::SingletonType>(left))
+	{
+		const Luau::SingletonType* right_singleton = Luau::get<Luau::SingletonType>(right);
+
+		if (right_singleton == nullptr)
+		{
+			return false;
+		}
+
+		if (const Luau::BooleanSingleton* left_boolean = Luau::get_if<Luau::BooleanSingleton>(&left_singleton->variant))
+		{
+			const Luau::BooleanSingleton* right_boolean = Luau::get_if<Luau::BooleanSingleton>(&right_singleton->variant);
+			return right_boolean != nullptr && left_boolean->value == right_boolean->value;
+		}
+
+		const Luau::StringSingleton* left_string = Luau::get_if<Luau::StringSingleton>(&left_singleton->variant);
+		const Luau::StringSingleton* right_string = Luau::get_if<Luau::StringSingleton>(&right_singleton->variant);
+		return left_string != nullptr && right_string != nullptr && left_string->value == right_string->value;
+	}
+
+	if (const Luau::NegationType* left_negation = Luau::get<Luau::NegationType>(left))
+	{
+		const Luau::NegationType* right_negation = Luau::get<Luau::NegationType>(right);
+		return right_negation != nullptr && equals(left_negation->ty, right_negation->ty);
+	}
+
+	if (const Luau::GenericType* left_generic = Luau::get<Luau::GenericType>(left))
+	{
+		const Luau::GenericType* right_generic = Luau::get<Luau::GenericType>(right);
+		return right_generic != nullptr && !left_generic->name.empty() && left_generic->name == right_generic->name;
+	}
+
+	if (const Luau::ExternType* left_extern = Luau::get<Luau::ExternType>(left))
+	{
+		const Luau::ExternType* right_extern = Luau::get<Luau::ExternType>(right);
+		return right_extern != nullptr && left_extern->name == right_extern->name;
+	}
+
+	if (const Luau::TypeFunctionInstanceType* left_instance = Luau::get<Luau::TypeFunctionInstanceType>(left))
+	{
+		const Luau::TypeFunctionInstanceType* right_instance = Luau::get<Luau::TypeFunctionInstanceType>(right);
+
+		if (right_instance == nullptr || left_instance->function != right_instance->function ||
+			left_instance->typeArguments.size() != right_instance->typeArguments.size() ||
+			left_instance->packArguments.size() != right_instance->packArguments.size())
+		{
+			return false;
+		}
+
+		for (size_t index = 0; index < left_instance->typeArguments.size(); ++index)
+		{
+			if (!equals(left_instance->typeArguments[index], right_instance->typeArguments[index]))
+			{
+				return false;
+			}
+		}
+
+		for (size_t index = 0; index < left_instance->packArguments.size(); ++index)
+		{
+			if (!equals_pack(left_instance->packArguments[index], right_instance->packArguments[index]))
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	if (Luau::get<Luau::AnyType>(left) != nullptr)
+	{
+		return Luau::get<Luau::AnyType>(right) != nullptr;
+	}
+
+	if (Luau::get<Luau::UnknownType>(left) != nullptr)
+	{
+		return Luau::get<Luau::UnknownType>(right) != nullptr;
+	}
+
+	if (Luau::get<Luau::NeverType>(left) != nullptr)
+	{
+		return Luau::get<Luau::NeverType>(right) != nullptr;
+	}
+
+	if (Luau::get<Luau::NoRefineType>(left) != nullptr)
+	{
+		return Luau::get<Luau::NoRefineType>(right) != nullptr;
+	}
+
+	return Luau::get<Luau::ErrorType>(left) != nullptr && Luau::get<Luau::ErrorType>(right) != nullptr;
+}
+
+bool is_same_type(Luau::TypeId left, Luau::TypeId right)
+{
+	if (left == right)
+	{
+		return true;
+	}
+
+	std::vector<Luau::TypeId> left_parts;
+	std::vector<Luau::TypeId> right_parts;
+	flatten_intersection(left, left_parts);
+	flatten_intersection(right, right_parts);
+
+	if (!left_parts.empty() && left_parts.size() == right_parts.size())
+	{
+		Luau::ToStringOptions options;
+		options.hideTableAliasExpansions = true;
+
+		std::vector<bool> matched(right_parts.size(), false);
+		bool equal = true;
+
+		for (Luau::TypeId left_part : left_parts)
+		{
+			bool found = false;
+
+			for (size_t index = 0; index < right_parts.size(); ++index)
+			{
+				if (matched[index])
+				{
+					continue;
+				}
+
+				if (left_part == right_parts[index] || Luau::toString(left_part, options) == Luau::toString(right_parts[index], options))
+				{
+					matched[index] = true;
+					found = true;
+					break;
+				}
+			}
+
+			if (!found)
+			{
+				equal = false;
+				break;
+			}
+		}
+
+		if (equal)
+		{
+			return true;
+		}
+	}
+
+	type_equality equality;
+	return equality.equals(left, right);
 }
 
 std::optional<named_type> get_reference_alias(const Luau::ScopePtr& scope, const Luau::AstType* annotation)
