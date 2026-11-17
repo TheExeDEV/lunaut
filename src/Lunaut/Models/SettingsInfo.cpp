@@ -46,6 +46,9 @@ const std::unordered_map<std::string_view, std::string_view> relevant_vscode_key
 	{"lunaut.inlayHints.hideHintsForMatchingParameterNames", "/inlay_hints/hide_matching_names"},
 	{"lunaut.inlayHints.typeHintMaxLength", "/inlay_hints/max_length"},
 	{"lunaut.inlayHints.makeInsertable", "/inlay_hints/insertable"},
+	{"lunaut.inlayHints.autoRequire", "/inlay_hints/auto_require"},
+	{"lunaut.typeDisplay.aliases", "/features/alias_types"},
+	{"lunaut.typeDisplay.refine", "/features/refine_types"},
 	{"lunaut.hover.documentation", "/features/documentation"},
 	{"lunaut.completion.autoImports", "/features/auto_imports"},
 	{"lunaut.completion.importKeyword", "/features/import_keyword"},
@@ -196,6 +199,7 @@ settingsinfo settingsinfo::from_json(const json& data, const settingsinfo& base)
 		priv::read(hints, "hide_matching_names", info.inlay_hints.hide_matching_names);
 		priv::read(hints, "max_length", info.inlay_hints.max_length);
 		priv::read(hints, "insertable", info.inlay_hints.insertable);
+		priv::read(hints, "auto_require", info.inlay_hints.auto_require);
 
 		if (hints.contains("parameter_names") && hints["parameter_names"].is_string())
 		{
@@ -222,6 +226,8 @@ settingsinfo settingsinfo::from_json(const json& data, const settingsinfo& base)
 		priv::read(features, "convert_quotes", info.features.convert_quotes);
 		priv::read(features, "formatting", info.features.formatting);
 		priv::read(features, "stylua", info.features.stylua);
+		priv::read(features, "alias_types", info.features.alias_types);
+		priv::read(features, "refine_types", info.features.refine_types);
 	}
 
 	priv::read(data, "documentation_files", info.documentation_files);
@@ -380,6 +386,7 @@ json settingsinfo::to_json() const
 			 {"hide_matching_names", inlay_hints.hide_matching_names},
 			 {"max_length", inlay_hints.max_length},
 			 {"insertable", inlay_hints.insertable},
+			 {"auto_require", inlay_hints.auto_require},
 		 }},
 		{"features",
 		 {
@@ -392,6 +399,8 @@ json settingsinfo::to_json() const
 			 {"convert_quotes", features.convert_quotes},
 			 {"formatting", features.formatting},
 			 {"stylua", features.stylua},
+			 {"alias_types", features.alias_types},
+			 {"refine_types", features.refine_types},
 		 }},
 	};
 }
@@ -403,6 +412,7 @@ json loadeddefinitioninfo::to_json() const
 		{"path", path},
 		{"priority", priority},
 		{"success", success},
+		{"show_as_module", show_as_module},
 		{"message", message},
 		{"source", enum_definition_source::get_name(source)},
 	};
@@ -460,7 +470,7 @@ void read_definitions(const json& data, std::vector<definitioninfo>& target)
 		{
 			if (path.is_string())
 			{
-				target.push_back(definitioninfo{path.get<std::string>(), name, std::nullopt, enumitem_definition_source::Config});
+				target.push_back(definitioninfo{path.get<std::string>(), name, std::nullopt, false, enumitem_definition_source::Config});
 			}
 		}
 		return;
@@ -477,7 +487,7 @@ void read_definitions(const json& data, std::vector<definitioninfo>& target)
 	{
 		if (item.is_string())
 		{
-			target.push_back(definitioninfo{item.get<std::string>(), "", std::nullopt, enumitem_definition_source::Config});
+			target.push_back(definitioninfo{item.get<std::string>(), "", std::nullopt, false, enumitem_definition_source::Config});
 			continue;
 		}
 
@@ -492,6 +502,11 @@ void read_definitions(const json& data, std::vector<definitioninfo>& target)
 		if (item.contains("priority") && item["priority"].is_number_integer())
 		{
 			info.priority = item["priority"].get<int>();
+		}
+
+		if (item.contains("show_as_module") && item["show_as_module"].is_boolean())
+		{
+			info.show_as_module = item["show_as_module"].get<bool>();
 		}
 
 		target.push_back(info);

@@ -228,6 +228,7 @@ struct definitioninfo
 	std::string path;
 	std::string name;
 	std::optional<int> priority;
+	bool show_as_module = false;
 	enumitem_definition_source source = enumitem_definition_source::Config;
 };
 
@@ -267,6 +268,7 @@ struct inlayhintsinfo
 	bool hide_matching_names = true;
 	int max_length = 50;
 	bool insertable = true;
+	bool auto_require = true;
 };
 
 struct featuresinfo
@@ -280,6 +282,8 @@ struct featuresinfo
 	bool convert_quotes = true;
 	bool formatting = true;
 	std::string stylua = "stylua";
+	bool alias_types = true;
+	bool refine_types = true;
 };
 
 struct diagnosticsinfo
@@ -337,10 +341,23 @@ struct loadeddefinitioninfo
 	std::string path;
 	int priority = 0;
 	bool success = false;
+	bool show_as_module = false;
 	std::string message;
 	enumitem_definition_source source = enumitem_definition_source::Config;
 
 	json to_json() const;
+};
+
+struct typedisplayinfo
+{
+	std::string text;
+	std::string name;
+	std::optional<Luau::ModuleName> module;
+	bool alias = false;
+	bool definition_file = false;
+	bool exported = false;
+	bool show_as_module = false;
+	bool truncated = false;
 };
 
 struct fflagstateinfo
@@ -778,6 +795,17 @@ public:
 		const Luau::ScopePtr& scope,
 		const Luau::AstType* annotation,
 		const Luau::AstExpr* initializer = nullptr) const;
+	typedisplayinfo get_type_display(
+		Luau::TypeId type,
+		const Luau::Module& module,
+		const Luau::ScopePtr& scope,
+		const Luau::AstType* annotation,
+		const Luau::AstExpr* initializer = nullptr,
+		size_t max_length = 0) const;
+	std::string get_import_symbol(const Luau::ModuleName& name) const;
+	std::optional<std::string>
+	get_import_statement(const Luau::ModuleName& from, const Luau::ModuleName& target, const std::string& symbol = std::string()) const;
+	unsigned int get_import_line(const Luau::ModuleName& name, const textdocument& document);
 	json get_semantic_tokens(const json& params);
 	json get_code_actions(const json& params);
 	json get_document_colors(const json& params);
@@ -799,8 +827,6 @@ private:
 	void index_workspace();
 	json get_auto_imports(const Luau::ModuleName& name, const textdocument& document, const std::set<std::string>& taken);
 	std::optional<json> make_import_edit(const Luau::ModuleName& name, const textdocument& document, const std::string& symbol);
-	std::optional<std::string> get_import_statement(const Luau::ModuleName& from, const std::string& symbol) const;
-	unsigned int get_import_line(const Luau::ModuleName& name, const textdocument& document);
 	std::optional<std::string> get_comment_documentation(const Luau::ModuleName& name, const Luau::Location& location);
 	std::optional<std::string> get_annotation_text(const Luau::ModuleName& name, const Luau::AstType* annotation) const;
 	std::optional<Luau::TypeFun> get_annotation_alias(
@@ -811,6 +837,9 @@ private:
 		std::string& alias,
 		std::string* display = nullptr) const;
 	std::optional<std::string> get_type_documentation(Luau::TypeId type);
+	std::string
+	render_type_display(Luau::TypeId type, const Luau::ModuleName& module_name, const Luau::ScopePtr& scope, size_t max_length) const;
+	std::string format_alias_display(const Luau::ModuleName& module, const std::string& name) const;
 	std::optional<Luau::TypeFun> find_type_alias(
 		Luau::TypeId type,
 		Luau::ModuleName& module,
@@ -834,7 +863,7 @@ private:
 		std::string& name,
 		std::string* display = nullptr) const;
 	std::optional<Luau::ModuleName> find_definition_module(Luau::TypeId type) const;
-	std::optional<Luau::ModuleName> find_definition_module(const Luau::Location& location) const;
+	std::optional<Luau::ModuleName> find_definition_module(const Luau::Location& location, const std::string& name = std::string()) const;
 	std::vector<std::pair<Luau::ModuleName, Luau::Location>> find_references(
 		const Luau::ModuleName& name,
 		Luau::Position position,
@@ -864,6 +893,7 @@ private:
 	std::set<std::string> definition_paths;
 	std::unordered_map<std::string, std::string> definition_module_paths;
 	std::unordered_map<std::string, Luau::SourceModule> definition_sources;
+	std::set<std::string> definition_show_as_module;
 	std::unordered_map<std::string, Luau::ModulePtr> definition_modules;
 	analyzerplugin analyzer;
 	bool analyzer_reported = false;

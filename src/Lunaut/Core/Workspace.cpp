@@ -506,6 +506,7 @@ void workspace::load_definitions()
 	definition_module_paths.clear();
 	definition_sources.clear();
 	definition_modules.clear();
+	definition_show_as_module.clear();
 
 	std::set<std::string> packages;
 	json metadata = json::object();
@@ -516,6 +517,7 @@ void workspace::load_definitions()
 		loaded.path = info.path;
 		loaded.priority = info.priority.value_or(0);
 		loaded.source = info.source;
+		loaded.show_as_module = info.show_as_module;
 		loaded.name = definitionloader::get_package_name(info, info.path);
 
 		for (size_t index = 2; !packages.insert(loaded.name).second; ++index)
@@ -572,6 +574,12 @@ void workspace::load_definitions()
 
 		definition_module_paths[loaded.name] = info.path;
 		definition_sources.emplace(loaded.name, std::move(result.sourceModule));
+
+		if (loaded.show_as_module)
+		{
+			definition_show_as_module.insert(loaded.name);
+		}
+
 		definition_modules.emplace(loaded.name, std::move(result.module));
 		definitions.push_back(loaded);
 	}

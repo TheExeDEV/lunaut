@@ -149,9 +149,10 @@ std::optional<json> workspace::make_import_edit(const Luau::ModuleName& name, co
 	return json{{"range", {{"start", at}, {"end", at}}}, {"newText", *statement + "\n"}};
 }
 
-std::optional<std::string> workspace::get_import_statement(const Luau::ModuleName& from, const std::string& target) const
+std::optional<std::string>
+workspace::get_import_statement(const Luau::ModuleName& from, const std::string& target, const std::string& requested_symbol) const
 {
-	std::string symbol = priv::get_module_symbol(target);
+	std::string symbol = requested_symbol.empty() ? priv::get_module_symbol(target) : requested_symbol;
 
 	if (sourcemap::is_virtual_path(target))
 	{
@@ -226,6 +227,11 @@ std::optional<std::string> workspace::get_import_statement(const Luau::ModuleNam
 	}
 
 	return priv::get_keyword(settings.features) + symbol + " = require(\"" + path + "\")";
+}
+
+std::string workspace::get_import_symbol(const Luau::ModuleName& name) const
+{
+	return priv::get_module_symbol(name);
 }
 
 unsigned int workspace::get_import_line(const Luau::ModuleName& name, const textdocument& document)

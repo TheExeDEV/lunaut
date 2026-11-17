@@ -1382,6 +1382,11 @@
                   },
                   "priority": {
                     "type": "integer"
+                  },
+                  "show_as_module": {
+                    "type": "boolean",
+                    "default": false,
+                    "markdownDescription": "Display types from this file as if they came from a required module, for example `@core.pointer`."
                   }
                 }
               }
@@ -1522,6 +1527,21 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Double-clicking a type hint inserts it as an annotation."
+        },
+        "lunaut.inlayHints.autoRequire": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "When an inserted type comes from another module, insert its `require` too and qualify the type as `Module.type`."
+        },
+        "lunaut.typeDisplay.aliases": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Use declared type and alias names in hovers and type hints instead of fully expanded structures."
+        },
+        "lunaut.typeDisplay.refine": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Simplify displayed types: fold duplicate union members, keep optionals as `?`, and hide empty fallbacks such as `value or {}`."
         },
         "lunaut.hover.documentation": {
           "type": "boolean",

@@ -169,7 +169,8 @@ class RequireAliasTests(unittest.TestCase):
 		)
 		shape = next(hint for hint in hints if hint["position"]["line"] == 2 and hint["kind"] == 1)
 		self.assertEqual(shape["label"], ": Shape")
-		self.assertNotIn("textEdits", shape)
+		edits = shape["textEdits"]
+		self.assertEqual([edit["newText"] for edit in edits], [": shape.Shape"])
 
 	def test_require_preserves_defaulted_generic_alias(self):
 		value = hover_text(self.client, self.uri, self.consumer, "local wrapped = require", 6)
@@ -184,7 +185,8 @@ class RequireAliasTests(unittest.TestCase):
 		)
 		wrapper = next(hint for hint in hints if hint["position"]["line"] == 6 and hint["kind"] == 1)
 		self.assertEqual(wrapper["label"], ": Wrapper")
-		self.assertNotIn("textEdits", wrapper)
+		edits = wrapper["textEdits"]
+		self.assertEqual([edit["newText"] for edit in edits], [": wrapped.Wrapper"])
 
 	def test_inlay_hints_preserve_table_aliases(self):
 		hints = self.client.request(
@@ -288,6 +290,127 @@ class AliasRecoveryTests(unittest.TestCase):
 		self.assertEqual(labels[7], ": Service.scheduler")
 		self.assertEqual(labels[8], ": { net_event }")
 		self.assertEqual(labels[9], ": { [string]: Service.scheduler }")
+
+	def test_inlay_hints_insert_visible_raw_annotations(self):
+		hints = self.client.request(
+			"textDocument/inlayHint",
+			{"textDocument": {"uri": self.uri}, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 99, "character": 0}}},
+		)
+		edits = {hint["position"]["line"]: [edit["newText"] for edit in hint.get("textEdits", [])] for hint in hints if hint["kind"] == 1}
+		# `net_event` is private to the service module, so `{ net_event }` cannot be inserted.
+		self.assertEqual(edits[8], [])
+		# Every part of the written annotation is visible in the consumer.
+		self.assertEqual(edits[9], [": { [string]: Service.scheduler }"])
+
+	def test_inlay_hints_skip_private_aliases(self):
+		hints = self.client.request(
+			"textDocument/inlayHint",
+			{"textDocument": {"uri": self.uri}, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 99, "character": 0}}},
+		)
+		edits = {hint["position"]["line"]: [edit["newText"] for edit in hint.get("textEdits", [])] for hint in hints if hint["kind"] == 1}
+		self.assertEqual(edits[5], [])
+		self.assertEqual(edits[6], [])
+		self.assertEqual(edits[7], [": Service.scheduler"])
+
+
+class TypeDisplaySettingsTests(unittest.TestCase):
+	def test_disabled_aliases_fall_back_to_module_names(self):
+		text = (FIXTURES / "aliases" / "consumer.luau").read_text(encoding="utf-8")
+		client = LspClient(FIXTURES / "aliases", {"vscode": {"lunaut.typeDisplay.aliases": False}})
+
+		try:
+			uri, _ = client.open("consumer.luau")
+			value = hover_text(client, uri, text, "local scheduler = Service:whose()", len("local "))
+			self.assertIn("local scheduler: scheduler?", value)
+			self.assertNotIn("Service.scheduler", value)
+		finally:
+			client.close()
+
+	def test_disabled_refine_keeps_or_union(self):
+		text = (FIXTURES / "refine" / "main.luau").read_text(encoding="utf-8")
+		client = LspClient(FIXTURES / "refine", {"vscode": {"lunaut.typeDisplay.refine": False}})
+
+		try:
+			uri, _ = client.open("main.luau")
+			value = hover_text(client, uri, text, "local known", len("local "))
+			self.assertIn("local known: entry | {}", value)
+		finally:
+			client.close()
+
+	def test_enabled_refine_drops_empty_or_branch(self):
+		text = (FIXTURES / "refine" / "main.luau").read_text(encoding="utf-8")
+		client = LspClient(FIXTURES / "refine")
+
+		try:
+			uri, _ = client.open("main.luau")
+			value = hover_text(client, uri, text, "local known", len("local "))
+			self.assertIn("local known: entry", value)
+			self.assertNotIn("| {}", value)
+		finally:
+			client.close()
+
+
+class AutoRequireTests(unittest.TestCase):
+	def test_auto_require_inserts_import_and_annotation(self):
+		text = (FIXTURES / "autorequire" / "user.luau").read_text(encoding="utf-8")
+		client = LspClient(FIXTURES / "autorequire")
+
+		try:
+			uri, _ = client.open("user.luau")
+			hints = client.request(
+				"textDocument/inlayHint",
+				{"textDocument": {"uri": uri}, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 99, "character": 0}}},
+			)
+			scheduler = next(hint for hint in hints if hint["position"]["line"] == 4 and hint["kind"] == 1)
+			self.assertEqual(scheduler["label"], ": Service.scheduler")
+			self.assertEqual(
+				[edit["newText"] for edit in scheduler["textEdits"]],
+				['local Service = require("./service")\n', ": Service.scheduler"],
+			)
+			self.assertIn("local scheduler: Service.scheduler", hover_text(client, uri, text, "local scheduler", len("local ")))
+		finally:
+			client.close()
+
+	def test_disabled_auto_require_does_not_offer_edits(self):
+		client = LspClient(FIXTURES / "autorequire", {"vscode": {"lunaut.inlayHints.autoRequire": False}})
+
+		try:
+			uri, _ = client.open("user.luau")
+			hints = client.request(
+				"textDocument/inlayHint",
+				{"textDocument": {"uri": uri}, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 99, "character": 0}}},
+			)
+			scheduler = next(hint for hint in hints if hint["position"]["line"] == 4 and hint["kind"] == 1)
+			self.assertEqual(scheduler["label"], ": Service.scheduler")
+			self.assertNotIn("textEdits", scheduler)
+		finally:
+			client.close()
+
+
+class ShowAsModuleTests(unittest.TestCase):
+	def test_definition_alias_uses_module_qualifier(self):
+		text = (FIXTURES / "definitions-module" / "main.luau").read_text(encoding="utf-8")
+		client = LspClient(FIXTURES / "definitions-module")
+
+		try:
+			uri, _ = client.open("main.luau")
+			value = hover_text(client, uri, text, "local car", len("local "))
+			self.assertIn("local car: @extra.Car", value)
+			self.assertIn("[Car](file:///", value)
+		finally:
+			client.close()
+
+	def test_definition_alias_without_option_stays_unqualified(self):
+		text = (FIXTURES / "definitions" / "main.luau").read_text(encoding="utf-8")
+		client = LspClient(FIXTURES / "definitions")
+
+		try:
+			uri, _ = client.open("main.luau")
+			value = hover_text(client, uri, text, "local car", len("local "))
+			self.assertIn("local car: Car", value)
+			self.assertNotIn("@extra.Car", value)
+		finally:
+			client.close()
 
 
 class TypeStatsTests(unittest.TestCase):

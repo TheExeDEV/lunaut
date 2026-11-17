@@ -44,7 +44,8 @@ definitionloader::collect(const std::filesystem::path& root, const settingsinfo&
 		if (path)
 		{
 			collected.add(
-				definitioninfo{path.value, "roblox", settings.roblox.types_priority, enumitem_definition_source::Roblox}, path.value);
+				definitioninfo{path.value, "roblox", settings.roblox.types_priority, false, enumitem_definition_source::Roblox},
+				path.value);
 		}
 		else
 		{
@@ -84,7 +85,7 @@ definitionloader::collect(const std::filesystem::path& root, const settingsinfo&
 	{
 		for (const std::filesystem::path& file : stdx::find_files(root, priv::discovery_pattern, settings.ignore_globs))
 		{
-			collected.add(definitioninfo{file.generic_string(), "", std::nullopt, enumitem_definition_source::Discovered}, file);
+			collected.add(definitioninfo{file.generic_string(), "", std::nullopt, false, enumitem_definition_source::Discovered}, file);
 		}
 	}
 #endif

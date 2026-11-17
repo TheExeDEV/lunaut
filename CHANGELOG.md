@@ -15,6 +15,9 @@
 - Analyzer plugins: a versioned C ABI (`src/Lunaut/analyzer.h`) loads a custom Luau fork at runtime, supports the pre-0.743 and post-0.743 frontend APIs and reports incompatible plugins instead of crashing
 - `lunaut.analyzer.enabled`, `lunaut.analyzer.path` and `lunaut.analyzer.diagnostics`
 - `lunaut.completion.importKeyword`: insert auto-imports with `local` or `const`
+- `lunaut.typeDisplay.aliases` and `lunaut.typeDisplay.refine`: turn off alias names or display simplification to get the analyzer's raw expanded types
+- `lunaut.inlayHints.autoRequire`: when an insertable hint refers to a type from another module, insert the missing `require` together with the `Module.type` annotation
+- `"show_as_module": true` on a `lunaut.definitions` entry: display its types as if they came from a required module, for example `@core.pointer`
 
 ### Fixed
 
@@ -28,6 +31,7 @@
 - Alias lookup prefers aliases from the type's own module, so structurally identical aliases from other files no longer win, while `textDocument/typeDefinition` still points at the right declaration
 - Anonymous table annotations are shown as written (`{ iteminstance }`, `{ [iteminstance]: pointer }`) instead of a structural type with `tN` placeholders, in hover and inlay hints
 - Alias lookup memoizes structural comparisons and filters candidates with a cheap shallow check, so inlay hints and hover on large files no longer spend seconds per variable
+- Insertable inlay hints write visible raw table annotations (`{ iteminstance }`, `{ [string]: Service.scheduler }`) verbatim and skip aliases that are private to another module
 - Definition files are stored with absolute paths, so hover links resolve for files opened outside the workspace root
 - Reading input no longer flushes standard output concurrently with JSON-RPC writes, which corrupted frames and hung shutdown
 

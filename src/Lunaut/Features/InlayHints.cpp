@@ -11,6 +11,11 @@
 #include "Luau/ToString.h"
 #include "Luau/TypePack.h"
 
+#include <algorithm>
+#include <cctype>
+#include <set>
+#include <vector>
+
 namespace lunaut
 {
 namespace
@@ -24,7 +29,7 @@ constexpr int kind_parameter = 2;
 struct hint_collector final : Luau::AstVisitor
 {
 	hint_collector(
-		const workspace& owner,
+		workspace& owner,
 		const Luau::Module& module,
 		const textdocument& document,
 		const inlayhintsinfo& info,
@@ -38,10 +43,10 @@ struct hint_collector final : Luau::AstVisitor
 
 	void add_variable(
 		Luau::AstLocal* local, std::optional<Luau::TypeId> type, const Luau::ScopePtr& scope, const Luau::AstExpr* initializer = nullptr);
-	void add_type(Luau::Position position, const Luau::ToStringResult& text);
+	void add_type(Luau::Position position, const Luau::ToStringResult& text, const json& edits = json());
 	bool is_visible(Luau::Position position) const;
 
-	const workspace& owner;
+	workspace& owner;
 	const Luau::Module& module;
 	const textdocument& document;
 	const inlayhintsinfo& info;
@@ -54,6 +59,12 @@ struct hint_collector final : Luau::AstVisitor
 bool is_literal(const Luau::AstExpr* expr);
 std::string get_argument_text(const Luau::AstExpr* expr);
 Luau::ToStringResult to_return_string(Luau::TypePackId pack, Luau::ToStringOptions& options);
+bool is_identifier(const std::string& name);
+bool is_qualified_name(const std::string& name);
+std::string last_name_part(const std::string& name);
+std::string name_prefix(const std::string& name);
+bool raw_annotation_visible(const Luau::ScopePtr& scope, const std::string& text);
+std::optional<std::string> find_imported_symbol(const Luau::ScopePtr& scope, const Luau::ModuleName& module);
 
 }
 }
@@ -96,7 +107,7 @@ namespace priv
 {
 
 hint_collector::hint_collector(
-	const workspace& owner,
+	workspace& owner,
 	const Luau::Module& module,
 	const textdocument& document,
 	const inlayhintsinfo& info,
@@ -281,30 +292,93 @@ void hint_collector::add_variable(
 		return;
 	}
 
-	if (std::optional<std::string> alias = owner.get_type_alias_name(followed, module, scope, local->annotation, initializer))
-	{
-		Luau::ToStringResult text{*alias};
+	typedisplayinfo display =
+		owner.get_type_display(followed, module, scope, local->annotation, initializer, static_cast<size_t>(std::max(10, info.max_length)));
 
-		if (local->annotation == nullptr && (scope == nullptr || !scope->lookupType(*alias)))
+	if (display.text.empty())
+	{
+		return;
+	}
+
+	if (!display.alias && stdx::to_lower(display.text) == stdx::to_lower(local->name.value))
+	{
+		return;
+	}
+
+	Luau::ToStringResult text{display.text};
+	text.truncated = display.truncated;
+	text.cycle = display.text.find("*CYCLE*") != std::string::npos;
+	text.invalid = display.text.find("*no-refine*") != std::string::npos;
+	json edits = json();
+
+	if (local->annotation == nullptr && display.alias)
+	{
+		bool optional = !display.text.empty() && display.text.back() == '?';
+		bool local_module = display.module && *display.module == module.name;
+
+		if (!priv::is_qualified_name(display.name))
 		{
-			text.invalid = true;
+			// A written table annotation such as `{ iteminstance }`: insert it verbatim when
+			// every type it mentions is visible here.
+			if (priv::raw_annotation_visible(scope, display.name))
+			{
+				json at = document.to_lsp_position(local->location.end);
+				edits = json::array({{{"range", {{"start", at}, {"end", at}}}, {"newText", ": " + display.name + (optional ? "?" : "")}}});
+			}
+			else
+			{
+				text.invalid = true;
+			}
 		}
+		else
+		{
+			std::string base = priv::last_name_part(display.name);
+			std::string suffix = optional ? "?" : "";
+			bool in_scope = scope != nullptr && scope->lookupType(base);
 
-		add_type(local->location.end, text);
-		return;
+			if (display.module && !display.definition_file && !local_module && display.exported)
+			{
+				std::optional<std::string> imported = priv::find_imported_symbol(scope, *display.module);
+
+				if (imported)
+				{
+					json at = document.to_lsp_position(local->location.end);
+					edits = json::array({{{"range", {{"start", at}, {"end", at}}}, {"newText", ": " + *imported + "." + base + suffix}}});
+				}
+				else if (info.auto_require)
+				{
+					std::string prefix = priv::name_prefix(display.name);
+					std::string symbol = priv::is_identifier(prefix) ? prefix : owner.get_import_symbol(*display.module);
+
+					if (priv::is_identifier(symbol))
+					{
+						if (std::optional<std::string> statement = owner.get_import_statement(module.name, *display.module, symbol))
+						{
+							json import_at = {{"line", owner.get_import_line(module.name, document)}, {"character", 0}};
+							json at = document.to_lsp_position(local->location.end);
+							edits = json::array(
+								{{{"range", {{"start", import_at}, {"end", import_at}}}, {"newText", *statement + "\n"}},
+								 {{"range", {{"start", at}, {"end", at}}}, {"newText", ": " + symbol + "." + base + suffix}}});
+						}
+					}
+				}
+
+				if (edits.is_null())
+				{
+					text.invalid = true;
+				}
+			}
+			else if (!in_scope && !local_module)
+			{
+				text.invalid = true;
+			}
+		}
 	}
 
-	Luau::ToStringResult text = Luau::toStringDetailed(followed, options);
-
-	if (stdx::to_lower(text.name) == stdx::to_lower(local->name.value))
-	{
-		return;
-	}
-
-	add_type(local->location.end, text);
+	add_type(local->location.end, text, edits);
 }
 
-void hint_collector::add_type(Luau::Position position, const Luau::ToStringResult& text)
+void hint_collector::add_type(Luau::Position position, const Luau::ToStringResult& text, const json& edits)
 {
 	if (text.name.empty() || (info.hide_error_types && text.error))
 	{
@@ -319,11 +393,171 @@ void hint_collector::add_type(Luau::Position position, const Luau::ToStringResul
 
 	if (info.insertable && !text.invalid && !text.truncated && !text.error && !text.cycle)
 	{
-		json at = document.to_lsp_position(position);
-		hint["textEdits"] = {{{"range", {{"start", at}, {"end", at}}}, {"newText", ": " + text.name}}};
+		if (!edits.is_null())
+		{
+			hint["textEdits"] = edits;
+		}
+		else
+		{
+			json at = document.to_lsp_position(position);
+			hint["textEdits"] = {{{"range", {{"start", at}, {"end", at}}}, {"newText", ": " + text.name}}};
+		}
 	}
 
 	hints.push_back(hint);
+}
+
+bool is_identifier(const std::string& name)
+{
+	if (name.empty() || (!std::isalpha(static_cast<unsigned char>(name[0])) && name[0] != '_'))
+	{
+		return false;
+	}
+
+	return std::all_of(name.begin(), name.end(), [](char c) { return std::isalnum(static_cast<unsigned char>(c)) || c == '_'; });
+}
+
+bool raw_annotation_visible(const Luau::ScopePtr& scope, const std::string& text)
+{
+	if (!scope)
+	{
+		return false;
+	}
+
+	static const std::set<std::string> keywords = {
+		"any",
+		"boolean",
+		"false",
+		"function",
+		"never",
+		"nil",
+		"number",
+		"read",
+		"self",
+		"string",
+		"true",
+		"unknown",
+		"write",
+	};
+
+	size_t index = 0;
+
+	while (index < text.size())
+	{
+		char current = text[index];
+
+		if (current == '"' || current == '\'')
+		{
+			char quote = current;
+			++index;
+
+			while (index < text.size() && text[index] != quote)
+			{
+				if (text[index] == '\\')
+				{
+					++index;
+				}
+
+				++index;
+			}
+
+			++index;
+			continue;
+		}
+
+		if (!std::isalpha(static_cast<unsigned char>(current)) && current != '_')
+		{
+			++index;
+			continue;
+		}
+
+		size_t start = index;
+
+		while (index < text.size() && (std::isalnum(static_cast<unsigned char>(text[index])) || text[index] == '_' || text[index] == '.'))
+		{
+			++index;
+		}
+
+		std::string token = text.substr(start, index - start);
+		std::vector<std::string> parts = stdx::split(token, '.');
+
+		if (parts.empty() || keywords.count(parts.front()) != 0)
+		{
+			continue;
+		}
+
+		if (parts.size() == 1)
+		{
+			if (!scope->lookupType(parts.front()))
+			{
+				return false;
+			}
+		}
+		else if (!scope->lookupImportedType(parts.front(), parts[1]))
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
+bool is_qualified_name(const std::string& name)
+{
+	if (name.empty())
+	{
+		return false;
+	}
+
+	size_t start = 0;
+
+	while (start <= name.size())
+	{
+		size_t dot = name.find('.', start);
+		std::string part = dot == std::string::npos ? name.substr(start) : name.substr(start, dot - start);
+
+		if (!is_identifier(part))
+		{
+			return false;
+		}
+
+		if (dot == std::string::npos)
+		{
+			break;
+		}
+
+		start = dot + 1;
+	}
+
+	return true;
+}
+
+std::string last_name_part(const std::string& name)
+{
+	size_t dot = name.rfind('.');
+	return dot == std::string::npos ? name : name.substr(dot + 1);
+}
+
+std::string name_prefix(const std::string& name)
+{
+	size_t dot = name.rfind('.');
+	return dot == std::string::npos ? std::string() : name.substr(0, dot);
+}
+
+std::optional<std::string> find_imported_symbol(const Luau::ScopePtr& scope, const Luau::ModuleName& module)
+{
+	for (Luau::Scope* current = scope.get(); current != nullptr; current = current->parent.get())
+	{
+		for (const auto& [symbol, target] : current->importedModules)
+		{
+			if (target == module)
+			{
+				return symbol;
+			}
+		}
+	}
+
+	return std::nullopt;
 }
 
 bool hint_collector::is_visible(Luau::Position position) const
