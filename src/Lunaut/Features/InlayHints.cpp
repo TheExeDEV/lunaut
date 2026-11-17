@@ -391,7 +391,11 @@ void hint_collector::add_type(Luau::Position position, const Luau::ToStringResul
 		{"kind", kind_type},
 	};
 
-	if (info.insertable && !text.invalid && !text.truncated && !text.error && !text.cycle)
+	// Negation is only valid when it is produced by a declared type function. A raw
+	// `A & ~B` in an annotation is not valid Luau, so never offer it as an edit.
+	const bool negated = text.name.find('~') != std::string::npos;
+
+	if (info.insertable && !text.invalid && !text.truncated && !text.error && !text.cycle && !negated)
 	{
 		if (!edits.is_null())
 		{

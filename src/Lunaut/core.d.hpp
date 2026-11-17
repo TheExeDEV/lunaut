@@ -5,6 +5,8 @@
 #include <iosfwd>
 #include <map>
 #include <memory>
+#include <chrono>
+#include <atomic>
 #include <condition_variable>
 #include <deque>
 #include <mutex>
@@ -291,6 +293,7 @@ struct diagnosticsinfo
 	bool lint = true;
 	bool include_dependents = true;
 	bool workspace = false;
+	int delay = 1000;
 };
 
 struct analyzerinfo
@@ -702,6 +705,7 @@ public:
 
 	void set_sourcemap(const sourcemap* map);
 	void set_base_config(const std::filesystem::path& path);
+	void set_show_as_modules(std::set<std::string> modules);
 	void clear_config_cache();
 
 	std::optional<std::filesystem::path> get_require_target(const std::string& requirer, const std::string& required) const;
@@ -715,6 +719,7 @@ private:
 
 	std::filesystem::path root;
 	std::unordered_map<std::string, textdocument> documents;
+	std::set<std::string> show_as_modules;
 	const sourcemap* map = nullptr;
 	mutable std::unordered_map<std::string, std::unique_ptr<Luau::Config>> configs;
 	Luau::Config default_config;
@@ -779,6 +784,8 @@ public:
 	json get_diagnostics(const std::string& address);
 	void publish_diagnostics(const std::string& address);
 	void flush_diagnostics();
+	std::optional<std::chrono::steady_clock::time_point> diagnostics_deadline() const;
+	bool has_pending_diagnostics() const;
 	json get_hover(const json& params);
 	json get_completion(const json& params);
 	json get_definition(const json& params);
@@ -898,6 +905,8 @@ private:
 	analyzerplugin analyzer;
 	bool analyzer_reported = false;
 	std::set<std::string> pending;
+	std::chrono::steady_clock::time_point last_change;
+	bool change_pending = false;
 	json plugin_tree = nullptr;
 	bool ready = false;
 	bool roblox = false;
@@ -963,7 +972,7 @@ public:
 private:
 	void process_message(const json& message);
 	void read_messages();
-	std::optional<json> take_message();
+	std::optional<json> take_message(std::optional<std::chrono::steady_clock::time_point> deadline = std::nullopt);
 	void add_workspace(const std::string& address);
 	void register_watchers();
 	workspace& get_workspace(const std::string& address);
@@ -983,7 +992,7 @@ private:
 	std::mutex queue_lock;
 	std::condition_variable queue_ready;
 	std::set<std::string> cancelled;
-	bool input_closed = false;
+	std::atomic<bool> input_closed = false;
 };
 
 class console final : public client

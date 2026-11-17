@@ -10,11 +10,14 @@ type net_event = {
 
 type status = "safe" | "unsafe"
 
+export type logger = (level: string, ...any) -> (...any)
+
 export type service = {
 	whose: (self: service) -> scheduler?,
 	get_event: (self: service, name: string) -> net_event,
 	get_status: (self: service) -> status?,
 	get_entries: (self: service) -> { net_event },
+	get_logger: (self: service) -> logger,
 	as: <T>(self: service, value: any) -> T,
 }
 
@@ -34,6 +37,9 @@ local service: service = {
 	end,
 	get_entries = function(self: service): { net_event }
 		return {}
+	end,
+	get_logger = function(self: service): logger
+		return nil :: any
 	end,
 	as = function<T>(self: service, value: any): T
 		return value

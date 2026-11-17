@@ -1,9 +1,9 @@
 # Test report
 
-- Date: 2026-11-18 00:31:20
+- Date: 2026-11-18 01:16:28
 - Binary: `/home/ifmnb/Git/lunaut/build/lunaut`
 - Version: `lunaut 0.0.4 (Luau 0.747, GNU 16.2.1)`
-- Result: **148/148 passed** in 1.4s
+- Result: **156/156 passed** in 12.5s
 
 | Test | Status | Time |
 | --- | --- | --- |
@@ -21,6 +21,7 @@
 | `test_definitions.DefinitionTests.test_wrong_priority_fails` | PASS | 0.01s |
 | `test_extended.AliasRecoveryTests.test_anonymous_table_return_annotation` | PASS | 0.00s |
 | `test_extended.AliasRecoveryTests.test_anonymous_table_type_argument` | PASS | 0.00s |
+| `test_extended.AliasRecoveryTests.test_expanded_vararg_type_has_no_double_ellipsis` | PASS | 0.00s |
 | `test_extended.AliasRecoveryTests.test_inlay_hints_insert_visible_raw_annotations` | PASS | 0.00s |
 | `test_extended.AliasRecoveryTests.test_inlay_hints_preserve_optional_and_local_aliases` | PASS | 0.00s |
 | `test_extended.AliasRecoveryTests.test_inlay_hints_skip_private_aliases` | PASS | 0.00s |
@@ -29,13 +30,16 @@
 | `test_extended.AliasRecoveryTests.test_local_alias_from_return_annotation` | PASS | 0.00s |
 | `test_extended.AliasRecoveryTests.test_optional_return_preserves_alias` | PASS | 0.00s |
 | `test_extended.AliasRecoveryTests.test_optional_union_return_preserves_alias` | PASS | 0.00s |
+| `test_extended.AliasRecoveryTests.test_vararg_return_preserves_alias` | PASS | 0.00s |
 | `test_extended.AnalyzerTests.test_analyzer_diagnostics_are_merged` | PASS | 0.03s |
 | `test_extended.AnalyzerTests.test_compatible_analyzer_is_loaded` | PASS | 0.03s |
-| `test_extended.AnalyzerTests.test_incompatible_abi_is_reported` | PASS | 0.04s |
+| `test_extended.AnalyzerTests.test_incompatible_abi_is_reported` | PASS | 0.03s |
 | `test_extended.AnalyzerTests.test_pre_0743_analyzer_is_supported` | PASS | 0.03s |
 | `test_extended.AnalyzerTests.test_version_and_api_mismatch_is_reported` | PASS | 0.03s |
 | `test_extended.AutoRequireTests.test_auto_require_inserts_import_and_annotation` | PASS | 0.07s |
 | `test_extended.AutoRequireTests.test_disabled_auto_require_does_not_offer_edits` | PASS | 0.07s |
+| `test_extended.DiagnosticsDelayTests.test_delay_setting_round_trip` | PASS | 0.02s |
+| `test_extended.DiagnosticsDelayTests.test_zero_delay_publishes_without_waiting` | PASS | 0.01s |
 | `test_extended.DocumentationTests.test_completion_shows_field_and_function_comments` | PASS | 0.00s |
 | `test_extended.DocumentationTests.test_completion_shows_function_comment` | PASS | 0.00s |
 | `test_extended.DocumentationTests.test_field_comment_from_definition_file` | PASS | 0.00s |
@@ -49,8 +53,9 @@
 | `test_extended.DocumentationTests.test_type_alias_name_stays_at_declaration` | PASS | 0.00s |
 | `test_extended.GenericAliasLoopTests.test_inlay_hints_preserve_generic_alias_on_loop_variable` | PASS | 0.00s |
 | `test_extended.GenericAliasLoopTests.test_loop_variable_preserves_generic_alias` | PASS | 0.00s |
-| `test_extended.ProtectionTests.test_broken_edit_does_not_crash` | PASS | 0.01s |
-| `test_extended.ProtectionTests.test_malformed_request_does_not_crash` | PASS | 0.01s |
+| `test_extended.NegatedInlayTests.test_negated_type_is_not_insertable` | PASS | 0.01s |
+| `test_extended.ProtectionTests.test_broken_edit_does_not_crash` | PASS | 2.01s |
+| `test_extended.ProtectionTests.test_malformed_request_does_not_crash` | PASS | 0.02s |
 | `test_extended.RequireAliasTests.test_function_return_preserves_annotated_alias` | PASS | 0.00s |
 | `test_extended.RequireAliasTests.test_inlay_hints_preserve_defaulted_generic_alias` | PASS | 0.00s |
 | `test_extended.RequireAliasTests.test_inlay_hints_preserve_intersection_alias` | PASS | 0.00s |
@@ -62,14 +67,17 @@
 | `test_extended.RequireAliasTests.test_require_preserves_recursive_alias` | PASS | 0.00s |
 | `test_extended.RequireAliasTests.test_type_definition_of_function_result` | PASS | 0.00s |
 | `test_extended.RequireAliasTests.test_type_definition_of_required_alias` | PASS | 0.00s |
+| `test_extended.ReservedWordHoverTests.test_reserved_words_have_no_hover` | PASS | 0.01s |
 | `test_extended.ShowAsModuleTests.test_definition_alias_uses_module_qualifier` | PASS | 0.01s |
 | `test_extended.ShowAsModuleTests.test_definition_alias_without_option_stays_unqualified` | PASS | 0.01s |
+| `test_extended.ShowAsModuleTests.test_module_qualified_annotation_typechecks` | PASS | 0.01s |
 | `test_extended.TypeDisplaySettingsTests.test_disabled_aliases_fall_back_to_module_names` | PASS | 0.07s |
 | `test_extended.TypeDisplaySettingsTests.test_disabled_refine_keeps_or_union` | PASS | 0.07s |
 | `test_extended.TypeDisplaySettingsTests.test_enabled_refine_drops_empty_or_branch` | PASS | 0.07s |
 | `test_extended.TypeStatsTests.test_stats_cli_json` | PASS | 0.01s |
 | `test_extended.TypeStatsTests.test_stats_cli_text` | PASS | 0.01s |
 | `test_extended.TypeStatsTests.test_type_stats_request` | PASS | 0.01s |
+| `test_extended.UnionAliasTests.test_union_of_alias_representations_keeps_alias` | PASS | 0.01s |
 | `test_features.FeatureTests.test_auto_import_keyword` | PASS | 0.01s |
 | `test_features.FeatureTests.test_auto_import_modules` | PASS | 0.00s |
 | `test_features.FeatureTests.test_code_action_adds_require` | PASS | 0.00s |
@@ -105,7 +113,7 @@
 | `test_lsp.LspTests.test_definition_local` | PASS | 0.00s |
 | `test_lsp.LspTests.test_definition_require` | PASS | 0.00s |
 | `test_lsp.LspTests.test_diagnostics` | PASS | 0.00s |
-| `test_lsp.LspTests.test_diagnostics_update_on_change` | PASS | 0.00s |
+| `test_lsp.LspTests.test_diagnostics_update_on_change` | PASS | 2.00s |
 | `test_lsp.LspTests.test_document_symbols` | PASS | 0.00s |
 | `test_lsp.LspTests.test_hover_function` | PASS | 0.00s |
 | `test_lsp.LspTests.test_hover_local` | PASS | 0.00s |
@@ -124,7 +132,7 @@
 | `test_navigation.NavigationTests.test_sort_imports_and_annotation` | PASS | 0.00s |
 | `test_navigation.NavigationTests.test_workspace_symbols` | PASS | 0.00s |
 | `test_navigation.RojoNavigationTests.test_string_require_action` | PASS | 0.08s |
-| `test_navigation.RojoNavigationTests.test_studio_plugin_tree` | PASS | 0.08s |
+| `test_navigation.RojoNavigationTests.test_studio_plugin_tree` | PASS | 3.08s |
 | `test_navigation.WorkspaceDiagnosticsTests.test_unopened_files_get_diagnostics` | PASS | 0.01s |
 | `test_references.NewSolverReferenceTests.test_local_references` | PASS | 0.00s |
 | `test_references.NewSolverReferenceTests.test_prepare_rename` | PASS | 0.00s |
@@ -144,13 +152,13 @@
 | `test_references.ReferenceTests.test_rename_module_function` | PASS | 0.00s |
 | `test_references.ReferenceTests.test_rename_rejects_bad_names` | PASS | 0.00s |
 | `test_references.ReferenceTests.test_rename_table_key` | PASS | 0.00s |
-| `test_rojo.RojoTests.test_completion_from_sourcemap_children` | PASS | 0.00s |
+| `test_rojo.RojoTests.test_completion_from_sourcemap_children` | PASS | 2.00s |
 | `test_rojo.RojoTests.test_definition_into_sourcemap_module` | PASS | 0.00s |
 | `test_rojo.RojoTests.test_definitions_loaded` | PASS | 0.00s |
 | `test_rojo.RojoTests.test_hover_on_required_module` | PASS | 0.00s |
 | `test_rojo.RojoTests.test_instance_requires_resolve` | PASS | 0.00s |
 | `test_rojo.RojoTests.test_references_through_sourcemap` | PASS | 0.00s |
-| `test_rojo.RojoTests.test_required_types_flow` | PASS | 0.00s |
+| `test_rojo.RojoTests.test_required_types_flow` | PASS | 2.00s |
 | `test_rojo.RojoTests.test_roblox_magic_functions` | PASS | 0.00s |
 | `test_rojo.RojoTests.test_roblox_magic_new_solver` | PASS | 0.07s |
 | `test_rojo.RojoTests.test_script_instance_type` | PASS | 0.00s |

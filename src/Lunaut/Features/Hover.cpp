@@ -6,6 +6,7 @@
 #include "core.d.hpp"
 
 #include "Luau/AstQuery.h"
+#include "Luau/Lexer.h"
 #include "Luau/PrettyPrinter.h"
 #include "Luau/Scope.h"
 #include "Luau/ToString.h"
@@ -62,6 +63,7 @@ bool contains_generic_reference(const Luau::ScopePtr& scope, const Luau::AstType
 std::optional<Luau::ModuleName> get_definition_module(Luau::TypeId type);
 std::optional<Luau::ModuleName> find_imported_module(const Luau::ScopePtr& scope, const std::string& alias);
 std::optional<size_t> get_utf8_length(std::string_view text);
+bool is_reserved_word_at(std::string_view text, const Luau::Position& position);
 
 }
 }
@@ -77,6 +79,12 @@ json workspace::get_hover(const json& params)
 	}
 
 	Luau::Position position = document->to_luau_position(params["position"]);
+
+	if (priv::is_reserved_word_at(document->get_text(), position))
+	{
+		return nullptr;
+	}
+
 	Luau::ModuleName name = resolver.get_module_name(address);
 	check_module(name, true);
 
@@ -1156,14 +1164,50 @@ std::optional<Luau::TypeFun> workspace::find_type_alias(
 		}
 	};
 
-	for (const auto& [source_name, source_node] : frontend.sourceNodes)
+	std::set<Luau::ModuleName> scanned;
+
+	auto scan_module = [&](const Luau::ModuleName& candidate_module)
 	{
-		scan(source_name, frontend.moduleResolver.getModule(source_name));
+		if (!scanned.insert(candidate_module).second)
+		{
+			return;
+		}
+
+		auto source = frontend.sourceNodes.find(candidate_module);
+
+		if (source != frontend.sourceNodes.end())
+		{
+			// Dirty modules can still expose type IDs from a module graph that is about to
+			// be replaced. Following those IDs is what used to crash the server.
+			if (!source->second->hasDirtyModule(false))
+			{
+				scan(candidate_module, frontend.moduleResolver.getModule(candidate_module));
+			}
+
+			return;
+		}
+
+		auto definition = definition_modules.find(candidate_module);
+
+		if (definition != definition_modules.end())
+		{
+			scan(candidate_module, definition->second);
+		}
+	};
+
+	for (const Luau::ModuleName& origin : origins)
+	{
+		scan_module(origin);
+	}
+
+	if (preferred)
+	{
+		scan_module(*preferred);
 	}
 
 	for (const auto& [definition_name, definition_module] : definition_modules)
 	{
-		scan(definition_name, definition_module);
+		scan_module(definition_name);
 	}
 
 	if (candidates.empty())
@@ -1439,9 +1483,22 @@ std::optional<Luau::TypeFun> workspace::find_return_alias(Luau::TypeId type, std
 	};
 
 	std::vector<candidate> candidates;
+	std::set<Luau::ModuleName> module_names = origins;
 
-	for (const auto& [module_name, source_node] : frontend.sourceNodes)
+	if (preferred)
 	{
+		module_names.insert(*preferred);
+	}
+
+	for (const Luau::ModuleName& module_name : module_names)
+	{
+		auto node = frontend.sourceNodes.find(module_name);
+
+		if (node == frontend.sourceNodes.end() || node->second->hasDirtyModule(false))
+		{
+			continue;
+		}
+
 		const Luau::SourceModule* source = frontend.getSourceModule(module_name);
 		Luau::ModulePtr module = frontend.moduleResolver.getModule(module_name);
 
@@ -1749,12 +1806,32 @@ std::string workspace::format_alias_display(const Luau::ModuleName& module, cons
 		return name;
 	}
 
-	if (!name.empty() && name.back() == '?')
+	std::string qualifier = module;
+	size_t at = qualifier.find('@');
+
+	if (at != std::string::npos)
 	{
-		return module + "." + name.substr(0, name.size() - 1) + "?";
+		qualifier.erase(at, 1);
 	}
 
-	return module + "." + name;
+	if (!name.empty() && name.back() == '?')
+	{
+		std::string base = name.substr(0, name.size() - 1);
+
+		if (base.find('.') != std::string::npos)
+		{
+			return name;
+		}
+
+		return qualifier + "." + base + "?";
+	}
+
+	if (name.find('.') != std::string::npos)
+	{
+		return name;
+	}
+
+	return qualifier + "." + name;
 }
 
 std::string
@@ -2209,7 +2286,7 @@ workspace::render_type_display(Luau::TypeId type, const Luau::ModuleName& module
 					result += ", ";
 				}
 
-				result += "..." + fallback_pack(*tail);
+				result += fallback_pack(*tail);
 			}
 
 			result += ") -> ";
@@ -2245,7 +2322,7 @@ workspace::render_type_display(Luau::TypeId type, const Luau::ModuleName& module
 						result += ", ";
 					}
 
-					result += "..." + fallback_pack(*return_tail);
+					result += fallback_pack(*return_tail);
 				}
 
 				result += ")";
@@ -2579,6 +2656,7 @@ struct type_equality
 	bool equals_function(const Luau::FunctionType& left, const Luau::FunctionType& right);
 	bool equals_property(const Luau::Property& left, const Luau::Property& right);
 	bool equals_unordered(const std::vector<Luau::TypeId>& left, const std::vector<Luau::TypeId>& right);
+	bool merge_table(Luau::TypeId type, Luau::TableType& out, std::set<Luau::TypeId>& active);
 	bool compare(Luau::TypeId left, Luau::TypeId right);
 };
 
@@ -2698,6 +2776,82 @@ bool type_equality::equals_property(const Luau::Property& left, const Luau::Prop
 	return true;
 }
 
+bool type_equality::merge_table(Luau::TypeId type, Luau::TableType& out, std::set<Luau::TypeId>& active)
+{
+	type = Luau::follow(type);
+
+	if (const Luau::TableType* table = Luau::get<Luau::TableType>(type))
+	{
+		for (const auto& [name, property] : table->props)
+		{
+			auto [entry, inserted] = out.props.emplace(name, property);
+
+			if (!inserted)
+			{
+				Luau::Property& target = entry->second;
+
+				if (bool(target.readTy) != bool(property.readTy) || bool(target.writeTy) != bool(property.writeTy))
+				{
+					return false;
+				}
+
+				if (target.readTy && property.readTy && !equals(*target.readTy, *property.readTy))
+				{
+					return false;
+				}
+
+				if (target.writeTy && property.writeTy && !equals(*target.writeTy, *property.writeTy))
+				{
+					return false;
+				}
+			}
+		}
+
+		if (table->indexer)
+		{
+			if (!out.indexer)
+			{
+				out.indexer = table->indexer;
+			}
+			else if (
+				out.indexer->isReadOnly != table->indexer->isReadOnly || !equals(out.indexer->indexType, table->indexer->indexType) ||
+				!equals(out.indexer->indexResultType, table->indexer->indexResultType))
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	if (const Luau::IntersectionType* intersection = Luau::get<Luau::IntersectionType>(type))
+	{
+		if (!active.insert(type).second)
+		{
+			return true;
+		}
+
+		for (Luau::TypeId part : intersection->parts)
+		{
+			if (!merge_table(part, out, active))
+			{
+				active.erase(type);
+				return false;
+			}
+		}
+
+		active.erase(type);
+		return true;
+	}
+
+	if (const Luau::MetatableType* metatable = Luau::get<Luau::MetatableType>(type))
+	{
+		return merge_table(metatable->table, out, active);
+	}
+
+	return false;
+}
+
 bool type_equality::equals_table(const Luau::TableType& left, const Luau::TableType& right)
 {
 	if (left.name && right.name && *left.name != *right.name)
@@ -2794,7 +2948,32 @@ bool type_equality::compare(Luau::TypeId left, Luau::TypeId right)
 	{
 		if (Luau::get<Luau::IntersectionType>(right) == nullptr)
 		{
+			// A union frequently carries one member as an alias and another as the
+			// same type with its table intersections flattened into a single table.
+			// Treat an intersection of tables as the table it describes.
+			if (const Luau::TableType* right_table = Luau::get<Luau::TableType>(right))
+			{
+				Luau::TableType merged;
+				std::set<Luau::TypeId> active;
+
+				if (merge_table(left, merged, active) && equals_table(merged, *right_table))
+				{
+					return true;
+				}
+			}
+
 			return false;
+		}
+
+		Luau::TableType left_merged;
+		Luau::TableType right_merged;
+		std::set<Luau::TypeId> left_active;
+		std::set<Luau::TypeId> right_active;
+
+		if (merge_table(left, left_merged, left_active) && merge_table(right, right_merged, right_active) &&
+			equals_table(left_merged, right_merged))
+		{
+			return true;
 		}
 
 		std::vector<Luau::TypeId> left_parts;
@@ -2802,6 +2981,22 @@ bool type_equality::compare(Luau::TypeId left, Luau::TypeId right)
 		flatten_intersection(left, left_parts);
 		flatten_intersection(right, right_parts);
 		return equals_unordered(left_parts, right_parts);
+	}
+
+	if (Luau::get<Luau::IntersectionType>(right) != nullptr)
+	{
+		if (const Luau::TableType* left_table = Luau::get<Luau::TableType>(left))
+		{
+			Luau::TableType merged;
+			std::set<Luau::TypeId> active;
+
+			if (merge_table(right, merged, active) && equals_table(merged, *left_table))
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	if (const Luau::UnionType* left_union = Luau::get<Luau::UnionType>(left))
@@ -3068,13 +3263,22 @@ bool may_be_same_type(Luau::TypeId left, Luau::TypeId right)
 		return true;
 	}
 
-	if (Luau::get<Luau::IntersectionType>(left) != nullptr || Luau::get<Luau::IntersectionType>(right) != nullptr)
+	const Luau::IntersectionType* left_intersection = Luau::get<Luau::IntersectionType>(left);
+	const Luau::IntersectionType* right_intersection = Luau::get<Luau::IntersectionType>(right);
+
+	if (left_intersection != nullptr || right_intersection != nullptr)
 	{
-		std::vector<Luau::TypeId> left_parts;
-		std::vector<Luau::TypeId> right_parts;
-		priv::flatten_intersection(left, left_parts);
-		priv::flatten_intersection(right, right_parts);
-		return left_parts.size() == right_parts.size();
+		if (left_intersection != nullptr && right_intersection != nullptr)
+		{
+			// `A & B` and `C & D` can name the same table when the intersections are
+			// split differently (a nameable part + inline fields vs one inline table).
+			// Let the structural comparison decide instead of requiring identical parts.
+			return true;
+		}
+
+		// An intersection of tables has the same shape as one merged table; let the
+		// structural comparison below decide instead of rejecting it by part count.
+		return Luau::get<Luau::TableType>(left_intersection != nullptr ? right : left) != nullptr;
 	}
 
 	shallow_kind left_kind = get_shallow_kind(left);
@@ -3868,6 +4072,43 @@ std::optional<Luau::ModuleName> find_imported_module(const Luau::ScopePtr& scope
 	}
 
 	return std::nullopt;
+}
+
+bool is_reserved_word_at(std::string_view text, const Luau::Position& position)
+{
+	Luau::Allocator allocator;
+	Luau::AstNameTable names(allocator);
+	Luau::Lexer lexer(text.data(), text.size(), names);
+	lexer.setSkipComments(true);
+
+	while (true)
+	{
+		const Luau::Lexeme& token = lexer.next();
+
+		if (token.type == Luau::Lexeme::Eof || token.location.begin > position)
+		{
+			return false;
+		}
+
+		if (!token.location.contains(position))
+		{
+			continue;
+		}
+
+		if (token.type >= Luau::Lexeme::Reserved_BEGIN && token.type < Luau::Lexeme::Reserved_END)
+		{
+			return true;
+		}
+
+		if (token.type == Luau::Lexeme::Name)
+		{
+			// `const` and `continue` are contextual Luau keywords and are lexed as names.
+			std::string_view name = token.name != nullptr ? std::string_view(token.name) : std::string_view();
+			return name == "const" || name == "continue";
+		}
+
+		return false;
+	}
 }
 
 std::optional<size_t> get_utf8_length(std::string_view text)

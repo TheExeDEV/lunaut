@@ -17,7 +17,8 @@
 - `lunaut.completion.importKeyword`: insert auto-imports with `local` or `const`
 - `lunaut.typeDisplay.aliases` and `lunaut.typeDisplay.refine`: turn off alias names or display simplification to get the analyzer's raw expanded types
 - `lunaut.inlayHints.autoRequire`: when an insertable hint refers to a type from another module, insert the missing `require` together with the `Module.type` annotation
-- `"show_as_module": true` on a `lunaut.definitions` entry: display its types as if they came from a required module, for example `@core.pointer`
+- `lunaut.diagnostics.delay`: wait this many milliseconds after the last change before checking and publishing diagnostics, `1000` by default
+- `"show_as_module": true` on a `lunaut.definitions` entry: display its types as if they came from a required module, for example `core.pointer`; the former `@core.pointer` spelling is still accepted in annotations
 
 ### Fixed
 
@@ -34,6 +35,12 @@
 - Insertable inlay hints write visible raw table annotations (`{ iteminstance }`, `{ [string]: Service.scheduler }`) verbatim and skip aliases that are private to another module
 - Definition files are stored with absolute paths, so hover links resolve for files opened outside the workspace root
 - Reading input no longer flushes standard output concurrently with JSON-RPC writes, which corrupted frames and hung shutdown
+- A union of the same alias represented as an intersection and as its merged table (for example `enumitem_shared_net_variant` from `variant or SharedNetVariant.Safe`) keeps the alias name instead of `alias | { ... }`
+- Function types containing a variadic tail no longer render a doubled ellipsis such as `(......any)`
+- Hovering a reserved word such as `local`, `const`, `if`, `return` or `end` shows nothing instead of a type
+- Inlay hints with a negated type are not offered as an insertable annotation, because `~` is not valid annotation syntax
+- `show_as_module` annotations accept `Module.Type` and `@Module.Type`, and resolve to the same type as the bare global name
+- Changes are debounced and changed modules are checked in one queued batch on up to eight threads, so an edit no longer rechecks the whole module synchronously for every keystroke
 
 ## [0.0.4] - 2026-11-16
 

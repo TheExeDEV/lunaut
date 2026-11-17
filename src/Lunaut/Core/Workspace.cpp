@@ -9,6 +9,9 @@
 #include "Luau/Common.h"
 #include "Luau/TypeArena.h"
 
+#include <atomic>
+#include <exception>
+
 LUAU_FASTFLAG(LuauSolverV2)
 
 namespace lunaut
@@ -21,6 +24,7 @@ namespace priv
 Luau::FrontendOptions make_options(bool for_autocomplete, bool lint);
 std::filesystem::path get_base_luaurc(const std::filesystem::path& root, const settingsinfo& settings);
 json make_definition_diagnostics(const textdocument& document, const Luau::LoadDefinitionFileResult& loaded, Luau::FileResolver* resolver);
+void run_parallel_tasks(std::vector<std::function<void()>> tasks);
 
 }
 }
@@ -163,6 +167,8 @@ void workspace::update_document(const std::string& address, const json& changes,
 	frontend.markDirty(name, &dirty);
 
 	pending.insert(address);
+	last_change = std::chrono::steady_clock::now();
+	change_pending = true;
 
 	if (!settings.diagnostics.include_dependents && !settings.diagnostics.workspace)
 	{
@@ -186,6 +192,44 @@ void workspace::flush_diagnostics()
 {
 	std::set<std::string> current;
 	current.swap(pending);
+	change_pending = false;
+
+	std::vector<Luau::ModuleName> modules;
+	std::set<Luau::ModuleName> queued;
+
+	for (const std::string& address : current)
+	{
+		std::string path = uri::to_path(address);
+
+		if (is_definition_file(path) || is_ignored(path) || (!settings.analyze_lua_files && stdx::ends_with(path, ".lua")))
+		{
+			continue;
+		}
+
+		Luau::ModuleName name = resolver.get_module_name(address);
+
+		if (queued.insert(name).second)
+		{
+			modules.push_back(name);
+		}
+	}
+
+	if (!modules.empty())
+	{
+		try
+		{
+			frontend.queueModuleCheck(modules);
+			frontend.checkQueuedModules(priv::make_options(false, settings.diagnostics.lint), priv::run_parallel_tasks);
+		}
+		catch (const std::exception& error)
+		{
+			owner.send_log(enumitem_message_type::Error, "typechecking changed modules failed: " + std::string(error.what()));
+		}
+		catch (...)
+		{
+			owner.send_log(enumitem_message_type::Error, "typechecking changed modules failed");
+		}
+	}
 
 	for (const std::string& address : current)
 	{
@@ -202,6 +246,21 @@ void workspace::flush_diagnostics()
 			owner.send_log(enumitem_message_type::Error, "diagnostics for " + address + " failed");
 		}
 	}
+}
+
+std::optional<std::chrono::steady_clock::time_point> workspace::diagnostics_deadline() const
+{
+	if (!change_pending || pending.empty())
+	{
+		return std::nullopt;
+	}
+
+	return last_change + std::chrono::milliseconds(std::max(0, settings.diagnostics.delay));
+}
+
+bool workspace::has_pending_diagnostics() const
+{
+	return !pending.empty();
 }
 
 void workspace::apply_plugin_tree(const json& tree)
@@ -584,6 +643,64 @@ void workspace::load_definitions()
 		definitions.push_back(loaded);
 	}
 
+	// `show_as_module` makes definitions display (and accept) `module.Type`. Luau
+	// definitions normally export types into the global scope under their bare name;
+	// register an imported-type namespace as well so the displayed spelling also
+	// typechecks in annotations. Package names are stored with a leading `@`, which
+	// is not valid in a type annotation, so expose the qualifier without it.
+	std::set<std::string> show_as_modules;
+
+	for (const auto& [name, module] : definition_modules)
+	{
+		if (!module || definition_show_as_module.count(name) == 0)
+		{
+			continue;
+		}
+
+		std::string alias = name;
+		size_t start = alias.find('@');
+
+		if (start != std::string::npos)
+		{
+			alias.erase(start, 1);
+		}
+
+		if (alias.empty())
+		{
+			continue;
+		}
+
+		// `loadDefinitionFile` exports a copy into the module, while the global scope holds
+		// the type IDs that global bindings (for example `garage: { Car }`) actually use.
+		// Import the global entry so `extra.Car` and `Car` are the same type even in strict
+		// mode, which compares them nominally.
+		auto import_bindings = [](const Luau::ScopePtr& global_scope, const std::unordered_map<Luau::Name, Luau::TypeFun>& exported)
+		{
+			std::unordered_map<Luau::Name, Luau::TypeFun> bindings;
+
+			for (const auto& [name, definition] : exported)
+			{
+				auto known = global_scope->exportedTypeBindings.find(name);
+				bindings.emplace(name, known != global_scope->exportedTypeBindings.end() ? known->second : definition);
+			}
+
+			return bindings;
+		};
+
+		frontend.globals.globalScope->importedTypeBindings[alias] =
+			import_bindings(frontend.globals.globalScope, module->exportedTypeBindings);
+
+		if (!FFlag::LuauSolverV2)
+		{
+			frontend.globalsForAutocomplete.globalScope->importedTypeBindings[alias] =
+				import_bindings(frontend.globalsForAutocomplete.globalScope, module->exportedTypeBindings);
+		}
+
+		show_as_modules.insert(std::move(alias));
+	}
+
+	resolver.set_show_as_modules(std::move(show_as_modules));
+
 	roblox_metadata = metadata;
 
 	if (!roblox)
@@ -760,6 +877,69 @@ json make_definition_diagnostics(const textdocument& document, const Luau::LoadD
 	}
 
 	return diagnostics;
+}
+
+void run_parallel_tasks(std::vector<std::function<void()>> tasks)
+{
+	if (tasks.empty())
+	{
+		return;
+	}
+
+	if (tasks.size() == 1)
+	{
+		tasks.front()();
+		return;
+	}
+
+	size_t hardware = std::max(1u, std::thread::hardware_concurrency());
+	size_t workers = std::min({tasks.size(), hardware, static_cast<size_t>(8)});
+	std::atomic<size_t> next{0};
+	std::exception_ptr failure;
+	std::mutex failure_lock;
+	std::vector<std::thread> threads;
+	threads.reserve(workers);
+
+	for (size_t index = 0; index < workers; ++index)
+	{
+		threads.emplace_back(
+			[&]()
+			{
+				while (true)
+				{
+					size_t task = next.fetch_add(1, std::memory_order_relaxed);
+
+					if (task >= tasks.size())
+					{
+						return;
+					}
+
+					try
+					{
+						tasks[task]();
+					}
+					catch (...)
+					{
+						std::lock_guard<std::mutex> guard(failure_lock);
+
+						if (!failure)
+						{
+							failure = std::current_exception();
+						}
+					}
+				}
+			});
+	}
+
+	for (std::thread& thread : threads)
+	{
+		thread.join();
+	}
+
+	if (failure)
+	{
+		std::rethrow_exception(failure);
+	}
 }
 
 }

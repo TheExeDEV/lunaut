@@ -8,5 +8,10 @@ local status = Service:get_status()
 local casted = Service:as<<Service.scheduler>>(nil)
 local entries = Service:get_entries()
 local watched = Service:as<<{ [string]: Service.scheduler }>>(nil)
+local logger = Service:get_logger()
 
-print(scheduler, event, status, casted, entries, watched)
+local function log(level: string, ...any): (...any)
+	return ...
+end
+
+print(scheduler, event, status, casted, entries, watched, logger, log)

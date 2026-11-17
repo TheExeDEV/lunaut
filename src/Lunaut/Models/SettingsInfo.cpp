@@ -35,6 +35,7 @@ const std::unordered_map<std::string_view, std::string_view> relevant_vscode_key
 	{"lunaut.rojo.executable", "/rojo/executable"},
 	{"lunaut.diagnostics.lint", "/diagnostics/lint"},
 	{"lunaut.diagnostics.includeDependents", "/diagnostics/include_dependents"},
+	{"lunaut.diagnostics.delay", "/diagnostics/delay"},
 	{"lunaut.ignoreGlobs", "/ignore_globs"},
 	{"lunaut.analyzeLuaFiles", "/analyze_lua_files"},
 	{"lunaut.baseLuaurc", "/base_luaurc"},
@@ -178,6 +179,7 @@ settingsinfo settingsinfo::from_json(const json& data, const settingsinfo& base)
 		priv::read(diagnostics, "lint", info.diagnostics.lint);
 		priv::read(diagnostics, "include_dependents", info.diagnostics.include_dependents);
 		priv::read(diagnostics, "workspace", info.diagnostics.workspace);
+		priv::read(diagnostics, "delay", info.diagnostics.delay);
 	}
 
 	if (data.contains("analyzer") && data["analyzer"].is_object())
@@ -369,7 +371,10 @@ json settingsinfo::to_json() const
 		  {"strict_datamodel_types", rojo.strict_datamodel_types},
 		  {"executable", rojo.executable}}},
 		{"diagnostics",
-		 {{"lint", diagnostics.lint}, {"include_dependents", diagnostics.include_dependents}, {"workspace", diagnostics.workspace}}},
+		 {{"lint", diagnostics.lint},
+		  {"include_dependents", diagnostics.include_dependents},
+		  {"workspace", diagnostics.workspace},
+		  {"delay", diagnostics.delay}}},
 		{"analyzer", {{"enabled", analyzer.enabled}, {"diagnostics", analyzer.diagnostics}, {"path", analyzer.path}}},
 		{"ignore_globs", ignore_globs},
 		{"analyze_lua_files", analyze_lua_files},

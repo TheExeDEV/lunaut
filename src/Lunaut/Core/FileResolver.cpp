@@ -6,6 +6,7 @@
 #include "core.d.hpp"
 
 #include "Luau/Ast.h"
+#include "Luau/Lexer.h"
 #include "Luau/LuauConfig.h"
 
 #include "lualib.h"
@@ -56,6 +57,58 @@ std::optional<Luau::SourceCode> fileresolver::readSource(const Luau::ModuleName&
 	if (!text)
 	{
 		return std::nullopt;
+	}
+
+	if (!show_as_modules.empty() && text->find('@') != std::string::npos)
+	{
+		// `@module.Type` is not valid Luau: the lexer treats `@module` as an attribute.
+		// Types from a `show_as_module` definition are displayed as `module.Type`, but
+		// the former `@module.Type` spelling is still accepted by blanking the `@`.
+		// Replacing one character with a space keeps every source position intact for
+		// diagnostics and hover.
+		Luau::Allocator allocator;
+		Luau::AstNameTable names(allocator);
+		Luau::Lexer lexer(text->data(), text->size(), names);
+		lexer.setSkipComments(true);
+
+		while (true)
+		{
+			const Luau::Lexeme& token = lexer.next();
+
+			if (token.type == Luau::Lexeme::Eof)
+			{
+				break;
+			}
+
+			if (token.type != Luau::Lexeme::Attribute || token.name == nullptr)
+			{
+				continue;
+			}
+
+			// The lexer consumes the `@` and stores the bare attribute name, so the
+			// spelling is the qualifier itself.
+			std::string_view qualifier(token.name);
+
+			if (qualifier.empty() || show_as_modules.count(std::string(qualifier)) == 0)
+			{
+				continue;
+			}
+
+			size_t offset = 0;
+
+			for (unsigned int line = 0; line < token.location.begin.line && offset < text->size(); ++line)
+			{
+				size_t next = text->find('\n', offset);
+				offset = next == std::string::npos ? text->size() : next + 1;
+			}
+
+			offset += token.location.begin.column;
+
+			if (offset + qualifier.size() + 1 < text->size() && (*text)[offset] == '@' && (*text)[offset + qualifier.size() + 1] == '.')
+			{
+				(*text)[offset] = ' ';
+			}
+		}
 	}
 
 	Luau::SourceCode::Type type = Luau::SourceCode::Type::Module;
@@ -230,6 +283,11 @@ void fileresolver::rem_document(const std::string& address)
 void fileresolver::set_sourcemap(const sourcemap* next)
 {
 	map = next;
+}
+
+void fileresolver::set_show_as_modules(std::set<std::string> modules)
+{
+	show_as_modules = std::move(modules);
 }
 
 void fileresolver::clear_config_cache()

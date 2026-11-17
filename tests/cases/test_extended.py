@@ -4,6 +4,7 @@ import string
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 from lsp_client import FIXTURES, LspClient, LspError, position_of, run_cli, to_uri
@@ -312,6 +313,16 @@ class AliasRecoveryTests(unittest.TestCase):
 		self.assertEqual(edits[6], [])
 		self.assertEqual(edits[7], [": Service.scheduler"])
 
+	def test_vararg_return_preserves_alias(self):
+		value = hover_text(self.client, self.uri, self.consumer, "local logger", len("local "))
+		self.assertIn("function logger(", value)
+		self.assertIn("[logger](file:///", value)
+
+	def test_expanded_vararg_type_has_no_double_ellipsis(self):
+		value = hover_text(self.client, self.uri, self.consumer, "local function log", len("local function "))
+		self.assertIn("...any", value)
+		self.assertNotIn("......", value)
+
 
 class TypeDisplaySettingsTests(unittest.TestCase):
 	def test_disabled_aliases_fall_back_to_module_names(self):
@@ -395,7 +406,7 @@ class ShowAsModuleTests(unittest.TestCase):
 		try:
 			uri, _ = client.open("main.luau")
 			value = hover_text(client, uri, text, "local car", len("local "))
-			self.assertIn("local car: @extra.Car", value)
+			self.assertIn("local car: extra.Car", value)
 			self.assertIn("[Car](file:///", value)
 		finally:
 			client.close()
@@ -409,6 +420,119 @@ class ShowAsModuleTests(unittest.TestCase):
 			value = hover_text(client, uri, text, "local car", len("local "))
 			self.assertIn("local car: Car", value)
 			self.assertNotIn("@extra.Car", value)
+		finally:
+			client.close()
+
+	def test_module_qualified_annotation_typechecks(self):
+		text = (FIXTURES / "definitions-module" / "main.luau").read_text(encoding="utf-8")
+		client = LspClient(FIXTURES / "definitions-module")
+
+		try:
+			uri, diagnostics = client.open("main.luau")
+			self.assertEqual([diagnostic for diagnostic in diagnostics if diagnostic.get("severity") == 1], [])
+
+			value = hover_text(client, uri, text, "local typed", len("local "))
+			self.assertIn("local typed: extra.Car", value)
+
+			# `@module.Type` is how the display used to look; it must be accepted too.
+			value = hover_text(client, uri, text, "local attributed", len("local "))
+			self.assertIn("local attributed: extra.Car", value)
+			self.assertIn("[extra.Car](file:///", value)
+		finally:
+			client.close()
+
+
+class UnionAliasTests(unittest.TestCase):
+	def test_union_of_alias_representations_keeps_alias(self):
+		text = (FIXTURES / "union-alias" / "main.luau").read_text(encoding="utf-8")
+		client = LspClient(FIXTURES / "union-alias")
+
+		try:
+			uri, diagnostics = client.open("main.luau")
+			self.assertEqual([diagnostic for diagnostic in diagnostics if diagnostic.get("severity") == 1], [])
+
+			value = hover_text(client, uri, text, "const kind", len("const "))
+			self.assertIn("const kind: enumitem_shared_net_variant", value)
+			self.assertNotIn("|", value)
+
+			hints = client.request(
+				"textDocument/inlayHint",
+				{"textDocument": {"uri": uri}, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 99, "character": 0}}},
+			)
+			kind = next(hint for hint in hints if hint["position"]["line"] == 3 and hint["kind"] == 1)
+			self.assertEqual(kind["label"], ": enumitem_shared_net_variant")
+		finally:
+			client.close()
+
+
+class NegatedInlayTests(unittest.TestCase):
+	def test_negated_type_is_not_insertable(self):
+		text = (FIXTURES / "negated" / "main.luau").read_text(encoding="utf-8")
+		client = LspClient(FIXTURES / "negated", {"vscode": {"lunaut.typeDisplay.aliases": False}})
+
+		try:
+			uri, _ = client.open("main.luau")
+			value = hover_text(client, uri, text, "local value", len("local "))
+			self.assertIn("local value: ~number", value)
+
+			hints = client.request(
+				"textDocument/inlayHint",
+				{"textDocument": {"uri": uri}, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 99, "character": 0}}},
+			)
+			hint = next(entry for entry in hints if entry["position"]["line"] == 1 and entry["kind"] == 1)
+			self.assertEqual(hint["label"], ": ~number")
+			self.assertNotIn("textEdits", hint)
+		finally:
+			client.close()
+
+
+class DiagnosticsDelayTests(unittest.TestCase):
+	def test_delay_setting_round_trip(self):
+		client = LspClient(FIXTURES / "basic")
+
+		try:
+			client.open("main.luau")
+			status = client.request("lunaut/status", {})
+			self.assertEqual(status["workspaces"][0]["settings"]["diagnostics"]["delay"], 1000)
+		finally:
+			client.close()
+
+		client = LspClient(FIXTURES / "basic", {"vscode": {"lunaut.diagnostics.delay": 25}})
+
+		try:
+			client.open("main.luau")
+			status = client.request("lunaut/status", {})
+			self.assertEqual(status["workspaces"][0]["settings"]["diagnostics"]["delay"], 25)
+		finally:
+			client.close()
+
+	def test_zero_delay_publishes_without_waiting(self):
+		client = LspClient(FIXTURES / "basic", {"vscode": {"lunaut.diagnostics.delay": 0}})
+
+		try:
+			uri, _ = client.open("main.luau")
+			started = time.time()
+			diagnostics = client.change(uri, "local x = 2\nprint(x)\n", version=2)
+			self.assertLess(time.time() - started, 0.9)
+			self.assertEqual(diagnostics, [])
+		finally:
+			client.close()
+
+
+class ReservedWordHoverTests(unittest.TestCase):
+	def test_reserved_words_have_no_hover(self):
+		text = (FIXTURES / "basic" / "control.luau").read_text(encoding="utf-8")
+		client = LspClient(FIXTURES / "basic")
+
+		try:
+			uri, _ = client.open("control.luau")
+
+			for word in ("local", "const", "if", "then", "return", "end"):
+				line, character = position_of(text, word, 1)
+				self.assertIsNone(client.at("textDocument/hover", uri, line, character), word)
+
+			line, character = position_of(text, "print(x, y)", len("print("))
+			self.assertIsNotNone(client.at("textDocument/hover", uri, line, character))
 		finally:
 			client.close()
 

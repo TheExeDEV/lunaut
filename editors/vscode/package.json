@@ -1458,6 +1458,12 @@
           "type": "boolean",
           "default": true
         },
+        "lunaut.diagnostics.delay": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 0,
+          "markdownDescription": "Wait this many milliseconds after the last change before checking and publishing diagnostics."
+        },
         "lunaut.analyzeLuaFiles": {
           "type": "boolean",
           "default": true,

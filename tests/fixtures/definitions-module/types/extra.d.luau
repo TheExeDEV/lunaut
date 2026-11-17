@@ -4,3 +4,5 @@ declare extern type Car extends Vehicle with
 end
 
 declare garage: { Car }
+
+declare function honk(times: number): string

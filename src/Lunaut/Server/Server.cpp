@@ -92,31 +92,21 @@ int server::run()
 	std::thread reader(&server::read_messages, this);
 	reader.detach();
 
-	while (state != enumitem_server_state::Exited)
+	auto flush_diagnostics = [&]()
 	{
-		std::optional<json> message = take_message();
-
-		if (!message)
-		{
-			break;
-		}
-
-		process_message(*message);
-
-		bool idle = false;
-
-		{
-			std::lock_guard<std::mutex> guard(queue_lock);
-			idle = queue.empty();
-		}
-
-		if (!idle)
-		{
-			continue;
-		}
+		// A workspace with a later deadline must wait for its own edit to settle; only
+		// flush workspaces whose debounce window has elapsed.
+		std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
 
 		for (const std::unique_ptr<workspace>& folder : workspaces)
 		{
+			std::optional<std::chrono::steady_clock::time_point> deadline = folder->diagnostics_deadline();
+
+			if (deadline && *deadline > now)
+			{
+				continue;
+			}
+
 			try
 			{
 				folder->flush_diagnostics();
@@ -133,6 +123,13 @@ int server::run()
 
 		if (null_workspace)
 		{
+			std::optional<std::chrono::steady_clock::time_point> deadline = null_workspace->diagnostics_deadline();
+
+			if (deadline && *deadline > now)
+			{
+				return;
+			}
+
 			try
 			{
 				null_workspace->flush_diagnostics();
@@ -142,6 +139,68 @@ int server::run()
 				send_log(enumitem_message_type::Error, "publishing diagnostics failed");
 			}
 		}
+	};
+
+	auto next_deadline = [&]() -> std::optional<std::chrono::steady_clock::time_point>
+	{
+		std::optional<std::chrono::steady_clock::time_point> deadline;
+
+		for (const std::unique_ptr<workspace>& folder : workspaces)
+		{
+			std::optional<std::chrono::steady_clock::time_point> candidate = folder->diagnostics_deadline();
+
+			if (candidate && (!deadline || *candidate < *deadline))
+			{
+				deadline = candidate;
+			}
+		}
+
+		if (null_workspace)
+		{
+			std::optional<std::chrono::steady_clock::time_point> candidate = null_workspace->diagnostics_deadline();
+
+			if (candidate && (!deadline || *candidate < *deadline))
+			{
+				deadline = candidate;
+			}
+		}
+
+		return deadline;
+	};
+
+	while (state != enumitem_server_state::Exited)
+	{
+		std::optional<std::chrono::steady_clock::time_point> deadline = next_deadline();
+
+		if (!deadline)
+		{
+			flush_diagnostics();
+
+			std::optional<json> message = take_message();
+
+			if (!message)
+			{
+				break;
+			}
+
+			process_message(*message);
+			continue;
+		}
+
+		std::optional<json> message = take_message(deadline);
+
+		if (!message)
+		{
+			if (input_closed)
+			{
+				break;
+			}
+
+			flush_diagnostics();
+			continue;
+		}
+
+		process_message(*message);
 	}
 
 	return exit_code;
@@ -178,10 +237,18 @@ void server::read_messages()
 	}
 }
 
-std::optional<json> server::take_message()
+std::optional<json> server::take_message(std::optional<std::chrono::steady_clock::time_point> deadline)
 {
 	std::unique_lock<std::mutex> guard(queue_lock);
-	queue_ready.wait(guard, [this]() { return !queue.empty() || input_closed; });
+
+	if (deadline)
+	{
+		queue_ready.wait_until(guard, *deadline, [this]() { return !queue.empty() || input_closed.load(); });
+	}
+	else
+	{
+		queue_ready.wait(guard, [this]() { return !queue.empty() || input_closed.load(); });
+	}
 
 	if (queue.empty())
 	{
