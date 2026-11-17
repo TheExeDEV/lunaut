@@ -802,6 +802,14 @@ private:
 	std::optional<std::string> get_import_statement(const Luau::ModuleName& from, const std::string& symbol) const;
 	unsigned int get_import_line(const Luau::ModuleName& name, const textdocument& document);
 	std::optional<std::string> get_comment_documentation(const Luau::ModuleName& name, const Luau::Location& location);
+	std::optional<std::string> get_annotation_text(const Luau::ModuleName& name, const Luau::AstType* annotation) const;
+	std::optional<Luau::TypeFun> get_annotation_alias(
+		const Luau::ModuleName& name,
+		const Luau::Module* module,
+		const Luau::ScopePtr& scope,
+		const Luau::AstType* annotation,
+		std::string& alias,
+		std::string* display = nullptr) const;
 	std::optional<std::string> get_type_documentation(Luau::TypeId type);
 	std::optional<Luau::TypeFun> find_type_alias(
 		Luau::TypeId type,

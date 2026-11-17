@@ -14,6 +14,7 @@ export type service = {
 	whose: (self: service) -> scheduler?,
 	get_event: (self: service, name: string) -> net_event,
 	get_status: (self: service) -> status?,
+	get_entries: (self: service) -> { net_event },
 	as: <T>(self: service, value: any) -> T,
 }
 
@@ -30,6 +31,9 @@ local service: service = {
 	end,
 	get_status = function(self: service): status?
 		return nil
+	end,
+	get_entries = function(self: service): { net_event }
+		return {}
 	end,
 	as = function<T>(self: service, value: any): T
 		return value

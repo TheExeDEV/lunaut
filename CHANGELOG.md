@@ -26,6 +26,8 @@
 - Loop variables over a function that returns a generic alias (`enumitem`, `marked`, ...) keep the alias name instead of an expanded, mutually recursive table
 - Hover and inlay hints keep alias names for optional returns (`scheduler?`, `enumitem?`), local non-exported aliases (`net_event`), inline type arguments (`as<<scheduler>>`), casts and union or intersection values, instead of expanding the structural type
 - Alias lookup prefers aliases from the type's own module, so structurally identical aliases from other files no longer win, while `textDocument/typeDefinition` still points at the right declaration
+- Anonymous table annotations are shown as written (`{ iteminstance }`, `{ [iteminstance]: pointer }`) instead of a structural type with `tN` placeholders, in hover and inlay hints
+- Alias lookup memoizes structural comparisons and filters candidates with a cheap shallow check, so inlay hints and hover on large files no longer spend seconds per variable
 - Definition files are stored with absolute paths, so hover links resolve for files opened outside the workspace root
 - Reading input no longer flushes standard output concurrently with JSON-RPC writes, which corrupted frames and hung shutdown
 

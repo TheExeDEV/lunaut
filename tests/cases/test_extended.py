@@ -262,6 +262,20 @@ class AliasRecoveryTests(unittest.TestCase):
 		self.assertIn("local casted: Service.scheduler", value)
 		self.assertIn("[Service.scheduler](file:///", value)
 
+	def test_anonymous_table_return_annotation(self):
+		value = hover_text(self.client, self.uri, self.consumer, "local entries = Service:get_entries()", len("local "))
+		self.assertIn("local entries: { net_event }", value)
+
+	def test_anonymous_table_type_argument(self):
+		value = hover_text(
+			self.client,
+			self.uri,
+			self.consumer,
+			"local watched = Service:as<<{ [string]: Service.scheduler }>>(nil)",
+			len("local "),
+		)
+		self.assertIn("local watched: { [string]: Service.scheduler }", value)
+
 	def test_inlay_hints_preserve_optional_and_local_aliases(self):
 		hints = self.client.request(
 			"textDocument/inlayHint",
@@ -272,6 +286,8 @@ class AliasRecoveryTests(unittest.TestCase):
 		self.assertEqual(labels[5], ": net_event")
 		self.assertEqual(labels[6], ": status?")
 		self.assertEqual(labels[7], ": Service.scheduler")
+		self.assertEqual(labels[8], ": { net_event }")
+		self.assertEqual(labels[9], ": { [string]: Service.scheduler }")
 
 
 class TypeStatsTests(unittest.TestCase):
