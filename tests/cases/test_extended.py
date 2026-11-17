@@ -171,6 +171,21 @@ class RequireAliasTests(unittest.TestCase):
 		self.assertEqual(shape["label"], ": Shape")
 		self.assertNotIn("textEdits", shape)
 
+	def test_require_preserves_defaulted_generic_alias(self):
+		value = hover_text(self.client, self.uri, self.consumer, "local wrapped = require", 6)
+		self.assertIn("local wrapped: Wrapper", value)
+		self.assertIn("[Wrapper](file:///", value)
+		self.assertNotIn("value: number", value)
+
+	def test_inlay_hints_preserve_defaulted_generic_alias(self):
+		hints = self.client.request(
+			"textDocument/inlayHint",
+			{"textDocument": {"uri": self.uri}, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 99, "character": 0}}},
+		)
+		wrapper = next(hint for hint in hints if hint["position"]["line"] == 6 and hint["kind"] == 1)
+		self.assertEqual(wrapper["label"], ": Wrapper")
+		self.assertNotIn("textEdits", wrapper)
+
 	def test_inlay_hints_preserve_table_aliases(self):
 		hints = self.client.request(
 			"textDocument/inlayHint",

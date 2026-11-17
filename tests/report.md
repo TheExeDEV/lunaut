@@ -1,9 +1,9 @@
 # Test report
 
-- Date: 2026-11-17 02:28:28
+- Date: 2026-11-17 20:46:19
 - Binary: `/home/ifmnb/Git/lunaut/build/lunaut`
 - Version: `lunaut 0.0.4 (Luau 0.747, GNU 16.2.1)`
-- Result: **127/127 passed** in 0.9s
+- Result: **129/129 passed** in 1.1s
 
 | Test | Status | Time |
 | --- | --- | --- |
@@ -13,13 +13,13 @@
 | `test_cli.CliTests.test_help` | PASS | 0.00s |
 | `test_cli.CliTests.test_unknown_option` | PASS | 0.00s |
 | `test_cli.CliTests.test_version` | PASS | 0.00s |
-| `test_config.ConfigTests.test_base_luaurc_and_lua_files` | PASS | 0.02s |
+| `test_config.ConfigTests.test_base_luaurc_and_lua_files` | PASS | 0.03s |
 | `test_config.ConfigTests.test_config_luau_aliases` | PASS | 0.01s |
 | `test_config.ConfigTests.test_require_path_completion` | PASS | 0.01s |
 | `test_definitions.DefinitionTests.test_cli_duplicate_keeps_config_priority` | PASS | 0.01s |
 | `test_definitions.DefinitionTests.test_priority_order_loads_dependent_files` | PASS | 0.01s |
 | `test_definitions.DefinitionTests.test_wrong_priority_fails` | PASS | 0.01s |
-| `test_extended.AnalyzerTests.test_analyzer_diagnostics_are_merged` | PASS | 0.03s |
+| `test_extended.AnalyzerTests.test_analyzer_diagnostics_are_merged` | PASS | 0.12s |
 | `test_extended.AnalyzerTests.test_compatible_analyzer_is_loaded` | PASS | 0.03s |
 | `test_extended.AnalyzerTests.test_incompatible_abi_is_reported` | PASS | 0.03s |
 | `test_extended.AnalyzerTests.test_pre_0743_analyzer_is_supported` | PASS | 0.03s |
@@ -36,12 +36,14 @@
 | `test_extended.DocumentationTests.test_type_alias_definition_jump` | PASS | 0.00s |
 | `test_extended.DocumentationTests.test_type_alias_name_stays_at_declaration` | PASS | 0.00s |
 | `test_extended.ProtectionTests.test_broken_edit_does_not_crash` | PASS | 0.01s |
-| `test_extended.ProtectionTests.test_malformed_request_does_not_crash` | PASS | 0.01s |
+| `test_extended.ProtectionTests.test_malformed_request_does_not_crash` | PASS | 0.02s |
 | `test_extended.RequireAliasTests.test_function_return_preserves_annotated_alias` | PASS | 0.00s |
+| `test_extended.RequireAliasTests.test_inlay_hints_preserve_defaulted_generic_alias` | PASS | 0.00s |
 | `test_extended.RequireAliasTests.test_inlay_hints_preserve_intersection_alias` | PASS | 0.00s |
 | `test_extended.RequireAliasTests.test_inlay_hints_preserve_table_aliases` | PASS | 0.00s |
 | `test_extended.RequireAliasTests.test_require_call_preserves_annotated_alias` | PASS | 0.00s |
 | `test_extended.RequireAliasTests.test_require_preserves_annotated_alias` | PASS | 0.00s |
+| `test_extended.RequireAliasTests.test_require_preserves_defaulted_generic_alias` | PASS | 0.00s |
 | `test_extended.RequireAliasTests.test_require_preserves_intersection_alias` | PASS | 0.00s |
 | `test_extended.RequireAliasTests.test_require_preserves_recursive_alias` | PASS | 0.00s |
 | `test_extended.RequireAliasTests.test_type_definition_of_function_result` | PASS | 0.00s |
@@ -97,13 +99,13 @@
 | `test_navigation.NavigationTests.test_convert_quotes` | PASS | 0.00s |
 | `test_navigation.NavigationTests.test_document_highlight` | PASS | 0.00s |
 | `test_navigation.NavigationTests.test_document_links` | PASS | 0.00s |
-| `test_navigation.NavigationTests.test_formatting_with_stylua` | PASS | 0.03s |
+| `test_navigation.NavigationTests.test_formatting_with_stylua` | PASS | 0.02s |
 | `test_navigation.NavigationTests.test_formatting_without_stylua` | PASS | 0.01s |
 | `test_navigation.NavigationTests.test_outgoing_calls` | PASS | 0.00s |
 | `test_navigation.NavigationTests.test_sort_imports_and_annotation` | PASS | 0.00s |
 | `test_navigation.NavigationTests.test_workspace_symbols` | PASS | 0.00s |
 | `test_navigation.RojoNavigationTests.test_string_require_action` | PASS | 0.08s |
-| `test_navigation.RojoNavigationTests.test_studio_plugin_tree` | PASS | 0.07s |
+| `test_navigation.RojoNavigationTests.test_studio_plugin_tree` | PASS | 0.08s |
 | `test_navigation.WorkspaceDiagnosticsTests.test_unopened_files_get_diagnostics` | PASS | 0.01s |
 | `test_references.NewSolverReferenceTests.test_local_references` | PASS | 0.00s |
 | `test_references.NewSolverReferenceTests.test_prepare_rename` | PASS | 0.00s |
@@ -131,6 +133,6 @@
 | `test_rojo.RojoTests.test_references_through_sourcemap` | PASS | 0.00s |
 | `test_rojo.RojoTests.test_required_types_flow` | PASS | 0.00s |
 | `test_rojo.RojoTests.test_roblox_magic_functions` | PASS | 0.00s |
-| `test_rojo.RojoTests.test_roblox_magic_new_solver` | PASS | 0.06s |
+| `test_rojo.RojoTests.test_roblox_magic_new_solver` | PASS | 0.07s |
 | `test_rojo.RojoTests.test_script_instance_type` | PASS | 0.00s |
 | `test_rojo.RojoTests.test_status` | PASS | 0.00s |

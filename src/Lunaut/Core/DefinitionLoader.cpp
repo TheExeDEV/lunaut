@@ -167,7 +167,9 @@ namespace priv
 
 void collector::add(definitioninfo info, const std::filesystem::path& file)
 {
-	std::string normalized = uri::normalize_path(file.generic_string());
+	std::error_code error;
+	std::filesystem::path absolute = std::filesystem::absolute(file, error);
+	std::string normalized = uri::normalize_path((error ? file : absolute).generic_string());
 
 	if (!seen.insert(normalized).second)
 	{

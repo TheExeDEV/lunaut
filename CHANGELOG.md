@@ -22,6 +22,8 @@
 - Hover on a table field shows `name: type` and its comment
 - Hover on a value whose type is an intersection alias shows the alias name and its comment, including aliases from `.d.luau`
 - Required modules keep the alias name from the module's annotated return (`service`, `scheduler`, `basis`, `obbvolume`, `luaobject`, ...) instead of an expanded or cyclic type, in both hover and inlay hints
+- Annotated returns of generic aliases with defaults (`enumitem<T = enumobject?>`, `wrapper<T = number>`) keep the alias name too
+- Definition files are stored with absolute paths, so hover links resolve for files opened outside the workspace root
 - Reading input no longer flushes standard output concurrently with JSON-RPC writes, which corrupted frames and hung shutdown
 
 ## [0.0.4] - 2026-11-16

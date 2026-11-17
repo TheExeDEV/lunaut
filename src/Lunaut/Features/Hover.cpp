@@ -1243,9 +1243,25 @@ std::optional<named_type> get_reference_alias(const Luau::ScopePtr& scope, const
 	std::optional<Luau::TypeFun> definition = reference->prefix ? scope->lookupImportedType(reference->prefix->value, reference->name.value)
 																: scope->lookupType(reference->name.value);
 
-	if (!definition || !definition->typeParams.empty() || !definition->typePackParams.empty())
+	if (!definition)
 	{
 		return std::nullopt;
+	}
+
+	for (const Luau::GenericTypeDefinition& parameter : definition->typeParams)
+	{
+		if (!parameter.defaultValue)
+		{
+			return std::nullopt;
+		}
+	}
+
+	for (const Luau::GenericTypePackDefinition& parameter : definition->typePackParams)
+	{
+		if (!parameter.defaultValue)
+		{
+			return std::nullopt;
+		}
 	}
 
 	std::string name = reference->prefix ? std::string(reference->prefix->value) + "." + reference->name.value : reference->name.value;
