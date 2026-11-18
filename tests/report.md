@@ -1,8 +1,8 @@
 # Test report
 
-- Date: 2026-11-18 02:44:43
+- Date: 2026-11-18 03:10:07
 - Binary: `/home/ifmnb/Git/lunaut/build/lunaut`
-- Version: `lunaut 0.0.4 (Luau 0.747, GNU 16.2.1)`
+- Version: `lunaut 0.0.5 (Luau 0.747, GNU 16.2.1)`
 - Result: **168/168 passed** in 12.7s
 
 | Test | Status | Time |
@@ -90,7 +90,7 @@
 | `test_extended.TypeStatsTests.test_stats_cli_text` | PASS | 0.01s |
 | `test_extended.TypeStatsTests.test_type_stats_request` | PASS | 0.01s |
 | `test_extended.UnionAliasTests.test_union_of_alias_representations_keeps_alias` | PASS | 0.01s |
-| `test_features.FeatureTests.test_auto_import_keyword` | PASS | 0.01s |
+| `test_features.FeatureTests.test_auto_import_keyword` | PASS | 0.02s |
 | `test_features.FeatureTests.test_auto_import_modules` | PASS | 0.00s |
 | `test_features.FeatureTests.test_code_action_adds_require` | PASS | 0.00s |
 | `test_features.FeatureTests.test_code_actions_for_lints` | PASS | 0.00s |

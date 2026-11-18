@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.0.5] - 2026-11-18
+
 ### Added
 
 - Comments from any `.luau` file, including `.d.luau` definitions, in hover, completion and signature help, for functions, type declarations, intersections and table fields
