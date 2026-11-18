@@ -10,7 +10,6 @@
 - Go to definition for globals, extern type members and type names from `.d.luau` files
 - `N references` code lenses above functions (`lunaut.codeLens.references`)
 - Selection range, inline values for debuggers, monikers and type hierarchy for extern types
-- `--!strict`, `--!nolint` and other directives are colored like comments
 - Comments from any `.luau` file, including `.d.luau` definitions, in hover, completion and signature help, for functions, type declarations, intersections and table fields
 - Completion items carry the comment above the field or function they insert
 - Go to definition on type references, and the name in `type Name = ...` goes to the type declaration from the analyzer, not to its body
@@ -27,6 +26,10 @@
 - `lunaut.inlayHints.autoRequire`: when an insertable hint refers to a type from another module, insert the missing `require` together with the `Module.type` annotation
 - `lunaut.diagnostics.delay`: wait this many milliseconds after the last change before checking and publishing diagnostics, `1000` by default
 - `"show_as_module": true` on a `lunaut.definitions` entry: display its types as if they came from a required module, for example `core.pointer`; the former `@core.pointer` spelling is still accepted in annotations
+
+### Changed
+
+- Syntax highlighting, brackets and indentation come from the luau-lsp grammar, so files look the same as with luau-lsp, and ```` ```luau ```` blocks in hovers are highlighted
 
 ### Fixed
 
