@@ -728,7 +728,7 @@ The rules live in [`.github/rulesets`](.github/rulesets):
 | Ruleset | Protects | Rules |
 | --- | --- | --- |
 | `main` | the default branch | no deletion, no force push, changes through pull requests, `build (windows-latest)` and `build (ubuntu-latest)` must pass |
-| `release tags` | tags `v*` | only the Release workflow and admins create them, nobody moves or deletes them |
+| `release tags` | tags `v*` | nobody moves, overwrites or deletes them; GitHub does not let a personal repository exempt the Actions app, so creating tags stays open for the Release workflow |
 
 Admins can bypass both, so you can still push to `main` directly. Apply or update them with
 
