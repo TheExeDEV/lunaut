@@ -12,6 +12,25 @@ end
 print(copy.x, move(origin))
 """
 
+ARMS = """--!strict
+local Arms = {}
+Arms.__index = Arms
+function Arms:update(dt: number)
+	self.speed = (self.speed or 0) * dt
+end
+function Arms:lerp(other, alpha: number)
+	return other
+end
+return Arms
+"""
+
+MAGIC = """--!strict
+local part = Instance.new("Part")
+local clone = part:Clone()
+local found = workspace:FindFirstChildWhichIsA("Folder")
+print(part, clone, found)
+"""
+
 
 def contains(outer, inner):
 	start = (outer["start"]["line"], outer["start"]["character"])
@@ -112,6 +131,18 @@ class SymbolTests(unittest.TestCase):
 		self.assertTrue({"value", "factor", "result"} <= names, names)
 		self.assertNotIn("label", names)
 
+	def test_method_generics_are_named(self):
+		uri, _ = self.client.open("arms.luau", ARMS)
+		signatures = {}
+
+		for needle in ("update(dt", "lerp(other"):
+			line, character = position_of(ARMS, needle, 1)
+			hover = self.client.at("textDocument/hover", uri, line, character)["contents"]["value"]
+			signatures[needle] = hover.splitlines()[1]
+
+		self.assertEqual(signatures["update(dt"], "function Arms:update(dt: number): ()")
+		self.assertEqual(signatures["lerp(other"], "function Arms:lerp<a>(other: a, alpha: number): a")
+
 	def test_monikers(self):
 		line, character = position_of(self.main, "util.add", 6)
 		moniker = self.client.at("textDocument/moniker", self.main_uri, line, character)[0]
@@ -150,6 +181,18 @@ class RobloxSymbolTests(unittest.TestCase):
 		location = self.client.at("textDocument/typeDefinition", self.uri, line, character)
 		self.assertTrue(location["uri"].endswith("roblox.d.luau"))
 		self.assertEqual(location["range"]["start"]["line"], 62)
+
+	def test_magic_results_are_displayed(self):
+		uri, _ = self.client.open("src/server/Display.server.luau", MAGIC)
+		hints = self.client.request(
+			"textDocument/inlayHint",
+			{"textDocument": {"uri": uri}, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 5, "character": 0}}},
+		)
+		labels = [hint["label"] if isinstance(hint["label"], str) else "".join(part["value"] for part in hint["label"]) for hint in hints]
+		self.assertEqual([label for label in labels if label.startswith(":")], [": Part", ": Part", ": Folder?"])
+
+		hover = self.client.at("textDocument/hover", uri, 2, 7)["contents"]["value"]
+		self.assertIn("local clone: Part", hover)
 
 	def test_type_hierarchy(self):
 		line, character = position_of(self.text, "ReplicatedStorage =", 1)

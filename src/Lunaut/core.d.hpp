@@ -665,6 +665,13 @@ public:
 	static std::vector<Luau::Location> find_writes(const Luau::Module& module, const Luau::SourceModule& source, const symbolinfo& symbol);
 };
 
+class typenormalizer
+{
+public:
+	static Luau::TypeId strip_refinements(Luau::TypeId type);
+	static bool is_refined(Luau::TypeId type);
+};
+
 class fileresolver;
 
 class requirenode final : public Luau::RequireNode
@@ -856,6 +863,7 @@ public:
 	json get_supertypes(const json& params);
 	json get_subtypes(const json& params);
 	void invoke_end_completion(const json& params);
+	std::optional<Luau::TypeId> get_initializer_type(const Luau::Module& module, const Luau::AstExpr* initializer) const;
 	void publish_workspace_diagnostics();
 	void apply_plugin_tree(const json& tree);
 

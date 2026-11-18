@@ -149,11 +149,11 @@ bool hint_collector::visit(Luau::AstStatLocal* node)
 
 		std::optional<Luau::TypeId> type = scope ? scope->lookup(Luau::Symbol(local)) : std::nullopt;
 
-		if (!type && i < node->values.size)
+		if ((!type || typenormalizer::is_refined(*type)) && i < node->values.size)
 		{
-			if (const Luau::TypeId* found = module.astTypes.find(node->values.data[i]))
+			if (std::optional<Luau::TypeId> found = owner.get_initializer_type(module, node->values.data[i]))
 			{
-				type = *found;
+				type = found;
 			}
 		}
 
@@ -290,7 +290,7 @@ void hint_collector::add_variable(
 		return;
 	}
 
-	Luau::TypeId followed = Luau::follow(*type);
+	Luau::TypeId followed = typenormalizer::strip_refinements(*type);
 
 	if (info.hide_error_types && Luau::get<Luau::ErrorType>(followed) != nullptr)
 	{

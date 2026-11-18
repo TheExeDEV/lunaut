@@ -293,8 +293,29 @@ bool token_collector::is_function(const Luau::AstExpr* expr) const
 		return false;
 	}
 
-	Luau::TypeId followed = Luau::follow(*type);
-	return Luau::get<Luau::FunctionType>(followed) != nullptr || Luau::get<Luau::IntersectionType>(followed) != nullptr;
+	Luau::TypeId followed = typenormalizer::strip_refinements(*type);
+
+	if (Luau::get<Luau::FunctionType>(followed) != nullptr)
+	{
+		return true;
+	}
+
+	const Luau::IntersectionType* overloads = Luau::get<Luau::IntersectionType>(followed);
+
+	if (overloads == nullptr)
+	{
+		return false;
+	}
+
+	for (Luau::TypeId part : overloads->parts)
+	{
+		if (Luau::get<Luau::FunctionType>(Luau::follow(part)) == nullptr)
+		{
+			return false;
+		}
+	}
+
+	return true;
 }
 
 bool token_collector::is_builtin(const Luau::AstName& name) const

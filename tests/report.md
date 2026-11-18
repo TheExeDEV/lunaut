@@ -1,24 +1,28 @@
 # Test report
 
-- Date: 2026-11-18 18:10:21
+- Date: 2026-11-18 21:19:23
 - Binary: `D:\t\lusp\build\lunaut.exe`
 - Version: `lunaut 0.0.5 (Luau 0.747, GNU 16.2.0)`
-- Result: **175/180 passed** in 17.5s
+- Result: **181/186 passed** in 15.9s
 
 | Test | Status | Time |
 | --- | --- | --- |
-| `test_cli.CliTests.test_analyze_clean_file` | PASS | 0.72s |
-| `test_cli.CliTests.test_analyze_reports_errors` | PASS | 0.04s |
-| `test_cli.CliTests.test_analyze_unknown_require` | PASS | 0.05s |
-| `test_cli.CliTests.test_help` | PASS | 0.02s |
-| `test_cli.CliTests.test_unknown_option` | PASS | 0.02s |
+| `test_cli.CliTests.test_analyze_clean_file` | PASS | 0.03s |
+| `test_cli.CliTests.test_analyze_reports_errors` | PASS | 0.03s |
+| `test_cli.CliTests.test_analyze_unknown_require` | PASS | 0.03s |
+| `test_cli.CliTests.test_help` | PASS | 0.01s |
+| `test_cli.CliTests.test_unknown_option` | PASS | 0.01s |
 | `test_cli.CliTests.test_version` | PASS | 0.02s |
-| `test_config.ConfigTests.test_base_luaurc_and_lua_files` | PASS | 0.04s |
+| `test_config.ConfigTests.test_base_luaurc_and_lua_files` | PASS | 0.03s |
 | `test_config.ConfigTests.test_config_luau_aliases` | PASS | 0.03s |
 | `test_config.ConfigTests.test_require_path_completion` | PASS | 0.03s |
 | `test_definitions.DefinitionTests.test_cli_duplicate_keeps_config_priority` | PASS | 0.03s |
 | `test_definitions.DefinitionTests.test_priority_order_loads_dependent_files` | PASS | 0.03s |
 | `test_definitions.DefinitionTests.test_wrong_priority_fails` | PASS | 0.03s |
+| `test_display.RefinedDisplayTests.test_nested_table_is_not_named_after_its_alias` | PASS | 0.00s |
+| `test_display.RefinedDisplayTests.test_no_diagnostics` | PASS | 0.00s |
+| `test_display.RefinedDisplayTests.test_refined_local_keeps_declared_type` | PASS | 0.00s |
+| `test_display.RefinedDisplayTests.test_refined_uses_have_one_token_type` | PASS | 0.00s |
 | `test_extended.AliasRecoveryTests.test_anonymous_table_return_annotation` | PASS | 0.00s |
 | `test_extended.AliasRecoveryTests.test_anonymous_table_type_argument` | PASS | 0.00s |
 | `test_extended.AliasRecoveryTests.test_expanded_vararg_type_has_no_double_ellipsis` | PASS | 0.00s |
@@ -36,16 +40,16 @@
 | `test_extended.AnalyzerTests.test_incompatible_abi_is_reported` | SKIP | 0.00s |
 | `test_extended.AnalyzerTests.test_pre_0743_analyzer_is_supported` | SKIP | 0.00s |
 | `test_extended.AnalyzerTests.test_version_and_api_mismatch_is_reported` | SKIP | 0.00s |
-| `test_extended.AutoRequireTests.test_auto_require_inserts_import_and_annotation` | PASS | 0.22s |
-| `test_extended.AutoRequireTests.test_disabled_auto_require_does_not_offer_edits` | PASS | 0.21s |
+| `test_extended.AutoRequireTests.test_auto_require_inserts_import_and_annotation` | PASS | 0.19s |
+| `test_extended.AutoRequireTests.test_disabled_auto_require_does_not_offer_edits` | PASS | 0.18s |
 | `test_extended.DiagnosticsDelayTests.test_delay_setting_round_trip` | PASS | 0.06s |
-| `test_extended.DiagnosticsDelayTests.test_zero_delay_publishes_without_waiting` | PASS | 0.06s |
+| `test_extended.DiagnosticsDelayTests.test_zero_delay_publishes_without_waiting` | PASS | 0.03s |
 | `test_extended.DisplayDefinitionTests.test_definition_prefers_implementation` | PASS | 0.00s |
 | `test_extended.DisplayDefinitionTests.test_function_value_has_definition` | PASS | 0.00s |
 | `test_extended.DisplayDefinitionTests.test_inlay_return_uses_alias` | PASS | 0.00s |
 | `test_extended.DisplayDefinitionTests.test_nested_alias_has_definition` | PASS | 0.00s |
 | `test_extended.DisplayDefinitionTests.test_union_member_has_definition` | PASS | 0.00s |
-| `test_extended.DisplayDefinitionTests.test_unknown_error_can_be_disabled` | PASS | 0.20s |
+| `test_extended.DisplayDefinitionTests.test_unknown_error_can_be_disabled` | PASS | 0.19s |
 | `test_extended.DisplayDefinitionTests.test_unknown_error_setting_replaces_error_type` | PASS | 0.00s |
 | `test_extended.DisplayDefinitionTests.test_variadic_tail_uses_alias` | PASS | 0.00s |
 | `test_extended.DocumentationTests.test_completion_shows_field_and_function_comments` | PASS | 0.00s |
@@ -61,12 +65,12 @@
 | `test_extended.DocumentationTests.test_type_alias_name_stays_at_declaration` | PASS | 0.00s |
 | `test_extended.GenericAliasLoopTests.test_inlay_hints_preserve_generic_alias_on_loop_variable` | PASS | 0.00s |
 | `test_extended.GenericAliasLoopTests.test_loop_variable_preserves_generic_alias` | PASS | 0.00s |
-| `test_extended.NegatedInlayTests.test_negated_type_is_not_insertable` | PASS | 0.04s |
+| `test_extended.NegatedInlayTests.test_negated_type_is_not_insertable` | PASS | 0.03s |
 | `test_extended.NormalizedAliasTests.test_defaulted_union_alias_is_not_expanded` | PASS | 0.00s |
 | `test_extended.NormalizedAliasTests.test_function_keyword_hover_uses_local_aliases` | PASS | 0.00s |
 | `test_extended.NormalizedAliasTests.test_primitive_does_not_become_any_alias` | PASS | 0.00s |
 | `test_extended.NormalizedAliasTests.test_primitive_does_not_become_string_alias` | PASS | 0.00s |
-| `test_extended.ProtectionTests.test_broken_edit_does_not_crash` | PASS | 2.07s |
+| `test_extended.ProtectionTests.test_broken_edit_does_not_crash` | PASS | 2.06s |
 | `test_extended.ProtectionTests.test_malformed_request_does_not_crash` | PASS | 0.04s |
 | `test_extended.RequireAliasTests.test_function_return_preserves_annotated_alias` | PASS | 0.00s |
 | `test_extended.RequireAliasTests.test_inlay_hints_preserve_defaulted_generic_alias` | PASS | 0.00s |
@@ -83,14 +87,14 @@
 | `test_extended.ShowAsModuleTests.test_definition_alias_uses_module_qualifier` | PASS | 0.03s |
 | `test_extended.ShowAsModuleTests.test_definition_alias_without_option_stays_unqualified` | PASS | 0.03s |
 | `test_extended.ShowAsModuleTests.test_module_qualified_annotation_typechecks` | PASS | 0.03s |
-| `test_extended.TypeDisplaySettingsTests.test_disabled_aliases_fall_back_to_module_names` | PASS | 0.20s |
-| `test_extended.TypeDisplaySettingsTests.test_disabled_refine_keeps_or_union` | PASS | 0.20s |
-| `test_extended.TypeDisplaySettingsTests.test_enabled_refine_drops_empty_or_branch` | PASS | 0.22s |
-| `test_extended.TypeStatsTests.test_stats_cli_json` | PASS | 0.05s |
-| `test_extended.TypeStatsTests.test_stats_cli_text` | PASS | 0.04s |
-| `test_extended.TypeStatsTests.test_type_stats_request` | PASS | 0.04s |
-| `test_extended.UnionAliasTests.test_union_of_alias_representations_keeps_alias` | PASS | 0.04s |
-| `test_features.FeatureTests.test_auto_import_keyword` | PASS | 0.04s |
+| `test_extended.TypeDisplaySettingsTests.test_disabled_aliases_fall_back_to_module_names` | PASS | 0.19s |
+| `test_extended.TypeDisplaySettingsTests.test_disabled_refine_keeps_or_union` | PASS | 0.19s |
+| `test_extended.TypeDisplaySettingsTests.test_enabled_refine_drops_empty_or_branch` | PASS | 0.19s |
+| `test_extended.TypeStatsTests.test_stats_cli_json` | PASS | 0.03s |
+| `test_extended.TypeStatsTests.test_stats_cli_text` | PASS | 0.03s |
+| `test_extended.TypeStatsTests.test_type_stats_request` | PASS | 0.03s |
+| `test_extended.UnionAliasTests.test_union_of_alias_representations_keeps_alias` | PASS | 0.03s |
+| `test_features.FeatureTests.test_auto_import_keyword` | PASS | 0.03s |
 | `test_features.FeatureTests.test_auto_import_modules` | PASS | 0.01s |
 | `test_features.FeatureTests.test_code_action_adds_require` | PASS | 0.00s |
 | `test_features.FeatureTests.test_code_actions_for_lints` | PASS | 0.00s |
@@ -104,18 +108,18 @@
 | `test_features.FeatureTests.test_inlay_hints_can_be_disabled` | PASS | 0.03s |
 | `test_features.FeatureTests.test_inlay_hints_default` | PASS | 0.00s |
 | `test_features.FeatureTests.test_inlay_hints_insertable` | PASS | 0.00s |
-| `test_features.FeatureTests.test_inlay_hints_parameter_types` | PASS | 0.03s |
+| `test_features.FeatureTests.test_inlay_hints_parameter_types` | PASS | 0.02s |
 | `test_features.FeatureTests.test_semantic_tokens` | PASS | 0.00s |
 | `test_features.LuauLspSettingsTests.test_definition_files_and_disabled_globals` | PASS | 0.00s |
 | `test_features.LuauLspSettingsTests.test_settings_mapped_with_lunaut_priority` | PASS | 0.00s |
-| `test_features.LuauLspSettingsTests.test_vscode_flat_settings` | PASS | 0.03s |
-| `test_features.RobloxDocumentationTests.test_api_documentation_in_hover_and_completion` | PASS | 0.28s |
-| `test_features.RobloxDocumentationTests.test_service_auto_import` | PASS | 0.22s |
+| `test_features.LuauLspSettingsTests.test_vscode_flat_settings` | PASS | 0.02s |
+| `test_features.RobloxDocumentationTests.test_api_documentation_in_hover_and_completion` | PASS | 0.19s |
+| `test_features.RobloxDocumentationTests.test_service_auto_import` | PASS | 0.19s |
 | `test_fflags.FFlagTests.test_cli_override` | PASS | 0.02s |
-| `test_fflags.FFlagTests.test_flags_enabled_by_default` | PASS | 0.02s |
-| `test_fflags.FFlagTests.test_invalid_value` | PASS | 0.02s |
-| `test_fflags.FFlagTests.test_json_output` | PASS | 0.02s |
-| `test_fflags.FFlagTests.test_no_flags_enabled` | PASS | 0.02s |
+| `test_fflags.FFlagTests.test_flags_enabled_by_default` | PASS | 0.01s |
+| `test_fflags.FFlagTests.test_invalid_value` | PASS | 0.01s |
+| `test_fflags.FFlagTests.test_json_output` | PASS | 0.01s |
+| `test_fflags.FFlagTests.test_no_flags_enabled` | PASS | 0.01s |
 | `test_fflags.FFlagTests.test_settings_override_over_lsp` | PASS | 0.03s |
 | `test_fflags.FFlagTests.test_unknown_flag` | PASS | 0.02s |
 | `test_lsp.LspTests.test_alias_require` | PASS | 0.00s |
@@ -138,12 +142,12 @@
 | `test_navigation.NavigationTests.test_convert_quotes` | PASS | 0.00s |
 | `test_navigation.NavigationTests.test_document_highlight` | PASS | 0.00s |
 | `test_navigation.NavigationTests.test_document_links` | PASS | 0.00s |
-| `test_navigation.NavigationTests.test_formatting_with_stylua` | PASS | 0.35s |
-| `test_navigation.NavigationTests.test_formatting_without_stylua` | PASS | 0.13s |
+| `test_navigation.NavigationTests.test_formatting_with_stylua` | PASS | 0.21s |
+| `test_navigation.NavigationTests.test_formatting_without_stylua` | PASS | 0.06s |
 | `test_navigation.NavigationTests.test_outgoing_calls` | PASS | 0.00s |
 | `test_navigation.NavigationTests.test_sort_imports_and_annotation` | PASS | 0.00s |
 | `test_navigation.NavigationTests.test_workspace_symbols` | PASS | 0.00s |
-| `test_navigation.RojoNavigationTests.test_string_require_action` | PASS | 0.23s |
+| `test_navigation.RojoNavigationTests.test_string_require_action` | PASS | 0.19s |
 | `test_navigation.RojoNavigationTests.test_studio_plugin_tree` | PASS | 3.25s |
 | `test_navigation.WorkspaceDiagnosticsTests.test_unopened_files_get_diagnostics` | PASS | 0.04s |
 | `test_references.NewSolverReferenceTests.test_local_references` | PASS | 0.00s |
@@ -164,18 +168,19 @@
 | `test_references.ReferenceTests.test_rename_module_function` | PASS | 0.00s |
 | `test_references.ReferenceTests.test_rename_rejects_bad_names` | PASS | 0.00s |
 | `test_references.ReferenceTests.test_rename_table_key` | PASS | 0.00s |
-| `test_rojo.RojoTests.test_completion_from_sourcemap_children` | PASS | 2.05s |
+| `test_rojo.RojoTests.test_completion_from_sourcemap_children` | PASS | 2.04s |
 | `test_rojo.RojoTests.test_definition_into_sourcemap_module` | PASS | 0.00s |
 | `test_rojo.RojoTests.test_definitions_loaded` | PASS | 0.00s |
 | `test_rojo.RojoTests.test_hover_on_required_module` | PASS | 0.00s |
 | `test_rojo.RojoTests.test_instance_requires_resolve` | PASS | 0.00s |
 | `test_rojo.RojoTests.test_references_through_sourcemap` | PASS | 0.00s |
-| `test_rojo.RojoTests.test_required_types_flow` | PASS | 2.03s |
+| `test_rojo.RojoTests.test_required_types_flow` | PASS | 2.04s |
 | `test_rojo.RojoTests.test_roblox_magic_functions` | PASS | 0.00s |
-| `test_rojo.RojoTests.test_roblox_magic_new_solver` | PASS | 0.19s |
+| `test_rojo.RojoTests.test_roblox_magic_new_solver` | PASS | 0.18s |
 | `test_rojo.RojoTests.test_script_instance_type` | PASS | 0.00s |
 | `test_rojo.RojoTests.test_status` | PASS | 0.00s |
 | `test_symbols.RobloxSymbolTests.test_definition_of_global` | PASS | 0.00s |
+| `test_symbols.RobloxSymbolTests.test_magic_results_are_displayed` | PASS | 0.00s |
 | `test_symbols.RobloxSymbolTests.test_type_definition_of_instance` | PASS | 0.00s |
 | `test_symbols.RobloxSymbolTests.test_type_hierarchy` | PASS | 0.00s |
 | `test_symbols.SymbolTests.test_capabilities` | PASS | 0.00s |
@@ -183,6 +188,7 @@
 | `test_symbols.SymbolTests.test_declaration` | PASS | 0.00s |
 | `test_symbols.SymbolTests.test_implementation` | PASS | 0.00s |
 | `test_symbols.SymbolTests.test_inline_values` | PASS | 0.00s |
+| `test_symbols.SymbolTests.test_method_generics_are_named` | PASS | 0.00s |
 | `test_symbols.SymbolTests.test_monikers` | PASS | 0.00s |
 | `test_symbols.SymbolTests.test_selection_range` | PASS | 0.00s |
 | `test_symbols.SymbolTests.test_type_definition_of_annotation` | PASS | 0.00s |
