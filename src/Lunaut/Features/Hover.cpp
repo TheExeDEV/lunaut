@@ -10,6 +10,7 @@
 #include "Luau/PrettyPrinter.h"
 #include "Luau/Scope.h"
 #include "Luau/ToString.h"
+#include "Luau/VisitType.h"
 
 #include <algorithm>
 #include <functional>
@@ -58,6 +59,19 @@ const Luau::AstExpr* find_initializer(const Luau::SourceModule& source, const Lu
 std::optional<named_type> get_reference_alias(const Luau::ScopePtr& scope, const Luau::AstType* annotation);
 bool contains_generic_reference(const Luau::ScopePtr& scope, const Luau::AstType* annotation);
 bool contains_generic_reference(const Luau::ScopePtr& scope, const Luau::AstTypePack* pack);
+std::string make_generic_name(size_t index);
+
+struct generic_collector final : Luau::TypeOnceVisitor
+{
+	generic_collector();
+
+	bool visit(Luau::TypeId type, const Luau::GenericType& generic) override;
+	bool visit(Luau::TypePackId pack, const Luau::GenericTypePack& generic) override;
+	bool visit(Luau::TypeId type, const Luau::ExternType& extern_type) override;
+
+	std::set<const void*> found;
+};
+
 std::optional<Luau::ModuleName> get_definition_module(Luau::TypeId type);
 std::optional<Luau::ModuleName> find_imported_module(const Luau::ScopePtr& scope, const std::string& alias);
 std::optional<size_t> get_utf8_length(std::string_view text);
@@ -186,6 +200,15 @@ json workspace::get_hover(const json& params)
 	else if (Luau::AstLocal* local = target.getLocal())
 	{
 		type = scope->lookup(Luau::Symbol(local));
+
+		if (type && typenormalizer::is_refined(*type))
+		{
+			if (std::optional<Luau::TypeId> declared = get_initializer_type(*module, priv::find_initializer(*source, local)))
+			{
+				type = declared;
+			}
+		}
+
 		value_alias = priv::get_reference_alias(scope, local->annotation);
 		origin = priv::location_info{name, local->location};
 	}
@@ -343,7 +366,7 @@ json workspace::get_hover(const json& params)
 		return nullptr;
 	}
 
-	type = Luau::follow(*type);
+	type = typenormalizer::strip_refinements(*type);
 
 	if (!alias && !value_alias)
 	{
@@ -1476,6 +1499,11 @@ std::optional<Luau::TypeFun> workspace::find_expression_alias(
 	{
 		const Luau::FunctionType* function = Luau::get<Luau::FunctionType>(Luau::follow(*found));
 
+		if (function != nullptr && function->magic)
+		{
+			return std::nullopt;
+		}
+
 		if (function != nullptr)
 		{
 			Luau::ModuleName alias_module;
@@ -1768,13 +1796,18 @@ std::optional<Luau::TypeFun> workspace::find_function_return_alias(
 
 	std::vector<Luau::AstNode*> ancestry = Luau::findAstAncestryOfPosition(*source, function.definition->definitionLocation.begin, true);
 
-	for (Luau::AstNode* node : ancestry)
+	for (auto node = ancestry.rbegin(); node != ancestry.rend(); ++node)
 	{
-		Luau::AstExprFunction* expression = node->as<Luau::AstExprFunction>();
+		Luau::AstExprFunction* expression = (*node)->as<Luau::AstExprFunction>();
 
-		if (expression == nullptr || expression->returnAnnotation == nullptr)
+		if (expression == nullptr)
 		{
 			continue;
+		}
+
+		if (expression->returnAnnotation == nullptr)
+		{
+			break;
 		}
 
 		Luau::AstTypePackExplicit* pack = expression->returnAnnotation->as<Luau::AstTypePackExplicit>();
@@ -2030,6 +2063,27 @@ std::string workspace::render_type_display(
 	auto fallback_pack = [&](Luau::TypePackId value)
 	{
 		return Luau::toString(value, options);
+	};
+
+	std::map<const void*, std::string> generic_names;
+
+	auto get_generic_name = [&](const void* key, const std::string& name) -> std::string
+	{
+		if (!name.empty())
+		{
+			return name;
+		}
+
+		const auto found = generic_names.find(key);
+
+		if (found != generic_names.end())
+		{
+			return found->second;
+		}
+
+		std::string generated = priv::make_generic_name(generic_names.size());
+		generic_names.emplace(key, generated);
+		return generated;
 	};
 
 	auto visible_tail = [](const std::optional<Luau::TypePackId>& pack) -> std::optional<Luau::TypePackId>
@@ -2410,40 +2464,60 @@ std::string workspace::render_type_display(
 		}
 		else if (const Luau::FunctionType* function = Luau::get<Luau::FunctionType>(value))
 		{
-			if (!function->generics.empty() || !function->genericPacks.empty())
+			auto [arguments, tail] = Luau::flatten(function->argTypes);
+			std::optional<Luau::TypePackId> arguments_tail = visible_tail(tail);
+			priv::generic_collector used;
+
+			for (size_t index = 0; index < arguments.size(); ++index)
+			{
+				if (!(hide_self && depth == 1 && index == 0 && function->hasSelf))
+				{
+					used.traverse(arguments[index]);
+				}
+			}
+
+			if (arguments_tail)
+			{
+				used.traverse(*arguments_tail);
+			}
+
+			used.traverse(function->retTypes);
+			std::vector<std::string> parameters;
+
+			for (Luau::TypeId generic_id : function->generics)
+			{
+				Luau::TypeId followed_generic = Luau::follow(generic_id);
+				const Luau::GenericType* generic = Luau::get<Luau::GenericType>(followed_generic);
+
+				if (generic != nullptr && used.found.count(followed_generic) != 0)
+				{
+					parameters.push_back(get_generic_name(followed_generic, generic->name));
+				}
+			}
+
+			for (Luau::TypePackId generic_id : function->genericPacks)
+			{
+				Luau::TypePackId followed_generic = Luau::follow(generic_id);
+				const Luau::GenericTypePack* generic = Luau::get<Luau::GenericTypePack>(followed_generic);
+
+				if (generic != nullptr && used.found.count(followed_generic) != 0)
+				{
+					parameters.push_back(get_generic_name(followed_generic, generic->name) + "...");
+				}
+			}
+
+			if (!parameters.empty())
 			{
 				result = "<";
-				bool first = true;
 
-				for (Luau::TypeId generic_id : function->generics)
+				for (size_t index = 0; index < parameters.size(); ++index)
 				{
-					if (!first)
-					{
-						result += ", ";
-					}
-
-					first = false;
-					const Luau::GenericType* generic = Luau::get<Luau::GenericType>(Luau::follow(generic_id));
-					result += generic != nullptr ? generic->name : fallback(generic_id);
-				}
-
-				for (Luau::TypePackId generic_id : function->genericPacks)
-				{
-					if (!first)
-					{
-						result += ", ";
-					}
-
-					first = false;
-					const Luau::GenericTypePack* generic = Luau::get<Luau::GenericTypePack>(Luau::follow(generic_id));
-					result += "..." + (generic != nullptr ? generic->name : std::string());
+					result += (index == 0 ? "" : ", ") + parameters[index];
 				}
 
 				result += ">";
 			}
 
-			auto [arguments, tail] = Luau::flatten(function->argTypes);
-			std::optional<Luau::TypePackId> arguments_tail = visible_tail(tail);
 			result += "(";
 
 			bool first_argument = true;
@@ -2533,7 +2607,7 @@ std::string workspace::render_type_display(
 		}
 		else if (const Luau::GenericType* generic = Luau::get<Luau::GenericType>(value))
 		{
-			result = generic->name;
+			result = get_generic_name(value, generic->name);
 		}
 		else
 		{
@@ -2566,7 +2640,7 @@ std::string workspace::render_type_display(
 
 		if (const Luau::GenericTypePack* generic = Luau::get<Luau::GenericTypePack>(followed_pack))
 		{
-			return "..." + generic->name;
+			return get_generic_name(followed_pack, generic->name) + "...";
 		}
 
 		if (const Luau::FreeTypePack* free = Luau::get<Luau::FreeTypePack>(followed_pack))
@@ -2857,7 +2931,7 @@ std::string workspace::render_type_pack_display(
 
 	if (const Luau::GenericTypePack* generic = Luau::get<Luau::GenericTypePack>(followed))
 	{
-		return "..." + generic->name;
+		return generic->name.empty() ? Luau::toString(followed) : generic->name + "...";
 	}
 
 	if (const Luau::FreeTypePack* free = Luau::get<Luau::FreeTypePack>(followed))
@@ -2959,6 +3033,34 @@ namespace priv
 std::string make_code_block(const std::string& code)
 {
 	return "```luau\n" + code + "\n```";
+}
+
+std::string make_generic_name(size_t index)
+{
+	std::string name(1, static_cast<char>('a' + index % 26));
+	return index < 26 ? name : name + std::to_string(index / 26);
+}
+
+generic_collector::generic_collector()
+	: Luau::TypeOnceVisitor("generic_collector", true)
+{
+}
+
+bool generic_collector::visit(Luau::TypeId type, const Luau::GenericType& generic)
+{
+	found.insert(type);
+	return true;
+}
+
+bool generic_collector::visit(Luau::TypePackId pack, const Luau::GenericTypePack& generic)
+{
+	found.insert(pack);
+	return true;
+}
+
+bool generic_collector::visit(Luau::TypeId type, const Luau::ExternType& extern_type)
+{
+	return false;
 }
 
 void flatten_intersection(Luau::TypeId type, std::vector<Luau::TypeId>& parts)
@@ -3538,6 +3640,11 @@ bool is_primitive_like(Luau::TypeId type)
 {
 	type = Luau::follow(type);
 
+	if (const Luau::TableType* table = Luau::get<Luau::TableType>(type))
+	{
+		return table->props.empty() && !table->indexer && !table->name && !table->syntheticName;
+	}
+
 	return Luau::get<Luau::AnyType>(type) != nullptr || Luau::get<Luau::UnknownType>(type) != nullptr ||
 		Luau::get<Luau::NeverType>(type) != nullptr || Luau::get<Luau::NoRefineType>(type) != nullptr ||
 		Luau::get<Luau::ErrorType>(type) != nullptr || Luau::get<Luau::PrimitiveType>(type) != nullptr;
@@ -4002,7 +4109,7 @@ int definition_location_score(
 	{
 		const location_info& candidate = locations[index];
 
-		if (candidate.module != module || !location_contains(*location, candidate.location))
+		if (candidate.module != module || !location_contains(*location, candidate.location) || candidate.location.end != location->end)
 		{
 			continue;
 		}

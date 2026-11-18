@@ -827,6 +827,45 @@ std::optional<textdocument> workspace::get_text_for(const Luau::ModuleName& name
 	return textdocument(address, *text, 0);
 }
 
+std::optional<Luau::TypeId> workspace::get_initializer_type(const Luau::Module& module, const Luau::AstExpr* initializer) const
+{
+	if (initializer == nullptr)
+	{
+		return std::nullopt;
+	}
+
+	if (const Luau::TypeId* found = module.astTypes.find(initializer))
+	{
+		return *found;
+	}
+
+	const auto node = frontend.sourceNodes.find(module.name);
+
+	if (!initializer->is<Luau::AstExprCall>() || node == frontend.sourceNodes.end())
+	{
+		return std::nullopt;
+	}
+
+	for (const auto& [required, location] : node->second->requireLocations)
+	{
+		if (!initializer->location.encloses(location))
+		{
+			continue;
+		}
+
+		Luau::ModulePtr required_module = get_module(required, false);
+
+		if (!required_module)
+		{
+			return std::nullopt;
+		}
+
+		return Luau::first(required_module->returnType);
+	}
+
+	return std::nullopt;
+}
+
 json workspace::get_location(const Luau::ModuleName& name, const Luau::Location& location) const
 {
 	std::optional<textdocument> document = get_text_for(name);
