@@ -36,6 +36,23 @@ struct member_collector final : Luau::AstVisitor
 	std::vector<Luau::Location> found;
 };
 
+struct write_collector final : Luau::AstVisitor
+{
+	write_collector(const Luau::Module& module, const symbolinfo& symbol);
+
+	bool visit(Luau::AstStatAssign* node) override;
+	bool visit(Luau::AstStatCompoundAssign* node) override;
+	bool visit(Luau::AstStatFunction* node) override;
+	bool visit(Luau::AstExprTable* node) override;
+
+	void add_target(Luau::AstExpr* target);
+
+	const Luau::Module& module;
+	const symbolinfo& symbol;
+	member_collector members;
+	std::vector<Luau::Location> found;
+};
+
 std::optional<symbolinfo>
 make_member(const Luau::Module& module, const Luau::AstExpr* object, const std::string& name, Luau::Location origin);
 
@@ -141,6 +158,24 @@ symbolfinder::find_member_uses(const Luau::Module& module, const Luau::SourceMod
 	return collected.found;
 }
 
+std::vector<Luau::Location>
+symbolfinder::find_writes(const Luau::Module& module, const Luau::SourceModule& source, const symbolinfo& symbol)
+{
+	priv::write_collector collected(module, symbol);
+
+	if (symbol.local != nullptr)
+	{
+		collected.found.push_back(symbol.local->location);
+	}
+
+	if (source.root != nullptr)
+	{
+		source.root->visit(&collected);
+	}
+
+	return collected.found;
+}
+
 namespace
 {
 namespace priv
@@ -207,6 +242,76 @@ bool member_collector::visit(Luau::AstExprTable* node)
 	}
 
 	return true;
+}
+
+write_collector::write_collector(const Luau::Module& module, const symbolinfo& symbol)
+	: module(module)
+	, symbol(symbol)
+	, members(module, symbol)
+{
+}
+
+bool write_collector::visit(Luau::AstStatAssign* node)
+{
+	for (Luau::AstExpr* target : node->vars)
+	{
+		add_target(target);
+	}
+
+	return true;
+}
+
+bool write_collector::visit(Luau::AstStatCompoundAssign* node)
+{
+	add_target(node->var);
+	return true;
+}
+
+bool write_collector::visit(Luau::AstStatFunction* node)
+{
+	add_target(node->name);
+	return true;
+}
+
+bool write_collector::visit(Luau::AstExprTable* node)
+{
+	if (symbol.member)
+	{
+		members.found.clear();
+		members.visit(node);
+		found.insert(found.end(), members.found.begin(), members.found.end());
+	}
+
+	return true;
+}
+
+void write_collector::add_target(Luau::AstExpr* target)
+{
+	if (symbol.local != nullptr)
+	{
+		Luau::AstExprLocal* local = target->as<Luau::AstExprLocal>();
+
+		if (local != nullptr && local->local == symbol.local)
+		{
+			found.push_back(local->location);
+		}
+
+		return;
+	}
+
+	Luau::AstExprIndexName* index = target->as<Luau::AstExprIndexName>();
+
+	if (!symbol.member || index == nullptr || symbol.name != index->index.value)
+	{
+		return;
+	}
+
+	std::optional<symbolinfo> found_member = make_member(module, index->expr, symbol.name, index->indexLocation);
+
+	if (found_member && found_member->is_same_owner(symbol))
+	{
+		found.push_back(index->indexLocation);
+	}
 }
 
 std::optional<symbolinfo>

@@ -266,6 +266,7 @@ struct featuresinfo
 	bool autocomplete_end = true;
 	bool convert_quotes = true;
 	bool formatting = true;
+	bool code_lens = true;
 	std::string stylua = "stylua";
 };
 
@@ -308,6 +309,12 @@ struct optionsinfo
 	bool no_flags_enabled = false;
 	std::vector<definitioninfo> definitions;
 	std::optional<std::string> settings_file;
+};
+
+struct declarationinfo
+{
+	Luau::ModuleName module;
+	Luau::Location location;
 };
 
 struct loadeddefinitioninfo
@@ -604,6 +611,7 @@ public:
 	static std::vector<Luau::Location> find_local_uses(const Luau::SourceModule& source, Luau::AstLocal* local);
 	static std::vector<Luau::Location>
 	find_member_uses(const Luau::Module& module, const Luau::SourceModule& source, const symbolinfo& symbol);
+	static std::vector<Luau::Location> find_writes(const Luau::Module& module, const Luau::SourceModule& source, const symbolinfo& symbol);
 };
 
 class fileresolver;
@@ -707,6 +715,9 @@ public:
 	json get_hover(const json& params);
 	json get_completion(const json& params);
 	json get_definition(const json& params);
+	json get_declaration(const json& params);
+	json get_type_definition(const json& params);
+	json get_implementations(const json& params);
 	json get_document_symbols(const json& params);
 	json get_signature_help(const json& params);
 	json get_references(const json& params);
@@ -726,6 +737,14 @@ public:
 	json get_outgoing_calls(const json& params);
 	json get_on_type_edits(const json& params);
 	json get_formatting(const json& params);
+	json get_code_lenses(const json& params);
+	json resolve_code_lens(const json& lens);
+	json get_selection_ranges(const json& params);
+	json get_inline_values(const json& params);
+	json get_monikers(const json& params);
+	json get_type_hierarchy_items(const json& params);
+	json get_supertypes(const json& params);
+	json get_subtypes(const json& params);
 	void invoke_end_completion(const json& params);
 	void publish_workspace_diagnostics();
 	void apply_plugin_tree(const json& tree);
@@ -752,6 +771,11 @@ private:
 	bool is_ignored(const std::string& path) const;
 	std::optional<textdocument> get_text_for(const Luau::ModuleName& name) const;
 	json get_location(const Luau::ModuleName& name, const Luau::Location& location) const;
+	json find_symbol_location(const json& params, bool declaration);
+	std::optional<declarationinfo>
+	get_alias_declaration(const Luau::ModuleName& name, const Luau::Scope& scope, const Luau::AstTypeReference& reference) const;
+	std::optional<declarationinfo> get_type_declaration(Luau::TypeId type) const;
+	json make_type_hierarchy_item(Luau::TypeId type, const std::string& origin) const;
 
 	client& owner;
 	std::filesystem::path root;
@@ -764,6 +788,8 @@ private:
 	json roblox_metadata = json::object();
 	std::vector<loadeddefinitioninfo> definitions;
 	std::set<std::string> definition_paths;
+	std::unordered_map<std::string, declarationinfo> declared_globals;
+	std::unordered_map<std::string, declarationinfo> declared_types;
 	std::set<std::string> pending;
 	json plugin_tree = nullptr;
 	bool ready = false;
@@ -787,6 +813,9 @@ public:
 	json on_hover(const json& params);
 	json on_completion(const json& params);
 	json on_definition(const json& params);
+	json on_declaration(const json& params);
+	json on_type_definition(const json& params);
+	json on_implementation(const json& params);
 	json on_document_symbol(const json& params);
 	json on_signature_help(const json& params);
 	json on_references(const json& params);
@@ -807,6 +836,14 @@ public:
 	json on_on_type_formatting(const json& params);
 	json on_formatting(const json& params);
 	json on_range_formatting(const json& params);
+	json on_code_lens(const json& params);
+	json on_code_lens_resolve(const json& params);
+	json on_selection_range(const json& params);
+	json on_inline_value(const json& params);
+	json on_moniker(const json& params);
+	json on_prepare_type_hierarchy(const json& params);
+	json on_supertypes(const json& params);
+	json on_subtypes(const json& params);
 	json on_lunaut_status(const json& params);
 	json on_lunaut_fflags(const json& params);
 	json on_lunaut_definitions(const json& params);
