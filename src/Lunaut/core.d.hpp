@@ -5,6 +5,8 @@
 #include <iosfwd>
 #include <map>
 #include <memory>
+#include <chrono>
+#include <atomic>
 #include <condition_variable>
 #include <deque>
 #include <mutex>
@@ -174,6 +176,12 @@ enum class enumitem_parameter_hints
 	All,
 };
 
+enum class enumitem_import_keyword
+{
+	Local,
+	Const,
+};
+
 enum class enumitem_fflag_source
 {
 	Default,
@@ -206,6 +214,12 @@ std::string_view get_name(enumitem_parameter_hints item);
 std::optional<enumitem_parameter_hints> from_name(std::string_view name);
 }
 
+namespace enum_import_keyword
+{
+std::string_view get_name(enumitem_import_keyword item);
+std::optional<enumitem_import_keyword> from_name(std::string_view name);
+}
+
 namespace enum_fflag_source
 {
 std::string_view get_name(enumitem_fflag_source item);
@@ -216,6 +230,7 @@ struct definitioninfo
 	std::string path;
 	std::string name;
 	std::optional<int> priority;
+	bool show_as_module = false;
 	enumitem_definition_source source = enumitem_definition_source::Config;
 };
 
@@ -255,12 +270,14 @@ struct inlayhintsinfo
 	bool hide_matching_names = true;
 	int max_length = 50;
 	bool insertable = true;
+	bool auto_require = true;
 };
 
 struct featuresinfo
 {
 	bool documentation = true;
 	bool auto_imports = true;
+	enumitem_import_keyword import_keyword = enumitem_import_keyword::Local;
 	bool semantic_tokens = true;
 	bool colors = true;
 	bool autocomplete_end = true;
@@ -268,6 +285,9 @@ struct featuresinfo
 	bool formatting = true;
 	bool code_lens = true;
 	std::string stylua = "stylua";
+	bool alias_types = true;
+	bool refine_types = true;
+	bool unknown_error = true;
 };
 
 struct diagnosticsinfo
@@ -275,6 +295,14 @@ struct diagnosticsinfo
 	bool lint = true;
 	bool include_dependents = true;
 	bool workspace = false;
+	int delay = 1000;
+};
+
+struct analyzerinfo
+{
+	bool enabled = false;
+	bool diagnostics = false;
+	std::string path;
 };
 
 struct settingsinfo
@@ -286,6 +314,7 @@ struct settingsinfo
 	robloxinfo roblox;
 	rojoinfo rojo;
 	diagnosticsinfo diagnostics;
+	analyzerinfo analyzer;
 	std::vector<std::string> ignore_globs;
 	bool analyze_lua_files = true;
 	std::string base_luaurc;
@@ -323,10 +352,30 @@ struct loadeddefinitioninfo
 	std::string path;
 	int priority = 0;
 	bool success = false;
+	bool show_as_module = false;
 	std::string message;
 	enumitem_definition_source source = enumitem_definition_source::Config;
 
 	json to_json() const;
+};
+
+struct typelinkinfo
+{
+	std::string name;
+	Luau::ModuleName module;
+	Luau::Location location;
+};
+
+struct typedisplayinfo
+{
+	std::string text;
+	std::string name;
+	std::optional<Luau::ModuleName> module;
+	bool alias = false;
+	bool definition_file = false;
+	bool exported = false;
+	bool show_as_module = false;
+	bool truncated = false;
 };
 
 struct fflagstateinfo
@@ -553,6 +602,8 @@ public:
 	std::optional<std::string> get_markdown(const std::string& symbol) const;
 	std::optional<std::string> get_parameter_markdown(const std::string& symbol, size_t index) const;
 	static std::optional<std::string> get_comment_markdown(const Luau::SourceModule& source, const std::string& text, unsigned int line);
+	static std::optional<std::string>
+	get_comment_parameter(const Luau::SourceModule& source, const std::string& text, unsigned int line, const std::string& name);
 
 private:
 	json entries = json::object();
@@ -664,11 +715,13 @@ public:
 
 	const textdocument* get_document(const std::string& address) const;
 	textdocument* get_document(const std::string& address);
+	const std::unordered_map<std::string, textdocument>& get_documents() const;
 	void set_document(textdocument document);
 	void rem_document(const std::string& address);
 
 	void set_sourcemap(const sourcemap* map);
 	void set_base_config(const std::filesystem::path& path);
+	void set_show_as_modules(std::set<std::string> modules);
 	void clear_config_cache();
 
 	std::optional<std::filesystem::path> get_require_target(const std::string& requirer, const std::string& required) const;
@@ -682,9 +735,43 @@ private:
 
 	std::filesystem::path root;
 	std::unordered_map<std::string, textdocument> documents;
+	std::set<std::string> show_as_modules;
 	const sourcemap* map = nullptr;
 	mutable std::unordered_map<std::string, std::unique_ptr<Luau::Config>> configs;
 	Luau::Config default_config;
+};
+
+class analyzerplugin
+{
+public:
+	~analyzerplugin();
+
+	bool load(const std::string& path);
+	void unload();
+
+	bool is_loaded() const;
+	const std::string& get_name() const;
+	const std::string& get_version() const;
+	const std::string& get_error() const;
+	const std::string& get_frontend_api() const;
+	json to_json() const;
+	std::optional<json> check(const std::string& module, const std::string& path, const std::string& source, const json& settings) const;
+
+private:
+	using info_function = const void* (*)();
+	using check_function = int (*)(const void*, void*);
+	using free_function = void (*)(const void*);
+
+	void* handle = nullptr;
+	info_function get_info = nullptr;
+	check_function run_check = nullptr;
+	free_function release = nullptr;
+	bool enabled = false;
+	bool loaded = false;
+	std::string name;
+	std::string version;
+	std::string error;
+	std::string frontend_api = "unknown";
 };
 
 class workspace
@@ -700,6 +787,7 @@ public:
 	const settingsinfo& get_settings() const;
 	const std::vector<loadeddefinitioninfo>& get_definitions() const;
 	json get_status() const;
+	json get_type_stats();
 
 	void open_document(const std::string& address, const std::string& text, int version);
 	void update_document(const std::string& address, const json& changes, int version);
@@ -712,6 +800,8 @@ public:
 	json get_diagnostics(const std::string& address);
 	void publish_diagnostics(const std::string& address);
 	void flush_diagnostics();
+	std::optional<std::chrono::steady_clock::time_point> diagnostics_deadline() const;
+	bool has_pending_diagnostics() const;
 	json get_hover(const json& params);
 	json get_completion(const json& params);
 	json get_definition(const json& params);
@@ -724,6 +814,26 @@ public:
 	json get_prepare_rename(const json& params);
 	json get_rename(const json& params);
 	json get_inlay_hints(const json& params);
+	std::optional<std::string> get_type_alias_name(
+		Luau::TypeId type,
+		const Luau::Module& module,
+		const Luau::ScopePtr& scope,
+		const Luau::AstType* annotation,
+		const Luau::AstExpr* initializer = nullptr) const;
+	typedisplayinfo get_type_display(
+		Luau::TypeId type,
+		const Luau::Module& module,
+		const Luau::ScopePtr& scope,
+		const Luau::AstType* annotation,
+		const Luau::AstExpr* initializer = nullptr,
+		size_t max_length = 0,
+		std::vector<typelinkinfo>* links = nullptr) const;
+	typedisplayinfo
+	get_type_display(Luau::TypePackId pack, const Luau::Module& module, const Luau::ScopePtr& scope, size_t max_length = 0) const;
+	std::string get_import_symbol(const Luau::ModuleName& name) const;
+	std::optional<std::string>
+	get_import_statement(const Luau::ModuleName& from, const Luau::ModuleName& target, const std::string& symbol = std::string()) const;
+	unsigned int get_import_line(const Luau::ModuleName& name, const textdocument& document);
 	json get_semantic_tokens(const json& params);
 	json get_code_actions(const json& params);
 	json get_document_colors(const json& params);
@@ -753,10 +863,53 @@ private:
 	void index_workspace();
 	json get_auto_imports(const Luau::ModuleName& name, const textdocument& document, const std::set<std::string>& taken);
 	std::optional<json> make_import_edit(const Luau::ModuleName& name, const textdocument& document, const std::string& symbol);
-	std::optional<std::string> get_import_statement(const Luau::ModuleName& from, const std::string& symbol) const;
-	unsigned int get_import_line(const Luau::ModuleName& name, const textdocument& document);
 	std::optional<std::string> get_comment_documentation(const Luau::ModuleName& name, const Luau::Location& location);
+	std::optional<std::string> get_annotation_text(const Luau::ModuleName& name, const Luau::AstType* annotation) const;
+	std::optional<Luau::TypeFun> get_annotation_alias(
+		const Luau::ModuleName& name,
+		const Luau::Module* module,
+		const Luau::ScopePtr& scope,
+		const Luau::AstType* annotation,
+		std::string& alias,
+		std::string* display = nullptr) const;
 	std::optional<std::string> get_type_documentation(Luau::TypeId type);
+	std::optional<Luau::Location> find_property_implementation(const Luau::ModuleName& name, const std::string& property) const;
+	std::string render_type_display(
+		Luau::TypeId type,
+		const Luau::ModuleName& module_name,
+		const Luau::ScopePtr& scope,
+		size_t max_length,
+		bool named_function = false,
+		bool hide_self = false,
+		const std::string* return_alias = nullptr,
+		std::vector<typelinkinfo>* links = nullptr) const;
+	std::string render_type_pack_display(
+		Luau::TypePackId pack, const Luau::ModuleName& module_name, const Luau::ScopePtr& scope, size_t max_length) const;
+	std::string format_alias_display(const Luau::ModuleName& module, const std::string& name) const;
+	std::optional<Luau::TypeFun> find_type_alias(
+		Luau::TypeId type,
+		Luau::ModuleName& module,
+		std::string& name,
+		const std::optional<Luau::ModuleName>& preferred = std::nullopt) const;
+	std::optional<Luau::TypeFun>
+	find_display_alias(Luau::TypeId type, const std::optional<Luau::ModuleName>& preferred, std::string& name, std::string& display) const;
+	std::optional<Luau::TypeFun> find_expression_alias(
+		const Luau::Module& module,
+		const Luau::ScopePtr& scope,
+		const Luau::AstExpr* expression,
+		std::string& name,
+		std::string& display) const;
+	std::optional<Luau::TypeFun> find_return_alias(Luau::TypeId type, std::string& name) const;
+	std::optional<Luau::TypeFun> find_function_return_alias(
+		const Luau::FunctionType& function, Luau::ModuleName& module, std::string& name, std::string* display = nullptr) const;
+	std::optional<Luau::TypeFun> find_annotation_return_alias(
+		const Luau::ModuleName& module,
+		const Luau::Location& location,
+		const std::string& property,
+		std::string& name,
+		std::string* display = nullptr) const;
+	std::optional<Luau::ModuleName> find_definition_module(Luau::TypeId type) const;
+	std::optional<Luau::ModuleName> find_definition_module(const Luau::Location& location, const std::string& name = std::string()) const;
 	std::vector<std::pair<Luau::ModuleName, Luau::Location>> find_references(
 		const Luau::ModuleName& name,
 		Luau::Position position,
@@ -764,6 +917,7 @@ private:
 		std::optional<Luau::Location>& declaration);
 	void register_types();
 	void load_definitions();
+	void load_analyzer();
 	void apply_disabled_globals(Luau::GlobalTypes& globals);
 	Luau::CheckResult check_module(const Luau::ModuleName& name, bool for_autocomplete);
 	Luau::ModulePtr get_module(const Luau::ModuleName& name, bool for_autocomplete) const;
@@ -772,6 +926,7 @@ private:
 	std::optional<textdocument> get_text_for(const Luau::ModuleName& name) const;
 	json get_location(const Luau::ModuleName& name, const Luau::Location& location) const;
 	json find_symbol_location(const json& params, bool declaration);
+	json get_declared_type_definition(const json& params);
 	std::optional<declarationinfo>
 	get_alias_declaration(const Luau::ModuleName& name, const Luau::Scope& scope, const Luau::AstTypeReference& reference) const;
 	std::optional<declarationinfo> get_type_declaration(Luau::TypeId type) const;
@@ -790,7 +945,15 @@ private:
 	std::set<std::string> definition_paths;
 	std::unordered_map<std::string, declarationinfo> declared_globals;
 	std::unordered_map<std::string, declarationinfo> declared_types;
+	std::unordered_map<std::string, std::string> definition_module_paths;
+	std::unordered_map<std::string, Luau::SourceModule> definition_sources;
+	std::set<std::string> definition_show_as_module;
+	std::unordered_map<std::string, Luau::ModulePtr> definition_modules;
+	analyzerplugin analyzer;
+	bool analyzer_reported = false;
 	std::set<std::string> pending;
+	std::chrono::steady_clock::time_point last_change;
+	bool change_pending = false;
 	json plugin_tree = nullptr;
 	bool ready = false;
 	bool roblox = false;
@@ -845,6 +1008,7 @@ public:
 	json on_supertypes(const json& params);
 	json on_subtypes(const json& params);
 	json on_lunaut_status(const json& params);
+	json on_lunaut_type_stats(const json& params);
 	json on_lunaut_fflags(const json& params);
 	json on_lunaut_definitions(const json& params);
 	json on_lunaut_sourcemap(const json& params);
@@ -865,7 +1029,7 @@ public:
 private:
 	void process_message(const json& message);
 	void read_messages();
-	std::optional<json> take_message();
+	std::optional<json> take_message(std::optional<std::chrono::steady_clock::time_point> deadline = std::nullopt);
 	void add_workspace(const std::string& address);
 	void register_watchers();
 	workspace& get_workspace(const std::string& address);
@@ -885,15 +1049,16 @@ private:
 	std::mutex queue_lock;
 	std::condition_variable queue_ready;
 	std::set<std::string> cancelled;
-	bool input_closed = false;
+	std::atomic<bool> input_closed = false;
 };
 
 class console final : public client
 {
 public:
-	explicit console(bool verbose);
+	explicit console(bool verbose, bool json_output = false);
 
 	int invoke_analyze(const std::vector<std::string>& files, const optionsinfo& options);
+	int invoke_stats(const std::vector<std::string>& files, const optionsinfo& options);
 
 	void send_log(enumitem_message_type type, const std::string& message) override;
 	void send_window_message(enumitem_message_type type, const std::string& message) override;
@@ -901,6 +1066,8 @@ public:
 
 private:
 	bool verbose = false;
+	bool json_output = false;
+	bool diagnostics_output = true;
 	size_t errors = 0;
 	size_t warnings = 0;
 };

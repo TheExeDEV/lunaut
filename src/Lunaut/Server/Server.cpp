@@ -57,6 +57,7 @@ const std::unordered_map<std::string_view, request_handler> relevant_requests = 
 	{"typeHierarchy/supertypes", &server::on_supertypes},
 	{"typeHierarchy/subtypes", &server::on_subtypes},
 	{"lunaut/status", &server::on_lunaut_status},
+	{"lunaut/typeStats", &server::on_lunaut_type_stats},
 	{"lunaut/fflags", &server::on_lunaut_fflags},
 	{"lunaut/definitions", &server::on_lunaut_definitions},
 	{"lunaut/sourcemap", &server::on_lunaut_sourcemap},
@@ -101,38 +102,113 @@ int server::run()
 	std::thread reader(&server::read_messages, this);
 	reader.detach();
 
-	while (state != enumitem_server_state::Exited)
+	auto flush_diagnostics = [&]()
 	{
-		std::optional<json> message = take_message();
-
-		if (!message)
-		{
-			break;
-		}
-
-		process_message(*message);
-
-		bool idle = false;
-
-		{
-			std::lock_guard<std::mutex> guard(queue_lock);
-			idle = queue.empty();
-		}
-
-		if (!idle)
-		{
-			continue;
-		}
+		std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
 
 		for (const std::unique_ptr<workspace>& folder : workspaces)
 		{
-			folder->flush_diagnostics();
+			std::optional<std::chrono::steady_clock::time_point> deadline = folder->diagnostics_deadline();
+
+			if (deadline && *deadline > now)
+			{
+				continue;
+			}
+
+			try
+			{
+				folder->flush_diagnostics();
+			}
+			catch (const std::exception& error)
+			{
+				send_log(enumitem_message_type::Error, "publishing diagnostics failed: " + std::string(error.what()));
+			}
+			catch (...)
+			{
+				send_log(enumitem_message_type::Error, "publishing diagnostics failed");
+			}
 		}
 
 		if (null_workspace)
 		{
-			null_workspace->flush_diagnostics();
+			std::optional<std::chrono::steady_clock::time_point> deadline = null_workspace->diagnostics_deadline();
+
+			if (deadline && *deadline > now)
+			{
+				return;
+			}
+
+			try
+			{
+				null_workspace->flush_diagnostics();
+			}
+			catch (...)
+			{
+				send_log(enumitem_message_type::Error, "publishing diagnostics failed");
+			}
 		}
+	};
+
+	auto next_deadline = [&]() -> std::optional<std::chrono::steady_clock::time_point>
+	{
+		std::optional<std::chrono::steady_clock::time_point> deadline;
+
+		for (const std::unique_ptr<workspace>& folder : workspaces)
+		{
+			std::optional<std::chrono::steady_clock::time_point> candidate = folder->diagnostics_deadline();
+
+			if (candidate && (!deadline || *candidate < *deadline))
+			{
+				deadline = candidate;
+			}
+		}
+
+		if (null_workspace)
+		{
+			std::optional<std::chrono::steady_clock::time_point> candidate = null_workspace->diagnostics_deadline();
+
+			if (candidate && (!deadline || *candidate < *deadline))
+			{
+				deadline = candidate;
+			}
+		}
+
+		return deadline;
+	};
+
+	while (state != enumitem_server_state::Exited)
+	{
+		std::optional<std::chrono::steady_clock::time_point> deadline = next_deadline();
+
+		if (!deadline)
+		{
+			flush_diagnostics();
+
+			std::optional<json> message = take_message();
+
+			if (!message)
+			{
+				break;
+			}
+
+			process_message(*message);
+			continue;
+		}
+
+		std::optional<json> message = take_message(deadline);
+
+		if (!message)
+		{
+			if (input_closed)
+			{
+				break;
+			}
+
+			flush_diagnostics();
+			continue;
+		}
+
+		process_message(*message);
 	}
 
 	return exit_code;
@@ -169,10 +245,18 @@ void server::read_messages()
 	}
 }
 
-std::optional<json> server::take_message()
+std::optional<json> server::take_message(std::optional<std::chrono::steady_clock::time_point> deadline)
 {
 	std::unique_lock<std::mutex> guard(queue_lock);
-	queue_ready.wait(guard, [this]() { return !queue.empty() || input_closed; });
+
+	if (deadline)
+	{
+		queue_ready.wait_until(guard, *deadline, [this]() { return !queue.empty() || input_closed.load(); });
+	}
+	else
+	{
+		queue_ready.wait(guard, [this]() { return !queue.empty() || input_closed.load(); });
+	}
 
 	if (queue.empty())
 	{
@@ -482,6 +566,29 @@ json server::on_lunaut_status(const json& params)
 	};
 }
 
+json server::on_lunaut_type_stats(const json& params)
+{
+	json stats = json::array();
+
+	for (const std::unique_ptr<workspace>& folder : workspaces)
+	{
+		try
+		{
+			stats.push_back({{"root", folder->get_root().generic_string()}, {"stats", folder->get_type_stats()}});
+		}
+		catch (const std::exception& error)
+		{
+			stats.push_back({{"root", folder->get_root().generic_string()}, {"error", error.what()}});
+		}
+		catch (...)
+		{
+			stats.push_back({{"root", folder->get_root().generic_string()}, {"error", "unknown error"}});
+		}
+	}
+
+	return {{"workspaces", stats}};
+}
+
 json server::on_lunaut_fflags(const json& params)
 {
 	std::string filter = stdx::to_lower(params.value("filter", ""));
@@ -648,6 +755,31 @@ void server::process_message(const json& message)
 	std::string method = message.value("method", "");
 	json params = message.value("params", json::object());
 
+	if (!params.is_object())
+	{
+		params = json::object();
+	}
+
+	if (!params.contains("textDocument") || !params["textDocument"].is_object())
+	{
+		params["textDocument"] = json::object();
+	}
+
+	if (!params["textDocument"].contains("uri") || !params["textDocument"]["uri"].is_string())
+	{
+		params["textDocument"]["uri"] = "";
+	}
+
+	if (!params.contains("position") || !params["position"].is_object())
+	{
+		params["position"] = {{"line", 0}, {"character", 0}};
+	}
+
+	if (!params.contains("item") || !params["item"].is_object())
+	{
+		params["item"] = json::object();
+	}
+
 	if (!message.contains("id"))
 	{
 		const auto handler = priv::relevant_notifications.find(method);
@@ -669,6 +801,10 @@ void server::process_message(const json& message)
 		catch (const std::exception& error)
 		{
 			send_log(enumitem_message_type::Error, method + " failed: " + error.what());
+		}
+		catch (...)
+		{
+			send_log(enumitem_message_type::Error, method + " failed: unknown error");
 		}
 
 		return;
@@ -713,6 +849,10 @@ void server::process_message(const json& message)
 	catch (const std::exception& error)
 	{
 		rpc.send_error(id, enumitem_error_code::InternalError, method + " failed: " + error.what());
+	}
+	catch (...)
+	{
+		rpc.send_error(id, enumitem_error_code::InternalError, method + " failed: unknown error");
 	}
 }
 

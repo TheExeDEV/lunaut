@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.0.5] - 2026-11-18
+
 ### Added
 
 - Go to declaration, type definition and implementation
@@ -9,6 +11,52 @@
 - `N references` code lenses above functions (`lunaut.codeLens.references`)
 - Selection range, inline values for debuggers, monikers and type hierarchy for extern types
 - `--!strict`, `--!nolint` and other directives are colored like comments
+- Comments from any `.luau` file, including `.d.luau` definitions, in hover, completion and signature help, for functions, type declarations, intersections and table fields
+- Completion items carry the comment above the field or function they insert
+- Go to definition on type references, and the name in `type Name = ...` goes to the type declaration from the analyzer, not to its body
+- Hover keeps the analyzer's alias name for named table types such as `LuaObject` or `Scheduler` instead of expanding the table
+- Function hover keeps the annotated return alias, so `Line.new` is shown as `function library.new(wrap: string?): line` instead of an expanded, cyclic table
+- Hover links named types to their definition, and `textDocument/typeDefinition` navigates to the alias declaration
+- Signature help takes `@param` descriptions from the comment above the function
+- Type statistics over `lunaut/typeStats` and `lunaut stats [paths] [--json]`: totals, origins, kinds, hierarchy and aliases
+- Analyzer plugins: a versioned C ABI (`src/Lunaut/analyzer.h`) loads a custom Luau fork at runtime, supports the pre-0.743 and post-0.743 frontend APIs and reports incompatible plugins instead of crashing
+- `lunaut.analyzer.enabled`, `lunaut.analyzer.path` and `lunaut.analyzer.diagnostics`
+- `lunaut.completion.importKeyword`: insert auto-imports with `local` or `const`
+- `lunaut.typeDisplay.aliases` and `lunaut.typeDisplay.refine`: turn off alias names or display simplification to get the analyzer's raw expanded types
+- `lunaut.typeDisplay.unknownError`: display `*error-type*` as `unknown` in hovers and type hints, enabled by default
+- `lunaut.inlayHints.autoRequire`: when an insertable hint refers to a type from another module, insert the missing `require` together with the `Module.type` annotation
+- `lunaut.diagnostics.delay`: wait this many milliseconds after the last change before checking and publishing diagnostics, `1000` by default
+- `"show_as_module": true` on a `lunaut.definitions` entry: display its types as if they came from a required module, for example `core.pointer`; the former `@core.pointer` spelling is still accepted in annotations
+
+### Fixed
+
+- Malformed LSP params and exceptions while checking or publishing diagnostics are caught, so the server keeps running
+- Hover on a table field shows `name: type` and its comment
+- Hover on a value whose type is an intersection alias shows the alias name and its comment, including aliases from `.d.luau`
+- Required modules keep the alias name from the module's annotated return (`service`, `scheduler`, `basis`, `obbvolume`, `luaobject`, ...) instead of an expanded or cyclic type, in both hover and inlay hints
+- Annotated returns of generic aliases with defaults (`enumitem<T = enumobject?>`, `wrapper<T = number>`) keep the alias name too
+- Loop variables over a function that returns a generic alias (`enumitem`, `marked`, ...) keep the alias name instead of an expanded, mutually recursive table
+- Hover and inlay hints keep alias names for optional returns (`scheduler?`, `enumitem?`), local non-exported aliases (`net_event`), inline type arguments (`as<<scheduler>>`), casts and union or intersection values, instead of expanding the structural type
+- Alias lookup prefers aliases from the type's own module, so structurally identical aliases from other files no longer win, while `textDocument/typeDefinition` still points at the right declaration
+- Anonymous table annotations are shown as written (`{ iteminstance }`, `{ [iteminstance]: pointer }`) instead of a structural type with `tN` placeholders, in hover and inlay hints
+- Alias lookup memoizes structural comparisons and filters candidates with a cheap shallow check, so inlay hints and hover on large files no longer spend seconds per variable
+- Insertable inlay hints write visible raw table annotations (`{ iteminstance }`, `{ [string]: Service.scheduler }`) verbatim and skip aliases that are private to another module
+- Definition files are stored with absolute paths, so hover links resolve for files opened outside the workspace root
+- Reading input no longer flushes standard output concurrently with JSON-RPC writes, which corrupted frames and hung shutdown
+- A union of the same alias represented as an intersection and as its merged table (for example `enumitem_shared_net_variant` from `variant or SharedNetVariant.Safe`) keeps the alias name instead of `alias | { ... }`
+- Function types containing a variadic tail no longer render a doubled ellipsis such as `(......any)`
+- Inlay return hints and function hovers render variadic tails through the alias-aware renderer, so `FuncDB:write` shows `...tval` instead of a structural `...argument | string | t1 where t1 = { ... }`
+- Hover Definitions include every alias resolved while rendering, so a `const result = {}` inferred as `{observer_var}`, a `work_list | string` union, an intersection and `class.type` all link to their aliases
+- Function hovers and function values add a Definition for the function itself
+- Go to definition on a required module's function or method prefers its implementation (`Scheduler:whose()` goes to `Scheduler.luau`) and falls back to the type declaration, including intersection-typed owners
+- Hovering a reserved word such as `local`, `const`, `if`, `return` or `end` shows nothing instead of a type
+- Hovering the `function` keyword shows the normalized function type, with parameter and return aliases such as `line | string` instead of expanded structural tables
+- Function hover normalizes parameter and return aliases the same way as locals, and hides inferred variadic tails that have no source `...`
+- Primitive-like types never take a structural alias, so `any` no longer displays as `AdReward` and `string` as `ContentId`
+- Defaulted generic aliases are compared through their defaults, so union aliases such as `observer_var` stay named instead of expanding to `(...) -> () | observer | thread`
+- Inlay hints with a negated type are not offered as an insertable annotation, because `~` is not valid annotation syntax
+- `show_as_module` annotations accept `Module.Type` and `@Module.Type`, and resolve to the same type as the bare global name
+- Changes are debounced and changed modules are checked in one queued batch on up to eight threads, so an edit no longer rechecks the whole module synchronously for every keystroke
 
 ## [0.0.4] - 2026-11-16
 

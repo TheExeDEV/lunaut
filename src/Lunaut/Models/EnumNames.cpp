@@ -31,6 +31,11 @@ const std::map<enumitem_parameter_hints, std::string_view> parameter_hints_names
 	{enumitem_parameter_hints::All, "all"},
 };
 
+const std::map<enumitem_import_keyword, std::string_view> import_keyword_names = {
+	{enumitem_import_keyword::Local, "local"},
+	{enumitem_import_keyword::Const, "const"},
+};
+
 const std::map<enumitem_definition_source, std::string_view> definition_source_names = {
 	{enumitem_definition_source::Config, "Config"},
 	{enumitem_definition_source::Cli, "Cli"},
@@ -96,6 +101,27 @@ std::string_view get_name(enumitem_parameter_hints item)
 std::optional<enumitem_parameter_hints> from_name(std::string_view name)
 {
 	for (const auto& [item, item_name] : priv::parameter_hints_names)
+	{
+		if (item_name == name)
+		{
+			return item;
+		}
+	}
+
+	return std::nullopt;
+}
+}
+
+namespace enum_import_keyword
+{
+std::string_view get_name(enumitem_import_keyword item)
+{
+	return priv::get_name_from(priv::import_keyword_names, item);
+}
+
+std::optional<enumitem_import_keyword> from_name(std::string_view name)
+{
+	for (const auto& [item, item_name] : priv::import_keyword_names)
 	{
 		if (item_name == name)
 		{

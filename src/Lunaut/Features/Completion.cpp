@@ -40,6 +40,8 @@ enumitem_completion_kind get_kind(const Luau::AutocompleteEntry& entry);
 std::string get_sort_text(const std::string& label, const Luau::AutocompleteEntry& entry);
 std::optional<json> get_string_range(const textdocument& document, const std::vector<Luau::AstNode*>& ancestry);
 std::pair<std::string, std::string> get_call_details(const Luau::AutocompleteEntry& entry, const Luau::FunctionType& function);
+std::optional<Luau::ModuleName> get_type_module(Luau::TypeId type);
+std::optional<Luau::ModuleName> get_property_module(const Luau::Module& module, const std::vector<Luau::AstNode*>& ancestry);
 
 }
 }
@@ -86,6 +88,15 @@ json workspace::get_completion(const json& params)
 	options.functionTypeArguments = true;
 
 	std::optional<json> string_range = priv::get_string_range(*document, completion.ancestry);
+	std::optional<Luau::ModuleName> property_module;
+
+	if (settings.features.documentation)
+	{
+		if (Luau::ModulePtr module = get_module(name, true))
+		{
+			property_module = priv::get_property_module(*module, completion.ancestry);
+		}
+	}
 
 	for (const auto& [label, entry] : completion.entryMap)
 	{
@@ -103,6 +114,21 @@ json workspace::get_completion(const json& params)
 		if (settings.features.documentation)
 		{
 			std::optional<std::string> markdown = entry.documentationSymbol ? docs.get_markdown(*entry.documentationSymbol) : std::nullopt;
+			const Luau::Property* property = entry.prop ? *entry.prop : nullptr;
+
+			if (!markdown && property != nullptr)
+			{
+				Luau::ModuleName module_name = property_module.value_or(name);
+
+				if (property->location)
+				{
+					markdown = get_comment_documentation(module_name, *property->location);
+				}
+				else if (property->typeLocation)
+				{
+					markdown = get_comment_documentation(module_name, *property->typeLocation);
+				}
+			}
 
 			if (!markdown && entry.type)
 			{
@@ -272,6 +298,62 @@ std::pair<std::string, std::string> get_call_details(const Luau::AutocompleteEnt
 	}
 
 	return {details + ")", snippet + ")"};
+}
+
+std::optional<Luau::ModuleName> get_type_module(Luau::TypeId type)
+{
+	Luau::TypeId followed = Luau::follow(type);
+
+	if (const Luau::TableType* table = Luau::get<Luau::TableType>(followed); table != nullptr && !table->definitionModuleName.empty())
+	{
+		return table->definitionModuleName;
+	}
+
+	if (const Luau::MetatableType* metatable = Luau::get<Luau::MetatableType>(followed))
+	{
+		return get_type_module(metatable->table);
+	}
+
+	if (const Luau::IntersectionType* intersection = Luau::get<Luau::IntersectionType>(followed))
+	{
+		for (Luau::TypeId part : intersection->parts)
+		{
+			if (std::optional<Luau::ModuleName> module = get_type_module(part))
+			{
+				return module;
+			}
+		}
+	}
+
+	if (const Luau::ExternType* extern_type = Luau::get<Luau::ExternType>(followed);
+		extern_type != nullptr && !extern_type->definitionModuleName.empty())
+	{
+		return extern_type->definitionModuleName;
+	}
+
+	return std::nullopt;
+}
+
+std::optional<Luau::ModuleName> get_property_module(const Luau::Module& module, const std::vector<Luau::AstNode*>& ancestry)
+{
+	for (auto it = ancestry.rbegin(); it != ancestry.rend(); ++it)
+	{
+		Luau::AstExprIndexName* index = (*it)->as<Luau::AstExprIndexName>();
+
+		if (index == nullptr)
+		{
+			continue;
+		}
+
+		const Luau::TypeId* owner = module.astTypes.find(index->expr);
+
+		if (owner != nullptr)
+		{
+			return get_type_module(*owner);
+		}
+	}
+
+	return std::nullopt;
 }
 
 std::optional<json> get_string_range(const textdocument& document, const std::vector<Luau::AstNode*>& ancestry)

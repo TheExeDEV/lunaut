@@ -1,0 +1,6 @@
+{
+  "lunaut.fflags.sync": false,
+  "lunaut.definitions": [
+    "types/base.d.luau"
+  ]
+}

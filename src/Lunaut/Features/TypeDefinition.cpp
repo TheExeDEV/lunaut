@@ -19,7 +19,7 @@ std::optional<Luau::TypeId> strip_optional(Luau::TypeId type);
 }
 }
 
-json workspace::get_type_definition(const json& params)
+json workspace::get_declared_type_definition(const json& params)
 {
 	std::string address = params["textDocument"].value("uri", "");
 	const textdocument* document = resolver.get_document(address);

@@ -50,7 +50,7 @@ const std::vector<std::pair<std::string_view, argument_handler>> relevant_argume
 	{"--clientProcessId=", &read_ignored},
 };
 
-const std::vector<std::string_view> commands = {"lsp", "analyze", "flags", "version", "help"};
+const std::vector<std::string_view> commands = {"lsp", "analyze", "stats", "flags", "version", "help"};
 
 result<commandinfo> parse(int argc, char** argv);
 int invoke_lsp(const commandinfo& info);
@@ -96,8 +96,14 @@ int main(int argc, char** argv)
 
 	if (info.command == "analyze")
 	{
-		console output(info.verbose);
+		console output(info.verbose, info.json_output);
 		return output.invoke_analyze(info.inputs, info.options);
+	}
+
+	if (info.command == "stats")
+	{
+		console output(info.verbose, info.json_output);
+		return output.invoke_stats(info.inputs, info.options);
 	}
 
 	return priv::invoke_lsp(info);
@@ -176,6 +182,11 @@ result<commandinfo> parse(int argc, char** argv)
 	}
 
 	if (info.command == "analyze" && info.inputs.empty())
+	{
+		info.inputs.emplace_back(".");
+	}
+
+	if (info.command == "stats" && info.inputs.empty())
 	{
 		info.inputs.emplace_back(".");
 	}
@@ -266,6 +277,8 @@ int invoke_lsp(const commandinfo& info)
 #endif
 
 	std::ios::sync_with_stdio(false);
+	std::cin.tie(nullptr);
+	std::cerr.tie(nullptr);
 
 	jsonrpc rpc(std::cin, std::cout);
 	server instance(rpc, info.options);
@@ -307,6 +320,7 @@ void print_help()
 			  << "Usage:\n"
 			  << "  lunaut [lsp] [options]            start the language server on stdio\n"
 			  << "  lunaut analyze [options] <paths>  check files or folders and print diagnostics\n"
+			  << "  lunaut stats [options] <paths>    report type statistics for files or folders\n"
 			  << "  lunaut flags [options]            list Luau FFlags and their values\n"
 			  << "  lunaut version                    print the version\n\n"
 			  << "Options:\n"
@@ -316,7 +330,7 @@ void print_help()
 			  << "                                    load a definitions file (.d.luau)\n"
 			  << "  --settings=<file>                 extra settings file (.vscode/settings.json format)\n"
 			  << "  --verbose                         print server log to stderr\n"
-			  << "  --json                            print flags as JSON (flags command)\n";
+			  << "  --json                            print flags or statistics as JSON\n";
 }
 
 }
