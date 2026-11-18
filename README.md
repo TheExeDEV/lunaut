@@ -235,6 +235,7 @@ All settings live in VS Code settings under `lunaut.*` (luau-lsp settings work t
 | `lunaut.completion.autoImports` | `true` | suggest modules and services that are not required yet |
 | `lunaut.semanticTokens.enabled` | `true` | semantic highlighting |
 | `lunaut.colors.enabled` | `true` | color picker for `Color3` |
+| `lunaut.codeLens.references` | `true` | `N references` above every function |
 | `lunaut.completion.autocompleteEnd` | `true` | insert `end` or `until` after Enter on a block opener, adding a missing `then` or `do` |
 | `lunaut.format.convertQuotes` | `true` | typing `{` in a `"string"` turns it into an interpolated string |
 | `lunaut.format.enabled` | `true` | format documents and selections with StyLua |
@@ -471,6 +472,15 @@ Pressing Enter after `function ...`, `if ... then`, `for ... do`, `while ... do`
 | document links | the path in `require("./util")` or `require("@alias/x")` is clickable |
 | workspace symbols | `Ctrl+T` finds functions, locals and module members in every file |
 | call hierarchy | *Show Call Hierarchy* lists callers and callees of a function, across modules |
+| go to definition | `F12` jumps to locals, requires, table members, type names, and globals and Roblox members in `.d.luau` files |
+| go to declaration | like definition, but a member typed by an annotation jumps to the field in the type, not to the assignment |
+| go to type definition | jumps to the type of the value under the cursor: a type alias, a table type or a `declare extern type` |
+| go to implementation | `Ctrl+F12` lists every place the symbol gets a value: `function M.x`, `M.x = ...`, `{ x = ... }`, `local x = ...` |
+| code lens | `N references` above every function; click it to list the uses (`lunaut.codeLens.references`) |
+| selection range | `Shift+Alt+→` grows the selection by syntax: name, call, statement, block, function |
+| type hierarchy | *Show Type Hierarchy* on an instance type walks `extends`: `Part` → `Instance` → `Object`, and every subclass |
+| inline values | while debugging, shows local values next to the code up to the stopped line |
+| monikers | stable symbol ids for indexers: `util.luau.add` for module exports, `print` for globals |
 
 ### Colors, folding, highlighting
 
@@ -708,7 +718,8 @@ tests/                test runner, suites and fixtures
 
 - Definition file and FFlag changes need a server restart
 - Rename and references cover locals and table members; globals and type names are not renamed
-- Go to definition works for locals, requires and table members, not for globals from definition files
+- Go to definition does not reach Luau built-ins (`print`, `table.insert`), they have no source file
+- Type hierarchy covers `declare extern type` classes; plain tables and metatables have no inheritance to show
 - Outside VS Code Rojo autogeneration runs `rojo sourcemap` once per change, it does not keep `--watch` running, and the Studio plugin is not available
 - Downloads (FFlags, Roblox definitions) use `curl`, which ships with Windows 10+, macOS and most Linux systems
 

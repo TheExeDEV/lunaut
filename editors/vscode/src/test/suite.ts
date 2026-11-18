@@ -108,6 +108,47 @@ export async function run(): Promise<void> {
 	);
 
 	await check(
+		"goes to the type definition",
+		async () => {
+			const locations = await vscode.commands.executeCommand<(vscode.Location | vscode.LocationLink)[]>(
+				"vscode.executeTypeDefinitionProvider",
+				main,
+				new vscode.Position(1, 7),
+			);
+			const files = locations.map((location) => ("uri" in location ? location.uri : location.targetUri).fsPath);
+			assert.ok(
+				files.some((file) => file.endsWith("util.luau")),
+				JSON.stringify(files),
+			);
+		},
+		results,
+	);
+
+	await check(
+		"shows reference code lenses",
+		async () => {
+			const util = vscode.Uri.file(path.join(root, "util.luau"));
+			await vscode.workspace.openTextDocument(util);
+			const lenses = await vscode.commands.executeCommand<vscode.CodeLens[]>("vscode.executeCodeLensProvider", util, 10);
+			const titles = lenses.map((lens) => lens.command?.title ?? "");
+			assert.deepStrictEqual(titles, ["1 reference", "1 reference"]);
+			assert.strictEqual(lenses[0].command?.command, "lunaut.showReferences");
+		},
+		results,
+	);
+
+	await check(
+		"expands selection",
+		async () => {
+			const ranges = await vscode.commands.executeCommand<vscode.SelectionRange[]>("vscode.executeSelectionRangeProvider", main, [
+				new vscode.Position(2, 31),
+			]);
+			assert.ok(ranges[0].parent?.parent, JSON.stringify(ranges));
+		},
+		results,
+	);
+
+	await check(
 		"links required files",
 		async () => {
 			const links = await vscode.commands.executeCommand<vscode.DocumentLink[]>("vscode.executeLinkProvider", main);

@@ -9,6 +9,9 @@
 #include "Luau/Common.h"
 #include "Luau/TypeArena.h"
 
+#include <algorithm>
+#include <cstring>
+
 LUAU_FASTFLAG(LuauSolverV2)
 
 namespace lunaut
@@ -21,6 +24,11 @@ namespace priv
 Luau::FrontendOptions make_options(bool for_autocomplete, bool lint);
 std::filesystem::path get_base_luaurc(const std::filesystem::path& root, const settingsinfo& settings);
 json make_definition_diagnostics(const textdocument& document, const Luau::LoadDefinitionFileResult& loaded, Luau::FileResolver* resolver);
+void collect_declarations(
+	const Luau::AstStatBlock* root,
+	const Luau::ModuleName& module,
+	std::unordered_map<std::string, declarationinfo>& globals,
+	std::unordered_map<std::string, declarationinfo>& types);
 
 }
 }
@@ -475,6 +483,8 @@ void workspace::load_definitions()
 {
 	definitions.clear();
 	definition_paths.clear();
+	declared_globals.clear();
+	declared_types.clear();
 
 	std::set<std::string> packages;
 	json metadata = json::object();
@@ -515,6 +525,11 @@ void workspace::load_definitions()
 		{
 			frontend.loadDefinitionFile(
 				frontend.globalsForAutocomplete, frontend.globalsForAutocomplete.globalScope, *source, loaded.name, true, true);
+		}
+
+		if (result.parseResult.root != nullptr)
+		{
+			priv::collect_declarations(result.parseResult.root, loaded.name, declared_globals, declared_types);
 		}
 
 		std::string address = uri::from_path(info.path);
@@ -614,7 +629,9 @@ bool workspace::is_ignored(const std::string& path) const
 
 std::optional<textdocument> workspace::get_text_for(const Luau::ModuleName& name) const
 {
-	std::optional<std::string> path = resolver.get_real_path(name);
+	const auto loaded = std::find_if(
+		definitions.begin(), definitions.end(), [&name](const loadeddefinitioninfo& definition) { return definition.name == name; });
+	std::optional<std::string> path = loaded != definitions.end() ? std::optional<std::string>(loaded->path) : resolver.get_real_path(name);
 
 	if (!path)
 	{
@@ -695,6 +712,35 @@ json make_definition_diagnostics(const textdocument& document, const Luau::LoadD
 	return diagnostics;
 }
 
+void collect_declarations(
+	const Luau::AstStatBlock* root,
+	const Luau::ModuleName& module,
+	std::unordered_map<std::string, declarationinfo>& globals,
+	std::unordered_map<std::string, declarationinfo>& types)
+{
+	for (Luau::AstStat* statement : root->body)
+	{
+		if (Luau::AstStatDeclareGlobal* global = statement->as<Luau::AstStatDeclareGlobal>())
+		{
+			globals[global->name.value] = declarationinfo{module, global->nameLocation};
+		}
+		else if (Luau::AstStatDeclareFunction* function = statement->as<Luau::AstStatDeclareFunction>())
+		{
+			globals[function->name.value] = declarationinfo{module, function->nameLocation};
+		}
+		else if (Luau::AstStatDeclareExternType* extern_type = statement->as<Luau::AstStatDeclareExternType>())
+		{
+			Luau::Position begin = extern_type->location.begin;
+			unsigned int length = static_cast<unsigned int>(std::strlen(extern_type->name.value));
+			types[extern_type->name.value] =
+				declarationinfo{module, Luau::Location{begin, Luau::Position{begin.line, begin.column + length}}};
+		}
+		else if (Luau::AstStatTypeAlias* alias = statement->as<Luau::AstStatTypeAlias>())
+		{
+			types[alias->name.value] = declarationinfo{module, alias->nameLocation};
+		}
+	}
+}
 }
 }
 

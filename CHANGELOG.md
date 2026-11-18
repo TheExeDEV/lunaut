@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- Go to declaration, type definition and implementation
+- Go to definition for globals, extern type members and type names from `.d.luau` files
+- `N references` code lenses above functions (`lunaut.codeLens.references`)
+- Selection range, inline values for debuggers, monikers and type hierarchy for extern types
+- `--!strict`, `--!nolint` and other directives are colored like comments
+
 ## [0.0.4] - 2026-11-16
 
 ### Changed

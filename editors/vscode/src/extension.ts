@@ -163,6 +163,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ getC
 			}
 		}),
 		vscode.commands.registerCommand("lunaut.regenerateSourcemap", () => showJson("Sourcemap", "lunaut/sourcemap", { regenerate: true })),
+		vscode.commands.registerCommand("lunaut.showReferences", (uri: string, position: { line: number; character: number }, locations: { uri: string; range: object }[]) => {
+			const converter = client?.protocol2CodeConverter;
+
+			if (!converter) {
+				return;
+			}
+
+			return vscode.commands.executeCommand(
+				"editor.action.showReferences",
+				vscode.Uri.parse(uri),
+				new vscode.Position(position.line, position.character),
+				locations.map((location) => converter.asLocation(location as never)),
+			);
+		}),
 		vscode.workspace.onDidChangeConfiguration(async (event) => {
 			if (!event.affectsConfiguration("lunaut") && !event.affectsConfiguration("luau-lsp")) {
 				return;

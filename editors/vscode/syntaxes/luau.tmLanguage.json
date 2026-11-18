@@ -17,7 +17,7 @@
     "comment": {
       "patterns": [
         { "name": "comment.block.luau", "begin": "--\\[(=*)\\[", "end": "\\]\\1\\]" },
-        { "name": "keyword.other.directive.luau", "match": "--!\\w+.*$" },
+        { "name": "comment.line.double-dash.directive.luau", "match": "--!\\w+.*$" },
         { "name": "comment.line.double-dash.luau", "match": "--.*$" }
       ]
     },

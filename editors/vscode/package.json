@@ -1783,6 +1783,11 @@
           "default": true,
           "markdownDescription": "Show a color picker for `Color3.new`, `fromRGB`, `fromHSV` and `fromHex`."
         },
+        "lunaut.codeLens.references": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show how many times each function is used above its declaration. Click it to list the uses."
+        },
         "lunaut.completion.autocompleteEnd": {
           "type": "boolean",
           "default": true,

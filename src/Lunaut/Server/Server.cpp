@@ -25,6 +25,9 @@ const std::unordered_map<std::string_view, request_handler> relevant_requests = 
 	{"textDocument/hover", &server::on_hover},
 	{"textDocument/completion", &server::on_completion},
 	{"textDocument/definition", &server::on_definition},
+	{"textDocument/declaration", &server::on_declaration},
+	{"textDocument/typeDefinition", &server::on_type_definition},
+	{"textDocument/implementation", &server::on_implementation},
 	{"textDocument/documentSymbol", &server::on_document_symbol},
 	{"textDocument/signatureHelp", &server::on_signature_help},
 	{"textDocument/references", &server::on_references},
@@ -45,6 +48,14 @@ const std::unordered_map<std::string_view, request_handler> relevant_requests = 
 	{"textDocument/onTypeFormatting", &server::on_on_type_formatting},
 	{"textDocument/formatting", &server::on_formatting},
 	{"textDocument/rangeFormatting", &server::on_range_formatting},
+	{"textDocument/codeLens", &server::on_code_lens},
+	{"codeLens/resolve", &server::on_code_lens_resolve},
+	{"textDocument/selectionRange", &server::on_selection_range},
+	{"textDocument/inlineValue", &server::on_inline_value},
+	{"textDocument/moniker", &server::on_moniker},
+	{"textDocument/prepareTypeHierarchy", &server::on_prepare_type_hierarchy},
+	{"typeHierarchy/supertypes", &server::on_supertypes},
+	{"typeHierarchy/subtypes", &server::on_subtypes},
 	{"lunaut/status", &server::on_lunaut_status},
 	{"lunaut/fflags", &server::on_lunaut_fflags},
 	{"lunaut/definitions", &server::on_lunaut_definitions},
@@ -268,6 +279,21 @@ json server::on_definition(const json& params)
 	return get_workspace(params["textDocument"].value("uri", "")).get_definition(params);
 }
 
+json server::on_declaration(const json& params)
+{
+	return get_workspace(params["textDocument"].value("uri", "")).get_declaration(params);
+}
+
+json server::on_type_definition(const json& params)
+{
+	return get_workspace(params["textDocument"].value("uri", "")).get_type_definition(params);
+}
+
+json server::on_implementation(const json& params)
+{
+	return get_workspace(params["textDocument"].value("uri", "")).get_implementations(params);
+}
+
 json server::on_document_symbol(const json& params)
 {
 	return get_workspace(params["textDocument"].value("uri", "")).get_document_symbols(params);
@@ -378,6 +404,46 @@ json server::on_formatting(const json& params)
 json server::on_range_formatting(const json& params)
 {
 	return get_workspace(params["textDocument"].value("uri", "")).get_formatting(params);
+}
+
+json server::on_code_lens(const json& params)
+{
+	return get_workspace(params["textDocument"].value("uri", "")).get_code_lenses(params);
+}
+
+json server::on_code_lens_resolve(const json& params)
+{
+	return get_workspace(params.value("/data/uri"_json_pointer, "")).resolve_code_lens(params);
+}
+
+json server::on_selection_range(const json& params)
+{
+	return get_workspace(params["textDocument"].value("uri", "")).get_selection_ranges(params);
+}
+
+json server::on_inline_value(const json& params)
+{
+	return get_workspace(params["textDocument"].value("uri", "")).get_inline_values(params);
+}
+
+json server::on_moniker(const json& params)
+{
+	return get_workspace(params["textDocument"].value("uri", "")).get_monikers(params);
+}
+
+json server::on_prepare_type_hierarchy(const json& params)
+{
+	return get_workspace(params["textDocument"].value("uri", "")).get_type_hierarchy_items(params);
+}
+
+json server::on_supertypes(const json& params)
+{
+	return get_workspace(params.value("/item/data/origin"_json_pointer, "")).get_supertypes(params);
+}
+
+json server::on_subtypes(const json& params)
+{
+	return get_workspace(params.value("/item/data/origin"_json_pointer, "")).get_subtypes(params);
 }
 
 void server::on_plugin_full(const json& params)
