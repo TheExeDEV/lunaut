@@ -1,0 +1,14 @@
+{
+  "lunaut.fflags.sync": false,
+  "lunaut.definitions": [
+    {
+      "path": "types/base.d.luau",
+      "priority": 100
+    },
+    {
+      "path": "types/extra.d.luau",
+      "priority": 50,
+      "show_as_module": true
+    }
+  ]
+}

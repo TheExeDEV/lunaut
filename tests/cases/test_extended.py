@@ -1,0 +1,891 @@
+import pathlib
+import shutil
+import string
+import subprocess
+import sys
+import tempfile
+import time
+import unittest
+
+from lsp_client import FIXTURES, LspClient, LspError, position_of, run_cli, to_uri
+
+
+def hover_text(client, uri, text, needle, offset=0):
+	line, character = position_of(text, needle, offset)
+	result = client.at("textDocument/hover", uri, line, character)
+	return "" if result is None else result["contents"]["value"]
+
+
+def completion_items(client, uri, text, needle, offset=0):
+	line, character = position_of(text, needle, offset)
+	result = client.request("textDocument/completion", {"textDocument": {"uri": uri}, "position": {"line": line, "character": character}})
+	return result["items"] if isinstance(result, dict) else result
+
+
+class DocumentationTests(unittest.TestCase):
+	@classmethod
+	def setUpClass(cls):
+		cls.client = LspClient(FIXTURES / "documentation")
+		cls.main = (FIXTURES / "documentation" / "main.luau").read_text(encoding="utf-8")
+		cls.uri, _ = cls.client.open("main.luau")
+
+	@classmethod
+	def tearDownClass(cls):
+		cls.client.close()
+
+	def test_type_alias_comment_from_definition_file(self):
+		value = hover_text(self.client, self.uri, self.main, "local point: Point", len("local point: "))
+		self.assertIn("type Point", value)
+		self.assertIn("A point in world space.", value)
+
+	def test_intersection_comment_from_definition_file(self):
+		value = hover_text(self.client, self.uri, self.main, "local moving: MovingPoint", len("local moving: "))
+		self.assertIn("type MovingPoint", value)
+		self.assertIn("A moving point.", value)
+
+	def test_intersection_comment_on_local_value(self):
+		value = hover_text(self.client, self.uri, self.main, "local moving: MovingPoint", len("local "))
+		self.assertIn("local moving: MovingPoint", value)
+		self.assertIn("A moving point.", value)
+
+	def test_function_comment_from_definition_file(self):
+		value = hover_text(self.client, self.uri, self.main, "add(1, 2)")
+		self.assertIn("function add", value)
+		self.assertIn("Adds two numbers.", value)
+
+	def test_field_comment_from_definition_file(self):
+		value = hover_text(self.client, self.uri, self.main, "point.x", len("point."))
+		self.assertIn("x: number", value)
+		self.assertIn("Horizontal coordinate.", value)
+
+		value = hover_text(self.client, self.uri, self.main, "moving.speed", len("moving."))
+		self.assertIn("speed: number", value)
+		self.assertIn("Speed in studs per second.", value)
+
+	def test_type_alias_definition_jump(self):
+		line, character = position_of(self.main, "local point: Point", len("local point: "))
+		location = self.client.at("textDocument/definition", self.uri, line, character)
+		self.assertTrue(location["uri"].endswith(".d.luau"), location)
+		self.assertEqual(location["range"]["start"]["line"], 1)
+
+	def test_type_alias_name_stays_at_declaration(self):
+		path = FIXTURES / "documentation" / "types" / "base.d.luau"
+		text = path.read_text(encoding="utf-8")
+		uri = to_uri(path)
+		self.client.notify(
+			"textDocument/didOpen",
+			{"textDocument": {"uri": uri, "languageId": "luau", "version": 1, "text": text}},
+		)
+		line, character = position_of(text, "export type Point", len("export type "))
+		location = self.client.at("textDocument/definition", uri, line, character)
+		self.assertTrue(location["uri"].endswith("base.d.luau"), location)
+		self.assertEqual(location["range"]["start"]["line"], 1)
+		self.assertLessEqual(location["range"]["start"]["character"], len("export type Point"))
+
+	def test_local_imported_type_keeps_name(self):
+		value = hover_text(self.client, self.uri, self.main, "local object: LuaObject", len("local "))
+		self.assertIn("local object: LuaObject", value)
+		self.assertNotIn("name: string", value)
+
+	def test_completion_shows_field_and_function_comments(self):
+		items = completion_items(self.client, self.uri, self.main, "point.x", len("point."))
+		field = next(item for item in items if item["label"] == "x")
+		self.assertIn("Horizontal coordinate.", field["documentation"]["value"])
+		function = next(item for item in items if item["label"] == "move")
+		self.assertIn("Moves the point by the given offset.", function["documentation"]["value"])
+
+		items = completion_items(self.client, self.uri, self.main, "moving.speed", len("moving."))
+		field = next(item for item in items if item["label"] == "speed")
+		self.assertIn("Speed in studs per second.", field["documentation"]["value"])
+
+	def test_completion_shows_function_comment(self):
+		items = completion_items(self.client, self.uri, self.main, "add(1, 2)", 1)
+		function = next(item for item in items if item["label"] == "add")
+		self.assertIn("Adds two numbers.", function["documentation"]["value"])
+
+	def test_signature_help_shows_source_parameter_comments(self):
+		line, character = position_of(self.main, "multiply(1, 2)", len("multiply("))
+		result = self.client.request(
+			"textDocument/signatureHelp",
+			{"textDocument": {"uri": self.uri}, "position": {"line": line, "character": character}},
+		)
+		parameters = result["signatures"][0]["parameters"]
+		self.assertEqual(parameters[0]["documentation"]["value"], "Input value.")
+		self.assertEqual(parameters[1]["documentation"]["value"], "Multiplier.")
+
+
+class RequireAliasTests(unittest.TestCase):
+	@classmethod
+	def setUpClass(cls):
+		cls.client = LspClient(FIXTURES / "annotations")
+		cls.consumer = (FIXTURES / "annotations" / "consumer.luau").read_text(encoding="utf-8")
+		cls.uri, _ = cls.client.open("consumer.luau")
+
+	@classmethod
+	def tearDownClass(cls):
+		cls.client.close()
+
+	def test_require_preserves_annotated_alias(self):
+		value = hover_text(self.client, self.uri, self.consumer, "local config = require", 6)
+		self.assertIn("local config: Config", value)
+		self.assertNotIn("maxPlayers", value)
+
+	def test_require_call_preserves_annotated_alias(self):
+		value = hover_text(self.client, self.uri, self.consumer, 'require("./config")')
+		self.assertIn("```luau\nConfig\n```", value)
+		self.assertIn("[Config](file:///", value)
+
+	def test_function_return_preserves_annotated_alias(self):
+		value = hover_text(self.client, self.uri, self.consumer, "factory()")
+		self.assertIn("function factory(): Shape", value)
+		self.assertIn("[Shape](file:///", value)
+
+	def test_type_definition_of_required_alias(self):
+		line, character = position_of(self.consumer, "local shape = require", len("local "))
+		location = self.client.at("textDocument/typeDefinition", self.uri, line, character)
+		self.assertTrue(location["uri"].endswith("shapes.luau"), location)
+		self.assertEqual(location["range"]["start"]["line"], 11)
+
+	def test_type_definition_of_function_result(self):
+		line, character = position_of(self.consumer, "made.count", 0)
+		location = self.client.at("textDocument/typeDefinition", self.uri, line, character)
+		self.assertTrue(location["uri"].endswith("factory.luau"), location)
+		self.assertEqual(location["range"]["start"]["line"], 2)
+
+	def test_require_preserves_intersection_alias(self):
+		value = hover_text(self.client, self.uri, self.consumer, "local shape = require", 6)
+		self.assertIn("local shape: Shape", value)
+		self.assertIn("Intersected shape.", value)
+
+	def test_require_preserves_recursive_alias(self):
+		value = hover_text(self.client, self.uri, self.consumer, "local node = require", 6)
+		self.assertIn("local node: Node", value)
+		self.assertIn("Recursive node.", value)
+		self.assertNotIn("where", value)
+
+	def test_inlay_hints_preserve_intersection_alias(self):
+		hints = self.client.request(
+			"textDocument/inlayHint",
+			{"textDocument": {"uri": self.uri}, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 99, "character": 0}}},
+		)
+		shape = next(hint for hint in hints if hint["position"]["line"] == 2 and hint["kind"] == 1)
+		self.assertEqual(shape["label"], ": Shape")
+		edits = shape["textEdits"]
+		self.assertEqual([edit["newText"] for edit in edits], [": shape.Shape"])
+
+	def test_require_preserves_defaulted_generic_alias(self):
+		value = hover_text(self.client, self.uri, self.consumer, "local wrapped = require", 6)
+		self.assertIn("local wrapped: Wrapper", value)
+		self.assertIn("[Wrapper](file:///", value)
+		self.assertNotIn("value: number", value)
+
+	def test_inlay_hints_preserve_defaulted_generic_alias(self):
+		hints = self.client.request(
+			"textDocument/inlayHint",
+			{"textDocument": {"uri": self.uri}, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 99, "character": 0}}},
+		)
+		wrapper = next(hint for hint in hints if hint["position"]["line"] == 6 and hint["kind"] == 1)
+		self.assertEqual(wrapper["label"], ": Wrapper")
+		edits = wrapper["textEdits"]
+		self.assertEqual([edit["newText"] for edit in edits], [": wrapped.Wrapper"])
+
+	def test_inlay_hints_preserve_table_aliases(self):
+		hints = self.client.request(
+			"textDocument/inlayHint",
+			{"textDocument": {"uri": self.uri}, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 99, "character": 0}}},
+		)
+		labels = {hint["position"]["line"]: hint["label"] for hint in hints if hint["kind"] == 1}
+		self.assertEqual(labels[1], ": Config")
+		self.assertEqual(labels[3], ": Node")
+
+
+class GenericAliasLoopTests(unittest.TestCase):
+	@classmethod
+	def setUpClass(cls):
+		cls.client = LspClient(FIXTURES / "generics")
+		cls.user = (FIXTURES / "generics" / "user.luau").read_text(encoding="utf-8")
+		cls.uri, _ = cls.client.open("user.luau")
+
+	@classmethod
+	def tearDownClass(cls):
+		cls.client.close()
+
+	def test_loop_variable_preserves_generic_alias(self):
+		value = hover_text(self.client, self.uri, self.user, "for _, entry in get_marked() do", len("for _, "))
+		self.assertIn("local entry: marked", value)
+		self.assertIn("[marked](file:///", value)
+		self.assertNotIn("luaobject", value)
+
+	def test_inlay_hints_preserve_generic_alias_on_loop_variable(self):
+		hints = self.client.request(
+			"textDocument/inlayHint",
+			{"textDocument": {"uri": self.uri}, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 99, "character": 0}}},
+		)
+		entry = next(hint for hint in hints if hint["position"]["line"] == 13 and hint["kind"] == 1)
+		self.assertEqual(entry["label"], ": marked")
+
+
+class AliasRecoveryTests(unittest.TestCase):
+	@classmethod
+	def setUpClass(cls):
+		cls.client = LspClient(FIXTURES / "aliases")
+		cls.consumer = (FIXTURES / "aliases" / "consumer.luau").read_text(encoding="utf-8")
+		cls.service = (FIXTURES / "aliases" / "service.luau").read_text(encoding="utf-8")
+		cls.uri, _ = cls.client.open("consumer.luau")
+		cls.service_uri, _ = cls.client.open("service.luau")
+
+	@classmethod
+	def tearDownClass(cls):
+		cls.client.close()
+
+	def test_optional_return_preserves_alias(self):
+		value = hover_text(self.client, self.uri, self.consumer, "local scheduler = Service:whose()", len("local "))
+		self.assertIn("local scheduler: scheduler?", value)
+		self.assertIn("[scheduler](file:///", value)
+
+	def test_optional_union_return_preserves_alias(self):
+		value = hover_text(self.client, self.uri, self.consumer, "local status = Service:get_status()", len("local "))
+		self.assertIn("local status: status?", value)
+		self.assertIn("[status](file:///", value)
+
+	def test_local_alias_from_return_annotation(self):
+		value = hover_text(self.client, self.uri, self.consumer, "local event = Service:get_event", len("local "))
+		self.assertIn("local event: net_event", value)
+		self.assertIn("[net_event](file:///", value)
+
+	def test_local_alias_from_indexer(self):
+		value = hover_text(self.client, self.service_uri, self.service, 'local existing = events["data"]', len("local "))
+		self.assertIn("local existing: net_event", value)
+		self.assertIn("[net_event](file:///", value)
+
+	def test_inline_type_argument_preserves_alias(self):
+		value = hover_text(
+			self.client, self.uri, self.consumer, "local casted = Service:as<<Service.scheduler>>(nil)", len("local ")
+		)
+		self.assertIn("local casted: Service.scheduler", value)
+		self.assertIn("[Service.scheduler](file:///", value)
+
+	def test_anonymous_table_return_annotation(self):
+		value = hover_text(self.client, self.uri, self.consumer, "local entries = Service:get_entries()", len("local "))
+		self.assertIn("local entries: { net_event }", value)
+
+	def test_anonymous_table_type_argument(self):
+		value = hover_text(
+			self.client,
+			self.uri,
+			self.consumer,
+			"local watched = Service:as<<{ [string]: Service.scheduler }>>(nil)",
+			len("local "),
+		)
+		self.assertIn("local watched: { [string]: Service.scheduler }", value)
+
+	def test_inlay_hints_preserve_optional_and_local_aliases(self):
+		hints = self.client.request(
+			"textDocument/inlayHint",
+			{"textDocument": {"uri": self.uri}, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 99, "character": 0}}},
+		)
+		labels = {hint["position"]["line"]: hint["label"] for hint in hints if hint["kind"] == 1}
+		self.assertEqual(labels[4], ": scheduler?")
+		self.assertEqual(labels[5], ": net_event")
+		self.assertEqual(labels[6], ": status?")
+		self.assertEqual(labels[7], ": Service.scheduler")
+		self.assertEqual(labels[8], ": { net_event }")
+		self.assertEqual(labels[9], ": { [string]: Service.scheduler }")
+
+	def test_inlay_hints_insert_visible_raw_annotations(self):
+		hints = self.client.request(
+			"textDocument/inlayHint",
+			{"textDocument": {"uri": self.uri}, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 99, "character": 0}}},
+		)
+		edits = {hint["position"]["line"]: [edit["newText"] for edit in hint.get("textEdits", [])] for hint in hints if hint["kind"] == 1}
+		self.assertEqual(edits[8], [])
+		self.assertEqual(edits[9], [": { [string]: Service.scheduler }"])
+
+	def test_inlay_hints_skip_private_aliases(self):
+		hints = self.client.request(
+			"textDocument/inlayHint",
+			{"textDocument": {"uri": self.uri}, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 99, "character": 0}}},
+		)
+		edits = {hint["position"]["line"]: [edit["newText"] for edit in hint.get("textEdits", [])] for hint in hints if hint["kind"] == 1}
+		self.assertEqual(edits[5], [])
+		self.assertEqual(edits[6], [])
+		self.assertEqual(edits[7], [": Service.scheduler"])
+
+	def test_vararg_return_preserves_alias(self):
+		value = hover_text(self.client, self.uri, self.consumer, "local logger", len("local "))
+		self.assertIn("function logger(", value)
+		self.assertIn("[logger](file:///", value)
+
+	def test_expanded_vararg_type_has_no_double_ellipsis(self):
+		value = hover_text(self.client, self.uri, self.consumer, "local function log", len("local function "))
+		self.assertIn("...any", value)
+		self.assertNotIn("......", value)
+
+
+class TypeDisplaySettingsTests(unittest.TestCase):
+	def test_disabled_aliases_fall_back_to_module_names(self):
+		text = (FIXTURES / "aliases" / "consumer.luau").read_text(encoding="utf-8")
+		client = LspClient(FIXTURES / "aliases", {"vscode": {"lunaut.typeDisplay.aliases": False}})
+
+		try:
+			uri, _ = client.open("consumer.luau")
+			value = hover_text(client, uri, text, "local scheduler = Service:whose()", len("local "))
+			self.assertIn("local scheduler: scheduler?", value)
+			self.assertNotIn("Service.scheduler", value)
+		finally:
+			client.close()
+
+	def test_disabled_refine_keeps_or_union(self):
+		text = (FIXTURES / "refine" / "main.luau").read_text(encoding="utf-8")
+		client = LspClient(FIXTURES / "refine", {"vscode": {"lunaut.typeDisplay.refine": False}})
+
+		try:
+			uri, _ = client.open("main.luau")
+			value = hover_text(client, uri, text, "local known", len("local "))
+			self.assertIn("local known: entry | {}", value)
+		finally:
+			client.close()
+
+	def test_enabled_refine_drops_empty_or_branch(self):
+		text = (FIXTURES / "refine" / "main.luau").read_text(encoding="utf-8")
+		client = LspClient(FIXTURES / "refine")
+
+		try:
+			uri, _ = client.open("main.luau")
+			value = hover_text(client, uri, text, "local known", len("local "))
+			self.assertIn("local known: entry", value)
+			self.assertNotIn("| {}", value)
+		finally:
+			client.close()
+
+
+class AutoRequireTests(unittest.TestCase):
+	def test_auto_require_inserts_import_and_annotation(self):
+		text = (FIXTURES / "autorequire" / "user.luau").read_text(encoding="utf-8")
+		client = LspClient(FIXTURES / "autorequire")
+
+		try:
+			uri, _ = client.open("user.luau")
+			hints = client.request(
+				"textDocument/inlayHint",
+				{"textDocument": {"uri": uri}, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 99, "character": 0}}},
+			)
+			scheduler = next(hint for hint in hints if hint["position"]["line"] == 4 and hint["kind"] == 1)
+			self.assertEqual(scheduler["label"], ": Service.scheduler")
+			self.assertEqual(
+				[edit["newText"] for edit in scheduler["textEdits"]],
+				['local Service = require("./service")\n', ": Service.scheduler"],
+			)
+			self.assertIn("local scheduler: Service.scheduler", hover_text(client, uri, text, "local scheduler", len("local ")))
+		finally:
+			client.close()
+
+	def test_disabled_auto_require_does_not_offer_edits(self):
+		client = LspClient(FIXTURES / "autorequire", {"vscode": {"lunaut.inlayHints.autoRequire": False}})
+
+		try:
+			uri, _ = client.open("user.luau")
+			hints = client.request(
+				"textDocument/inlayHint",
+				{"textDocument": {"uri": uri}, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 99, "character": 0}}},
+			)
+			scheduler = next(hint for hint in hints if hint["position"]["line"] == 4 and hint["kind"] == 1)
+			self.assertEqual(scheduler["label"], ": Service.scheduler")
+			self.assertNotIn("textEdits", scheduler)
+		finally:
+			client.close()
+
+
+class ShowAsModuleTests(unittest.TestCase):
+	def test_definition_alias_uses_module_qualifier(self):
+		text = (FIXTURES / "definitions-module" / "main.luau").read_text(encoding="utf-8")
+		client = LspClient(FIXTURES / "definitions-module")
+
+		try:
+			uri, _ = client.open("main.luau")
+			value = hover_text(client, uri, text, "local car", len("local "))
+			self.assertIn("local car: extra.Car", value)
+			self.assertIn("[Car](file:///", value)
+		finally:
+			client.close()
+
+	def test_definition_alias_without_option_stays_unqualified(self):
+		text = (FIXTURES / "definitions" / "main.luau").read_text(encoding="utf-8")
+		client = LspClient(FIXTURES / "definitions")
+
+		try:
+			uri, _ = client.open("main.luau")
+			value = hover_text(client, uri, text, "local car", len("local "))
+			self.assertIn("local car: Car", value)
+			self.assertNotIn("@extra.Car", value)
+		finally:
+			client.close()
+
+	def test_module_qualified_annotation_typechecks(self):
+		text = (FIXTURES / "definitions-module" / "main.luau").read_text(encoding="utf-8")
+		client = LspClient(FIXTURES / "definitions-module")
+
+		try:
+			uri, diagnostics = client.open("main.luau")
+			self.assertEqual([diagnostic for diagnostic in diagnostics if diagnostic.get("severity") == 1], [])
+
+			value = hover_text(client, uri, text, "local typed", len("local "))
+			self.assertIn("local typed: extra.Car", value)
+
+			value = hover_text(client, uri, text, "local attributed", len("local "))
+			self.assertIn("local attributed: extra.Car", value)
+			self.assertIn("[extra.Car](file:///", value)
+		finally:
+			client.close()
+
+
+class UnionAliasTests(unittest.TestCase):
+	def test_union_of_alias_representations_keeps_alias(self):
+		text = (FIXTURES / "union-alias" / "main.luau").read_text(encoding="utf-8")
+		client = LspClient(FIXTURES / "union-alias")
+
+		try:
+			uri, diagnostics = client.open("main.luau")
+			self.assertEqual([diagnostic for diagnostic in diagnostics if diagnostic.get("severity") == 1], [])
+
+			value = hover_text(client, uri, text, "const kind", len("const "))
+			self.assertIn("const kind: enumitem_shared_net_variant", value)
+			self.assertNotIn("|", value)
+
+			hints = client.request(
+				"textDocument/inlayHint",
+				{"textDocument": {"uri": uri}, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 99, "character": 0}}},
+			)
+			kind = next(hint for hint in hints if hint["position"]["line"] == 3 and hint["kind"] == 1)
+			self.assertEqual(kind["label"], ": enumitem_shared_net_variant")
+		finally:
+			client.close()
+
+
+class NormalizedAliasTests(unittest.TestCase):
+	@classmethod
+	def setUpClass(cls):
+		cls.client = LspClient(FIXTURES / "alias-norm")
+		cls.text = (FIXTURES / "alias-norm" / "main.luau").read_text(encoding="utf-8")
+		cls.uri, _ = cls.client.open("main.luau")
+
+	@classmethod
+	def tearDownClass(cls):
+		cls.client.close()
+
+	def test_primitive_does_not_become_any_alias(self):
+		value = hover_text(self.client, self.uri, self.text, "const action", len("const "))
+		self.assertIn("const action: any", value)
+		self.assertNotIn("AdReward", value)
+
+	def test_primitive_does_not_become_string_alias(self):
+		value = hover_text(self.client, self.uri, self.text, "const id", len("const "))
+		self.assertIn("const id: string", value)
+		self.assertNotIn("ContentId", value)
+
+	def test_function_keyword_hover_uses_local_aliases(self):
+		value = hover_text(self.client, self.uri, self.text, "local function compare", len("local "))
+		self.assertIn("function(left: first, right: second", value)
+		self.assertIn("): boolean", value)
+		self.assertNotIn("name: string", value)
+
+	def test_defaulted_union_alias_is_not_expanded(self):
+		value = hover_text(self.client, self.uri, self.text, "const result", len("const "))
+		self.assertIn("observer_var", value)
+		self.assertNotIn("|", value)
+
+
+class DisplayDefinitionTests(unittest.TestCase):
+	@classmethod
+	def setUpClass(cls):
+		cls.client = LspClient(FIXTURES / "display")
+		cls.consumer = (FIXTURES / "display" / "consumer.luau").read_text(encoding="utf-8")
+		cls.service = (FIXTURES / "display" / "service.luau").read_text(encoding="utf-8")
+		cls.broken = (FIXTURES / "display" / "broken.luau").read_text(encoding="utf-8")
+		cls.consumer_uri, _ = cls.client.open("consumer.luau")
+		cls.service_uri, _ = cls.client.open("service.luau")
+		cls.broken_uri, _ = cls.client.open("broken.luau")
+
+	@classmethod
+	def tearDownClass(cls):
+		cls.client.close()
+
+	def test_nested_alias_has_definition(self):
+		value = hover_text(self.client, self.service_uri, self.service, "const result", len("const "))
+		self.assertIn("const result: {observer_var}", value)
+		self.assertIn("[observer_var](file:///", value)
+
+	def test_union_member_has_definition(self):
+		value = hover_text(self.client, self.service_uri, self.service, "local viewed", len("local "))
+		self.assertIn("local viewed: line | string", value)
+		self.assertIn("[line](file:///", value)
+
+	def test_function_value_has_definition(self):
+		value = hover_text(self.client, self.service_uri, self.service, "= function(self: scheduler", 2)
+		self.assertIn("**Definitions**", value)
+		self.assertIn("[function](file:///", value)
+
+	def test_variadic_tail_uses_alias(self):
+		value = hover_text(self.client, self.consumer_uri, self.consumer, "local write = FuncDB.write", len("local write = FuncDB."))
+		self.assertIn("...tval", value)
+		self.assertNotIn("where t1", value)
+		self.assertNotIn("read read", value)
+
+	def test_inlay_return_uses_alias(self):
+		hints = self.client.request(
+			"textDocument/inlayHint",
+			{
+				"textDocument": {"uri": self.service_uri},
+				"range": {"start": {"line": 0, "character": 0}, "end": {"line": 99, "character": 0}},
+			},
+		)
+		labels = [hint["label"] for hint in hints if hint["kind"] == 1]
+		self.assertIn(": {observer_var}", labels)
+
+	def test_definition_prefers_implementation(self):
+		line, character = position_of(self.consumer, "Service:whose()", len("Service:"))
+		result = self.client.at("textDocument/definition", self.consumer_uri, line, character)
+		expected_line, _ = position_of(self.service, "whose = function", 1)
+		self.assertTrue(result["uri"].endswith("/service.luau"), result)
+		self.assertEqual(result["range"]["start"]["line"], expected_line)
+
+	def test_unknown_error_setting_replaces_error_type(self):
+		value = hover_text(self.client, self.broken_uri, self.broken, "local broken", len("local "))
+		self.assertIn("local broken: unknown", value)
+		self.assertNotIn("*error-type*", value)
+
+	def test_unknown_error_can_be_disabled(self):
+		client = LspClient(FIXTURES / "display", {"vscode": {"lunaut.typeDisplay.unknownError": False}})
+
+		try:
+			uri, _ = client.open("broken.luau")
+			value = hover_text(client, uri, self.broken, "local broken", len("local "))
+			self.assertIn("local broken: *error-type*", value)
+		finally:
+			client.close()
+
+
+class NegatedInlayTests(unittest.TestCase):
+	def test_negated_type_is_not_insertable(self):
+		text = (FIXTURES / "negated" / "main.luau").read_text(encoding="utf-8")
+		client = LspClient(FIXTURES / "negated", {"vscode": {"lunaut.typeDisplay.aliases": False}})
+
+		try:
+			uri, _ = client.open("main.luau")
+			value = hover_text(client, uri, text, "local value", len("local "))
+			self.assertIn("local value: ~number", value)
+
+			hints = client.request(
+				"textDocument/inlayHint",
+				{"textDocument": {"uri": uri}, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 99, "character": 0}}},
+			)
+			hint = next(entry for entry in hints if entry["position"]["line"] == 1 and entry["kind"] == 1)
+			self.assertEqual(hint["label"], ": ~number")
+			self.assertNotIn("textEdits", hint)
+		finally:
+			client.close()
+
+
+class DiagnosticsDelayTests(unittest.TestCase):
+	def test_delay_setting_round_trip(self):
+		client = LspClient(FIXTURES / "basic")
+
+		try:
+			client.open("main.luau")
+			status = client.request("lunaut/status", {})
+			self.assertEqual(status["workspaces"][0]["settings"]["diagnostics"]["delay"], 1000)
+		finally:
+			client.close()
+
+		client = LspClient(FIXTURES / "basic", {"vscode": {"lunaut.diagnostics.delay": 25}})
+
+		try:
+			client.open("main.luau")
+			status = client.request("lunaut/status", {})
+			self.assertEqual(status["workspaces"][0]["settings"]["diagnostics"]["delay"], 25)
+		finally:
+			client.close()
+
+	def test_zero_delay_publishes_without_waiting(self):
+		client = LspClient(FIXTURES / "basic", {"vscode": {"lunaut.diagnostics.delay": 0}})
+
+		try:
+			uri, _ = client.open("main.luau")
+			started = time.time()
+			diagnostics = client.change(uri, "local x = 2\nprint(x)\n", version=2)
+			self.assertLess(time.time() - started, 0.9)
+			self.assertEqual(diagnostics, [])
+		finally:
+			client.close()
+
+
+class ReservedWordHoverTests(unittest.TestCase):
+	def test_reserved_words_have_no_hover(self):
+		text = (FIXTURES / "basic" / "control.luau").read_text(encoding="utf-8")
+		client = LspClient(FIXTURES / "basic")
+
+		try:
+			uri, _ = client.open("control.luau")
+
+			for word in ("local", "const", "if", "then", "return", "end"):
+				line, character = position_of(text, word, 1)
+				self.assertIsNone(client.at("textDocument/hover", uri, line, character), word)
+
+			line, character = position_of(text, "print(x, y)", len("print("))
+			self.assertIsNotNone(client.at("textDocument/hover", uri, line, character))
+		finally:
+			client.close()
+
+
+class TypeStatsTests(unittest.TestCase):
+	def test_type_stats_request(self):
+		client = LspClient(FIXTURES / "definitions")
+
+		try:
+			main = (FIXTURES / "definitions" / "main.luau").read_text(encoding="utf-8")
+			uri, _ = client.open("main.luau")
+			client.at("textDocument/hover", uri, 0, 12)
+
+			stats = client.request("lunaut/typeStats", {})["workspaces"][0]["stats"]
+			self.assertGreater(stats["total"], 0)
+			self.assertIn("table", stats["types"]["kinds"])
+			self.assertIn("extern", stats["types"]["kinds"])
+			self.assertTrue(any(origin["name"] == "@base" for origin in stats["origins"]), stats["origins"])
+			self.assertIn({"name": "Car", "parent": "Vehicle"}, stats["hierarchy"])
+			self.assertTrue(
+				any(entry["name"] == "Vehicle" and "Car" in entry["children"] for entry in stats["subtypes"]),
+				stats["subtypes"],
+			)
+			self.assertTrue(any(alias["name"] == "Car" for alias in stats["aliases"]), stats["aliases"])
+			self.assertIn("analyzer", stats)
+			self.assertTrue(main)
+		finally:
+			client.close()
+
+	def test_stats_cli_json(self):
+		result = run_cli("stats", ".", "--json", cwd=FIXTURES / "definitions")
+		self.assertEqual(result.returncode, 0, result.stderr)
+		self.assertIn('"hierarchy"', result.stdout)
+		self.assertIn('"Car"', result.stdout)
+		self.assertIn('"Vehicle"', result.stdout)
+
+	def test_stats_cli_text(self):
+		result = run_cli("stats", ".", cwd=FIXTURES / "definitions")
+		self.assertEqual(result.returncode, 0, result.stderr)
+		self.assertIn("Types:", result.stdout)
+		self.assertIn("Origins:", result.stdout)
+		self.assertIn("Car extends Vehicle", result.stdout)
+
+
+class ProtectionTests(unittest.TestCase):
+	def test_broken_edit_does_not_crash(self):
+		client = LspClient(FIXTURES / "basic")
+
+		try:
+			uri, _ = client.open("main.luau")
+			diagnostics = client.change(uri, "local x = \n", version=2)
+			self.assertTrue(any(diagnostic["code"] == "SyntaxError" for diagnostic in diagnostics), diagnostics)
+			client.at("textDocument/hover", uri, 0, 6)
+			self.assertEqual(client.request("lunaut/status", {})["name"], "lunaut")
+			self.assertEqual(client.change(uri, "local x = 1\nprint(x)\n", version=3), [])
+		finally:
+			client.close()
+
+	def test_malformed_request_does_not_crash(self):
+		client = LspClient(FIXTURES / "basic")
+
+		try:
+			uri, _ = client.open("main.luau")
+			self.assertIsNone(client.request("textDocument/hover", []))
+			self.assertIsNone(client.request("textDocument/hover", {}))
+
+			with self.assertRaises(LspError):
+				client.request("textDocument/hover", {"textDocument": {"uri": uri}, "position": {"line": "x", "character": 0}})
+
+			status = client.request("lunaut/status", {})
+			self.assertEqual(status["name"], "lunaut")
+			self.assertTrue(uri)
+		finally:
+			client.close()
+
+
+PLUGIN_TEMPLATE = string.Template(r"""
+#include <stdint.h>
+#include <stddef.h>
+
+struct lunaut_analyzer_info
+{
+	uint32_t size;
+	uint32_t abi;
+	const char* name;
+	const char* luau_version;
+	uint32_t luau_version_code;
+	uint32_t frontend_api;
+};
+
+struct lunaut_analyzer_request
+{
+	uint32_t size;
+	const char* module;
+	const char* path;
+	const char* source;
+	const char* settings;
+};
+
+struct lunaut_analyzer_response
+{
+	uint32_t size;
+	const char* diagnostics;
+	const char* error;
+};
+
+static const struct lunaut_analyzer_info info = {
+	sizeof(struct lunaut_analyzer_info),
+	$abi,
+	"$name",
+	"$version",
+	$version_code,
+	$frontend_api,
+};
+
+const struct lunaut_analyzer_info* lunaut_analyzer_info_v1(void)
+{
+	return &info;
+}
+
+int lunaut_analyzer_check_v1(const struct lunaut_analyzer_request* request, struct lunaut_analyzer_response* response)
+{
+	response->diagnostics = "$diagnostics";
+	response->error = NULL;
+	return 0;
+}
+
+void lunaut_analyzer_free_v1(const char* text)
+{
+	(void)text;
+}
+""")
+
+
+def build_plugin(directory, name="test-analyzer", version="0.747.0", version_code=74700, frontend_api=2, abi=1, diagnostics="[]"):
+	compiler = shutil.which("cc") or shutil.which("clang") or shutil.which("gcc")
+
+	if compiler is None:
+		return None
+
+	root = pathlib.Path(directory)
+	source = root / "plugin.c"
+	target = root / f"lib{name}.so"
+	source.write_text(
+		PLUGIN_TEMPLATE.substitute(
+			abi=abi,
+			name=name,
+			version=version,
+			version_code=version_code,
+			frontend_api=frontend_api,
+			diagnostics=diagnostics.replace('"', '\\"'),
+		),
+		encoding="utf-8",
+	)
+	subprocess.run([compiler, "-shared", "-fPIC", "-o", str(target), str(source)], check=True)
+	return target
+
+
+@unittest.skipIf(sys.platform == "win32", "plugins are built with a POSIX C compiler")
+class AnalyzerTests(unittest.TestCase):
+	def setUp(self):
+		self.tools = tempfile.TemporaryDirectory()
+
+	def tearDown(self):
+		self.tools.cleanup()
+
+	def client(self, plugin, diagnostics=False):
+		return LspClient(
+			FIXTURES / "basic",
+			{"analyzer": {"enabled": True, "path": str(plugin), "diagnostics": diagnostics}},
+		)
+
+	def test_compatible_analyzer_is_loaded(self):
+		plugin = build_plugin(self.tools.name)
+
+		if plugin is None:
+			self.skipTest("no C compiler")
+
+		client = self.client(plugin)
+
+		try:
+			analyzer = client.request("lunaut/status", {})["workspaces"][0]["analyzer"]
+			self.assertTrue(analyzer["enabled"])
+			self.assertTrue(analyzer["loaded"])
+			self.assertEqual(analyzer["name"], "test-analyzer")
+			self.assertEqual(analyzer["frontend_api"], "post-0.743")
+			self.assertEqual(analyzer["error"], "")
+		finally:
+			client.close()
+
+	def test_pre_0743_analyzer_is_supported(self):
+		plugin = build_plugin(self.tools.name, name="old-analyzer", version="0.742.0", version_code=74200, frontend_api=1)
+
+		if plugin is None:
+			self.skipTest("no C compiler")
+
+		client = self.client(plugin)
+
+		try:
+			analyzer = client.request("lunaut/status", {})["workspaces"][0]["analyzer"]
+			self.assertTrue(analyzer["loaded"])
+			self.assertEqual(analyzer["frontend_api"], "pre-0.743")
+		finally:
+			client.close()
+
+	def test_analyzer_diagnostics_are_merged(self):
+		payload = (
+			'[{"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}},'
+			'"severity":1,"source":"test-analyzer","message":"external diagnostic"}]'
+		)
+		plugin = build_plugin(self.tools.name, name="diagnostic-analyzer", diagnostics=payload)
+
+		if plugin is None:
+			self.skipTest("no C compiler")
+
+		client = self.client(plugin, diagnostics=True)
+
+		try:
+			uri, diagnostics = client.open("main.luau")
+			self.assertTrue(any(diagnostic.get("message") == "external diagnostic" for diagnostic in diagnostics), diagnostics)
+			self.assertIsNotNone(uri)
+		finally:
+			client.close()
+
+	def test_incompatible_abi_is_reported(self):
+		plugin = build_plugin(self.tools.name, name="bad-abi", abi=99)
+
+		if plugin is None:
+			self.skipTest("no C compiler")
+
+		client = self.client(plugin)
+
+		try:
+			analyzer = client.request("lunaut/status", {})["workspaces"][0]["analyzer"]
+			self.assertFalse(analyzer["loaded"])
+			self.assertIn("incompatible analyzer ABI", analyzer["error"])
+
+			uri, _ = client.open("main.luau")
+			self.assertIsNotNone(client.at("textDocument/hover", uri, 2, 6))
+		finally:
+			client.close()
+
+	def test_version_and_api_mismatch_is_reported(self):
+		plugin = build_plugin(self.tools.name, name="bad-version", version="0.747.0", version_code=74700, frontend_api=1)
+
+		if plugin is None:
+			self.skipTest("no C compiler")
+
+		client = self.client(plugin)
+
+		try:
+			analyzer = client.request("lunaut/status", {})["workspaces"][0]["analyzer"]
+			self.assertFalse(analyzer["loaded"])
+			self.assertIn("pre-0.743 frontend API cannot serve", analyzer["error"])
+		finally:
+			client.close()

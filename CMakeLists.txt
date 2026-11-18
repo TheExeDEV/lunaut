@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.20)
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/luau.version" LUNAUT_LUAU_VERSION)
 string(STRIP "${LUNAUT_LUAU_VERSION}" LUNAUT_LUAU_VERSION)
 
-project(lunaut VERSION 0.0.4 LANGUAGES CXX)
+project(lunaut VERSION 0.0.5 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -46,7 +46,7 @@ file(GLOB_RECURSE LUNAUT_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/
 
 add_executable(lunaut ${LUNAUT_SOURCES})
 target_include_directories(lunaut PRIVATE src/Lunaut "${CMAKE_BINARY_DIR}/generated")
-target_link_libraries(lunaut PRIVATE Luau.Analysis Luau.Ast Luau.Config Luau.Compiler Luau.VM nlohmann_json::nlohmann_json)
+target_link_libraries(lunaut PRIVATE Luau.Analysis Luau.Ast Luau.Config Luau.Compiler Luau.VM nlohmann_json::nlohmann_json ${CMAKE_DL_LIBS})
 target_compile_definitions(lunaut PRIVATE LUNAUT_DEBUG=$<BOOL:${LUNAUT_DEBUG}>)
 
 if(MSVC)

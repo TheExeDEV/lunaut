@@ -6,6 +6,7 @@
 #include "core.d.hpp"
 
 #include "Luau/Ast.h"
+#include "Luau/Lexer.h"
 #include "Luau/LuauConfig.h"
 
 #include "lualib.h"
@@ -56,6 +57,51 @@ std::optional<Luau::SourceCode> fileresolver::readSource(const Luau::ModuleName&
 	if (!text)
 	{
 		return std::nullopt;
+	}
+
+	if (!show_as_modules.empty() && text->find('@') != std::string::npos)
+	{
+		Luau::Allocator allocator;
+		Luau::AstNameTable names(allocator);
+		Luau::Lexer lexer(text->data(), text->size(), names);
+		lexer.setSkipComments(true);
+
+		while (true)
+		{
+			const Luau::Lexeme& token = lexer.next();
+
+			if (token.type == Luau::Lexeme::Eof)
+			{
+				break;
+			}
+
+			if (token.type != Luau::Lexeme::Attribute || token.name == nullptr)
+			{
+				continue;
+			}
+
+			std::string_view qualifier(token.name);
+
+			if (qualifier.empty() || show_as_modules.count(std::string(qualifier)) == 0)
+			{
+				continue;
+			}
+
+			size_t offset = 0;
+
+			for (unsigned int line = 0; line < token.location.begin.line && offset < text->size(); ++line)
+			{
+				size_t next = text->find('\n', offset);
+				offset = next == std::string::npos ? text->size() : next + 1;
+			}
+
+			offset += token.location.begin.column;
+
+			if (offset + qualifier.size() + 1 < text->size() && (*text)[offset] == '@' && (*text)[offset + qualifier.size() + 1] == '.')
+			{
+				(*text)[offset] = ' ';
+			}
+		}
 	}
 
 	Luau::SourceCode::Type type = Luau::SourceCode::Type::Module;
@@ -211,6 +257,11 @@ textdocument* fileresolver::get_document(const std::string& address)
 	return found == documents.end() ? nullptr : &found->second;
 }
 
+const std::unordered_map<std::string, textdocument>& fileresolver::get_documents() const
+{
+	return documents;
+}
+
 void fileresolver::set_document(textdocument document)
 {
 	std::string path = uri::to_path(document.get_uri());
@@ -225,6 +276,11 @@ void fileresolver::rem_document(const std::string& address)
 void fileresolver::set_sourcemap(const sourcemap* next)
 {
 	map = next;
+}
+
+void fileresolver::set_show_as_modules(std::set<std::string> modules)
+{
+	show_as_modules = std::move(modules);
 }
 
 void fileresolver::clear_config_cache()

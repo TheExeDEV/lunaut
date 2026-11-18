@@ -39,6 +39,27 @@ json workspace::get_diagnostics(const std::string& address)
 		diagnostics.push_back(protocol::make_lint_warning(*document, warning, false));
 	}
 
+	if (settings.analyzer.enabled && settings.analyzer.diagnostics && analyzer.is_loaded())
+	{
+		std::optional<json> external = analyzer.check(name, uri::to_path(address), document->get_text(), settings.to_json());
+
+		if (external)
+		{
+			for (const json& diagnostic : *external)
+			{
+				if (diagnostic.is_object())
+				{
+					diagnostics.push_back(diagnostic);
+				}
+			}
+		}
+		else if (!analyzer_reported)
+		{
+			analyzer_reported = true;
+			owner.send_log(enumitem_message_type::Warning, "analyzer " + analyzer.get_name() + " returned an invalid diagnostics payload");
+		}
+	}
+
 	return diagnostics;
 }
 

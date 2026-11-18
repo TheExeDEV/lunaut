@@ -35,6 +35,7 @@ const std::unordered_map<std::string_view, std::string_view> relevant_vscode_key
 	{"lunaut.rojo.executable", "/rojo/executable"},
 	{"lunaut.diagnostics.lint", "/diagnostics/lint"},
 	{"lunaut.diagnostics.includeDependents", "/diagnostics/include_dependents"},
+	{"lunaut.diagnostics.delay", "/diagnostics/delay"},
 	{"lunaut.ignoreGlobs", "/ignore_globs"},
 	{"lunaut.analyzeLuaFiles", "/analyze_lua_files"},
 	{"lunaut.baseLuaurc", "/base_luaurc"},
@@ -46,8 +47,13 @@ const std::unordered_map<std::string_view, std::string_view> relevant_vscode_key
 	{"lunaut.inlayHints.hideHintsForMatchingParameterNames", "/inlay_hints/hide_matching_names"},
 	{"lunaut.inlayHints.typeHintMaxLength", "/inlay_hints/max_length"},
 	{"lunaut.inlayHints.makeInsertable", "/inlay_hints/insertable"},
+	{"lunaut.inlayHints.autoRequire", "/inlay_hints/auto_require"},
+	{"lunaut.typeDisplay.aliases", "/features/alias_types"},
+	{"lunaut.typeDisplay.refine", "/features/refine_types"},
+	{"lunaut.typeDisplay.unknownError", "/features/unknown_error"},
 	{"lunaut.hover.documentation", "/features/documentation"},
 	{"lunaut.completion.autoImports", "/features/auto_imports"},
+	{"lunaut.completion.importKeyword", "/features/import_keyword"},
 	{"lunaut.semanticTokens.enabled", "/features/semantic_tokens"},
 	{"lunaut.colors.enabled", "/features/colors"},
 	{"lunaut.completion.autocompleteEnd", "/features/autocomplete_end"},
@@ -56,6 +62,9 @@ const std::unordered_map<std::string_view, std::string_view> relevant_vscode_key
 	{"lunaut.format.styluaPath", "/features/stylua"},
 	{"lunaut.codeLens.references", "/features/code_lens"},
 	{"lunaut.diagnostics.workspace", "/diagnostics/workspace"},
+	{"lunaut.analyzer.enabled", "/analyzer/enabled"},
+	{"lunaut.analyzer.path", "/analyzer/path"},
+	{"lunaut.analyzer.diagnostics", "/analyzer/diagnostics"},
 	{"luau-lsp.completion.autocompleteEnd", "/features/autocomplete_end"},
 	{"luau-lsp.autocompleteEnd", "/features/autocomplete_end"},
 	{"luau-lsp.format.convertQuotes", "/features/convert_quotes"},
@@ -172,6 +181,16 @@ settingsinfo settingsinfo::from_json(const json& data, const settingsinfo& base)
 		priv::read(diagnostics, "lint", info.diagnostics.lint);
 		priv::read(diagnostics, "include_dependents", info.diagnostics.include_dependents);
 		priv::read(diagnostics, "workspace", info.diagnostics.workspace);
+		priv::read(diagnostics, "delay", info.diagnostics.delay);
+	}
+
+	if (data.contains("analyzer") && data["analyzer"].is_object())
+	{
+		const json& analyzer = data["analyzer"];
+		priv::read(analyzer, "path", info.analyzer.path);
+		info.analyzer.enabled = !info.analyzer.path.empty();
+		priv::read(analyzer, "enabled", info.analyzer.enabled);
+		priv::read(analyzer, "diagnostics", info.analyzer.diagnostics);
 	}
 
 	if (data.contains("inlay_hints") && data["inlay_hints"].is_object())
@@ -184,6 +203,7 @@ settingsinfo settingsinfo::from_json(const json& data, const settingsinfo& base)
 		priv::read(hints, "hide_matching_names", info.inlay_hints.hide_matching_names);
 		priv::read(hints, "max_length", info.inlay_hints.max_length);
 		priv::read(hints, "insertable", info.inlay_hints.insertable);
+		priv::read(hints, "auto_require", info.inlay_hints.auto_require);
 
 		if (hints.contains("parameter_names") && hints["parameter_names"].is_string())
 		{
@@ -198,12 +218,22 @@ settingsinfo settingsinfo::from_json(const json& data, const settingsinfo& base)
 		priv::read(features, "documentation", info.features.documentation);
 		priv::read(features, "auto_imports", info.features.auto_imports);
 		priv::read(features, "semantic_tokens", info.features.semantic_tokens);
+
+		if (features.contains("import_keyword") && features["import_keyword"].is_string())
+		{
+			info.features.import_keyword =
+				enum_import_keyword::from_name(features["import_keyword"].get<std::string>()).value_or(info.features.import_keyword);
+		}
+
 		priv::read(features, "colors", info.features.colors);
 		priv::read(features, "autocomplete_end", info.features.autocomplete_end);
 		priv::read(features, "convert_quotes", info.features.convert_quotes);
 		priv::read(features, "formatting", info.features.formatting);
 		priv::read(features, "code_lens", info.features.code_lens);
 		priv::read(features, "stylua", info.features.stylua);
+		priv::read(features, "alias_types", info.features.alias_types);
+		priv::read(features, "refine_types", info.features.refine_types);
+		priv::read(features, "unknown_error", info.features.unknown_error);
 	}
 
 	priv::read(data, "documentation_files", info.documentation_files);
@@ -345,7 +375,11 @@ json settingsinfo::to_json() const
 		  {"strict_datamodel_types", rojo.strict_datamodel_types},
 		  {"executable", rojo.executable}}},
 		{"diagnostics",
-		 {{"lint", diagnostics.lint}, {"include_dependents", diagnostics.include_dependents}, {"workspace", diagnostics.workspace}}},
+		 {{"lint", diagnostics.lint},
+		  {"include_dependents", diagnostics.include_dependents},
+		  {"workspace", diagnostics.workspace},
+		  {"delay", diagnostics.delay}}},
+		{"analyzer", {{"enabled", analyzer.enabled}, {"diagnostics", analyzer.diagnostics}, {"path", analyzer.path}}},
 		{"ignore_globs", ignore_globs},
 		{"analyze_lua_files", analyze_lua_files},
 		{"base_luaurc", base_luaurc},
@@ -361,11 +395,13 @@ json settingsinfo::to_json() const
 			 {"hide_matching_names", inlay_hints.hide_matching_names},
 			 {"max_length", inlay_hints.max_length},
 			 {"insertable", inlay_hints.insertable},
+			 {"auto_require", inlay_hints.auto_require},
 		 }},
 		{"features",
 		 {
 			 {"documentation", features.documentation},
 			 {"auto_imports", features.auto_imports},
+			 {"import_keyword", enum_import_keyword::get_name(features.import_keyword)},
 			 {"semantic_tokens", features.semantic_tokens},
 			 {"colors", features.colors},
 			 {"autocomplete_end", features.autocomplete_end},
@@ -373,6 +409,9 @@ json settingsinfo::to_json() const
 			 {"formatting", features.formatting},
 			 {"code_lens", features.code_lens},
 			 {"stylua", features.stylua},
+			 {"alias_types", features.alias_types},
+			 {"refine_types", features.refine_types},
+			 {"unknown_error", features.unknown_error},
 		 }},
 	};
 }
@@ -384,6 +423,7 @@ json loadeddefinitioninfo::to_json() const
 		{"path", path},
 		{"priority", priority},
 		{"success", success},
+		{"show_as_module", show_as_module},
 		{"message", message},
 		{"source", enum_definition_source::get_name(source)},
 	};
@@ -441,7 +481,7 @@ void read_definitions(const json& data, std::vector<definitioninfo>& target)
 		{
 			if (path.is_string())
 			{
-				target.push_back(definitioninfo{path.get<std::string>(), name, std::nullopt, enumitem_definition_source::Config});
+				target.push_back(definitioninfo{path.get<std::string>(), name, std::nullopt, false, enumitem_definition_source::Config});
 			}
 		}
 		return;
@@ -458,7 +498,7 @@ void read_definitions(const json& data, std::vector<definitioninfo>& target)
 	{
 		if (item.is_string())
 		{
-			target.push_back(definitioninfo{item.get<std::string>(), "", std::nullopt, enumitem_definition_source::Config});
+			target.push_back(definitioninfo{item.get<std::string>(), "", std::nullopt, false, enumitem_definition_source::Config});
 			continue;
 		}
 
@@ -473,6 +513,11 @@ void read_definitions(const json& data, std::vector<definitioninfo>& target)
 		if (item.contains("priority") && item["priority"].is_number_integer())
 		{
 			info.priority = item["priority"].get<int>();
+		}
+
+		if (item.contains("show_as_module") && item["show_as_module"].is_boolean())
+		{
+			info.show_as_module = item["show_as_module"].get<bool>();
 		}
 
 		target.push_back(info);

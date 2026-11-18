@@ -85,6 +85,24 @@ json workspace::get_signature_help(const json& params)
 	size_t skip = call->self && function->hasSelf ? 1 : 0;
 	json parameters = json::array();
 
+	std::optional<std::pair<Luau::ModuleName, Luau::Location>> definition;
+	const Luau::SourceModule* definition_source = nullptr;
+	std::optional<std::string> definition_text;
+
+	if (function->definition && function->definition->definitionModuleName)
+	{
+		definition = std::make_pair(*function->definition->definitionModuleName, function->definition->definitionLocation);
+		definition_source = frontend.getSourceModule(definition->first);
+
+		if (definition_source != nullptr)
+		{
+			if (std::optional<textdocument> text = get_text_for(definition->first))
+			{
+				definition_text = text->get_text();
+			}
+		}
+	}
+
 	for (size_t i = skip; i < arguments.size(); ++i)
 	{
 		std::string parameter = Luau::toString(arguments[i], options);
@@ -99,6 +117,16 @@ json workspace::get_signature_help(const json& params)
 		if (symbol)
 		{
 			if (std::optional<std::string> notes = docs.get_parameter_markdown(*symbol, i))
+			{
+				entry["documentation"] = protocol::make_markdown(*notes);
+			}
+		}
+
+		if (!entry.contains("documentation") && definition_source && definition_text && i < function->argNames.size() &&
+			function->argNames[i])
+		{
+			if (std::optional<std::string> notes = documentation::get_comment_parameter(
+					*definition_source, *definition_text, definition->second.begin.line, function->argNames[i]->name))
 			{
 				entry["documentation"] = protocol::make_markdown(*notes);
 			}
