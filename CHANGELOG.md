@@ -11,6 +11,8 @@
 
 ### Changed
 
+- The VS Code extension is published as `theexe.lunaut` and every release ships one VSIX per platform (`win32-x64`, `linux-x64`, `darwin-x64`, `darwin-arm64`) with its own server inside, instead of one VSIX with only the Windows server
+- Releases publish the extension to the VS Code Marketplace and Open VSX when the `VSCE_PAT` and `OVSX_PAT` secrets are set
 - The type display code is split into `Core/TypeDisplay`, `TypeAliases`, `TypeComparer` and `TypeLookup`, and `textDocument/typeDefinition` lives in its own feature file
 - clang-format no longer puts a return type on its own line
 

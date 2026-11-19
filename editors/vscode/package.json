@@ -3,7 +3,7 @@
   "displayName": "Lunaut",
   "description": "Luau language server written in C++: FFlags, prioritized .d.luau definitions and Rojo support",
   "version": "0.0.5",
-  "publisher": "lunaut",
+  "publisher": "theexe",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -1716,6 +1716,7 @@
     "watch": "tsc -watch -p ./",
     "bundle-server": "node scripts/bundle-server.js",
     "package": "npm run compile && npm run bundle-server && vsce package --out lunaut.vsix",
+    "package:target": "npm run compile && npm run bundle-server && node scripts/package-target.js",
     "test": "npm run compile && node ./out/test/run.js"
   },
   "dependencies": {

@@ -25,6 +25,7 @@ case "$(uname -m)" in
 esac
 
 asset="lunaut-$system-$architecture"
+extension_asset="lunaut-$([ "$system" = "osx" ] && echo darwin || echo "$system")-$architecture.vsix"
 
 if [ "$version" = "latest" ]; then
 	base_url="https://github.com/$repository/releases/latest/download"
@@ -57,7 +58,7 @@ if [ -z "${LUNAUT_NO_EXTENSION:-}" ] && command -v code >/dev/null 2>&1; then
 
 	echo "Installing the VS Code extension"
 
-	if download "$base_url/lunaut.vsix" "$extension" && code --install-extension "$extension" --force >/dev/null; then
+	if download "$base_url/$extension_asset" "$extension" && code --install-extension "$extension" --force >/dev/null; then
 		echo "Installed the lunaut extension for VS Code"
 	else
 		echo "Could not install the VS Code extension, the server is installed anyway." >&2
@@ -164,7 +165,7 @@ exit 0
 		Write-Host "Installing the VS Code extension"
 
 		try {
-			Get-File "$baseUrl/lunaut.vsix" $extension
+			Get-File "$baseUrl/lunaut-win32-x64.vsix" $extension
 			& code --install-extension $extension --force | Out-Null
 			Write-Host "Installed the lunaut extension for VS Code"
 		} catch {

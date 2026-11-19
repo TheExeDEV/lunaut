@@ -94,7 +94,7 @@ Both lines run the same file. It downloads the latest release into `%LOCALAPPDAT
 
 Options, set before the command: `LUNAUT_VERSION=0.1.0` installs a specific version, `LUNAUT_INSTALL_DIR` changes the folder, `LUNAUT_NO_PATH=1` leaves `PATH` alone, `LUNAUT_NO_EXTENSION=1` skips VS Code. In PowerShell: `$env:LUNAUT_VERSION = "0.1.0"`.
 
-**Manually:** download `lunaut-<platform>` from the latest release, rename it to `lunaut` (or `lunaut.exe`) and put it on your `PATH`. Install `lunaut.vsix` with `code --install-extension lunaut.vsix`.
+**Manually:** download `lunaut-<platform>` from the latest release, rename it to `lunaut` (or `lunaut.exe`) and put it on your `PATH`. Install the extension for your platform, for example `code --install-extension lunaut-win32-x64.vsix` (also `linux-x64`, `darwin-x64`, `darwin-arm64`), or from the VS Code Marketplace as `theexe.lunaut`.
 
 ### Uninstall
 
@@ -716,7 +716,7 @@ On every push to `main` the [Release](.github/workflows/release.yml) workflow ch
 
 1. builds Windows, Linux and macOS (macOS is skipped when GitHub has no runner),
 2. runs every test on each of them,
-3. packages `lunaut.vsix` with the same version,
+3. packages one VSIX per platform (`lunaut-win32-x64.vsix`, `lunaut-linux-x64.vsix`, `lunaut-darwin-x64.vsix`, `lunaut-darwin-arm64.vsix`) with the same version, each with its own server inside,
 4. creates the tag `v<version>` and publishes the release with the changelog section as notes and every binary attached.
 
 Pushes that do not change the version release nothing. To rebuild any commit under a chosen version, run the workflow by hand: Actions → Release → Run workflow, with `ref` (commit, branch or tag), `version` and `latest` (whether it becomes the latest release). The daily Luau update also bumps the patch version, so merging its pull request ships the new Luau on its own. `python scripts/release.py notes 0.2.0` prints what the release notes will be.
