@@ -61,6 +61,7 @@ const std::unordered_map<std::string_view, request_handler> relevant_requests = 
 	{"lunaut/fflags", &server::on_lunaut_fflags},
 	{"lunaut/definitions", &server::on_lunaut_definitions},
 	{"lunaut/sourcemap", &server::on_lunaut_sourcemap},
+	{"workspace/executeCommand", &server::on_execute_command},
 };
 
 const std::unordered_map<std::string_view, notification_handler> relevant_notifications = {
@@ -78,6 +79,18 @@ const std::unordered_map<std::string_view, notification_handler> relevant_notifi
 	{"$/setTrace", &server::on_ignore},
 	{"$/cancelRequest", &server::on_ignore},
 };
+
+const std::vector<std::pair<std::string_view, std::string_view>> relevant_actions = {
+	{"Lunaut: Regenerate Rojo Sourcemap", "lunaut.server.regenerateSourcemap"},
+	{"Lunaut: Show Status", "lunaut.server.showStatus"},
+};
+
+const std::unordered_map<std::string_view, request_handler> relevant_commands = {
+	{"lunaut.server.regenerateSourcemap", &server::invoke_regenerate_sourcemap},
+	{"lunaut.server.showStatus", &server::invoke_show_status},
+};
+
+constexpr std::string_view extension_client_name = "lunaut-vscode";
 
 const std::vector<std::pair<std::string_view, std::string_view>> relevant_refreshes = {
 	{"/workspace/inlayHint/refreshSupport", "workspace/inlayHint/refresh"},
@@ -309,7 +322,7 @@ json server::on_initialize(const json& params)
 {
 	client_settings = priv::get_client_settings(params.value("initializationOptions", json::object()));
 	client_capabilities = params.value("capabilities", json::object());
-	extension_client = params.value("initializationOptions", json::object()).contains("vscode");
+	extension_client = params.value("initializationOptions", json::object()).value("client", "") == priv::extension_client_name;
 
 	std::vector<std::string> roots;
 
@@ -415,7 +428,25 @@ json server::on_semantic_tokens(const json& params)
 
 json server::on_code_action(const json& params)
 {
-	return get_workspace(params["textDocument"].value("uri", "")).get_code_actions(params);
+	std::string address = params["textDocument"].value("uri", "");
+	json actions = get_workspace(address).get_code_actions(params);
+
+	if (!actions.is_array())
+	{
+		actions = json::array();
+	}
+
+	if (extension_client)
+	{
+		return actions;
+	}
+
+	for (const auto& [title, command] : priv::relevant_actions)
+	{
+		actions.push_back({{"title", title}, {"command", {{"title", title}, {"command", command}, {"arguments", json::array({address})}}}});
+	}
+
+	return actions;
 }
 
 json server::on_document_color(const json& params)
@@ -544,6 +575,72 @@ void server::on_plugin_clear(const json& params)
 	{
 		folder->apply_plugin_tree(nullptr);
 	}
+}
+
+json server::on_execute_command(const json& params)
+{
+	const auto found = priv::relevant_commands.find(params.value("command", ""));
+
+	if (found == priv::relevant_commands.end())
+	{
+		return nullptr;
+	}
+
+	return (this->*found->second)(params.value("arguments", json::array()));
+}
+
+json server::invoke_regenerate_sourcemap(const json& arguments)
+{
+	json results = on_lunaut_sourcemap({{"regenerate", true}});
+
+	if (results.empty())
+	{
+		send_window_message(enumitem_message_type::Warning, "Lunaut: open a folder to regenerate its sourcemap");
+		return nullptr;
+	}
+
+	for (const json& result : results)
+	{
+		std::string folder = std::filesystem::path(result.value("root", "")).filename().string();
+
+		if (result.value("success", false))
+		{
+			send_window_message(
+				enumitem_message_type::Info,
+				"Lunaut: sourcemap of " + folder + " regenerated, " + std::to_string(result.value("instances", 0)) + " instances");
+		}
+		else
+		{
+			send_window_message(
+				enumitem_message_type::Error, "Lunaut: sourcemap of " + folder + " was not regenerated: " + result.value("message", ""));
+		}
+	}
+
+	return nullptr;
+}
+
+json server::invoke_show_status(const json& arguments)
+{
+	std::string address = arguments.is_array() && !arguments.empty() && arguments[0].is_string() ? arguments[0].get<std::string>() : "";
+	json status = get_workspace(address).get_status();
+	std::string definitions;
+
+	for (const json& definition : status.value("definitions", json::array()))
+	{
+		definitions +=
+			(definitions.empty() ? "" : ", ") + definition.value("name", "") + (definition.value("success", false) ? "" : " (failed)");
+	}
+
+	std::string sourcemap = status.value("/sourcemap/loaded"_json_pointer, false)
+		? std::to_string(status.value("/sourcemap/nodes"_json_pointer, 0)) + " instances"
+		: "not loaded";
+
+	send_window_message(
+		enumitem_message_type::Info,
+		std::string("Lunaut ") + LUNAUT_VERSION + " (Luau " + LUNAUT_LUAU_VERSION + "), " + status.value("platform", "standard") + ", " +
+			status.value("solver", "old") + " solver; definitions: " + (definitions.empty() ? "none" : definitions) +
+			"; sourcemap: " + sourcemap);
+	return nullptr;
 }
 
 json server::on_lunaut_status(const json& params)

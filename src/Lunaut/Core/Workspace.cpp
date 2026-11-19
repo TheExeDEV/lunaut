@@ -641,7 +641,10 @@ void workspace::load_definitions()
 			loaded.message = diagnostics.front().value("message", "");
 		}
 
-		owner.send_diagnostics(address, std::nullopt, diagnostics);
+		if (!diagnostics.empty())
+		{
+			owner.send_diagnostics(address, std::nullopt, diagnostics);
+		}
 		owner.send_log(
 			result.success ? enumitem_message_type::Info : enumitem_message_type::Error,
 			std::string(result.success ? "loaded" : "failed to load") + " definitions " + loaded.name + " (priority " +

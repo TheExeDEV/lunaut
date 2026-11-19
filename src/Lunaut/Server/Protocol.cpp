@@ -38,6 +38,7 @@ json protocol::get_capabilities()
 		{"inlayHintProvider", true},
 		{"semanticTokensProvider", {{"legend", get_semantic_legend()}, {"full", true}, {"range", false}}},
 		{"codeActionProvider", {{"codeActionKinds", {"quickfix"}}}},
+		{"executeCommandProvider", {{"commands", {"lunaut.server.regenerateSourcemap", "lunaut.server.showStatus"}}}},
 		{"colorProvider", true},
 		{"foldingRangeProvider", true},
 		{"documentHighlightProvider", true},

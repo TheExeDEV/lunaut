@@ -2,10 +2,14 @@ id = "lunaut"
 name = "Lunaut"
 version = "0.0.7"
 schema_version = 1
-authors = ["Exitedb"]
-description = "Luau language server written in C++: FFlags, prioritized .d.luau definitions and Rojo support"
+authors = ["TheExeDEV"]
+description = "Luau language support: highlighting and the lunaut language server with Roblox, Rojo, FFlags and prioritized .d.luau definitions"
 repository = "https://github.com/TheExeDEV/lunaut"
 
 [language_servers.lunaut]
 name = "Lunaut"
 languages = ["Luau"]
+
+[grammars.luau]
+repository = "https://github.com/4teapo/tree-sitter-luau"
+commit = "4f09f79945de3d5575b079103d86a515030c62ab"
