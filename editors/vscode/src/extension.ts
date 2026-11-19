@@ -29,6 +29,14 @@ function getServerPath(context: vscode.ExtensionContext): string {
 	const bundled = context.asAbsolutePath(path.join("bin", executableName));
 
 	if (fs.existsSync(bundled)) {
+		if (process.platform !== "win32") {
+			try {
+				fs.accessSync(bundled, fs.constants.X_OK);
+			} catch {
+				fs.chmodSync(bundled, 0o755);
+			}
+		}
+
 		return bundled;
 	}
 

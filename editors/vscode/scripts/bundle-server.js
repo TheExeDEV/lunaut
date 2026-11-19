@@ -2,10 +2,14 @@ const childProcess = require("child_process");
 const fs = require("fs");
 const path = require("path");
 
-const name = process.platform === "win32" ? "lunaut.exe" : "lunaut";
 const root = path.resolve(__dirname, "..");
+const host = `${process.platform}-${process.arch}`;
+const target = process.env.LUNAUT_TARGET || host;
+const name = target.startsWith("win32") ? "lunaut.exe" : "lunaut";
+const hostName = process.platform === "win32" ? "lunaut.exe" : "lunaut";
 const source = process.env.LUNAUT_BINARY || path.resolve(root, "..", "..", "build", name);
-const target = path.resolve(root, "bin", name);
+const binaries = path.resolve(root, "bin");
+const bundled = path.resolve(binaries, name);
 const manifest = path.resolve(root, "package.json");
 
 if (!fs.existsSync(source)) {
@@ -13,13 +17,21 @@ if (!fs.existsSync(source)) {
 	process.exit(1);
 }
 
-fs.mkdirSync(path.dirname(target), { recursive: true });
-fs.copyFileSync(source, target);
-fs.chmodSync(target, 0o755);
+fs.rmSync(binaries, { recursive: true, force: true });
+fs.mkdirSync(binaries, { recursive: true });
+fs.copyFileSync(source, bundled);
+fs.chmodSync(bundled, 0o755);
 fs.copyFileSync(path.resolve(root, "..", "..", "LICENSE"), path.resolve(root, "LICENSE"));
-console.log(`bundled ${source} -> ${target}`);
+console.log(`bundled ${source} -> ${bundled} for ${target}`);
 
-const flags = JSON.parse(childProcess.execFileSync(target, ["flags", "--json"], { encoding: "utf8" }));
+const schemaBinary = process.env.LUNAUT_SCHEMA_BINARY || (target === host ? bundled : path.resolve(root, "..", "..", "build", hostName));
+
+if (!fs.existsSync(schemaBinary)) {
+	console.warn(`no runnable lunaut at ${schemaBinary}, keeping the current fflag schema`);
+	process.exit(0);
+}
+
+const flags = JSON.parse(childProcess.execFileSync(schemaBinary, ["flags", "--json"], { encoding: "utf8" }));
 const properties = {};
 
 for (const flag of flags) {
