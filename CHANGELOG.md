@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.0.7] - 2026-11-19
+
 ### Added
 
 - Zed extension in `editors/zed`: downloads the server for the platform from the latest release and runs it for Luau files
