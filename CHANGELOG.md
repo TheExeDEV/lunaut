@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.0.8] - 2026-11-19
+
 ### Added
 
 - The Zed extension highlights Luau itself: grammar, highlighting, brackets, indentation and outline, so the separate Luau extension is no longer needed
