@@ -4,30 +4,61 @@ const path = require("path");
 
 const root = path.resolve(__dirname, "..");
 const host = `${process.platform}-${process.arch}`;
-const target = process.env.LUNAUT_TARGET || host;
-const name = target.startsWith("win32") ? "lunaut.exe" : "lunaut";
-const hostName = process.platform === "win32" ? "lunaut.exe" : "lunaut";
-const source = process.env.LUNAUT_BINARY || path.resolve(root, "..", "..", "build", name);
 const binaries = path.resolve(root, "bin");
-const bundled = path.resolve(binaries, name);
 const manifest = path.resolve(root, "package.json");
+const assets = {
+	"win32-x64": "lunaut-win-x64.exe",
+	"linux-x64": "lunaut-linux-x64",
+	"darwin-x64": "lunaut-osx-x64",
+	"darwin-arm64": "lunaut-osx-arm64",
+};
 
-if (!fs.existsSync(source)) {
-	console.error(`lunaut binary not found at ${source}, build the server first or set LUNAUT_BINARY`);
-	process.exit(1);
+function getName(platform) {
+	return platform.startsWith("win32") ? "lunaut.exe" : "lunaut";
+}
+
+function bundle(platform, source) {
+	const target = path.resolve(binaries, platform, getName(platform));
+	fs.mkdirSync(path.dirname(target), { recursive: true });
+	fs.copyFileSync(source, target);
+	fs.chmodSync(target, 0o755);
+	console.log(`bundled ${source} -> ${target}`);
+	return target;
 }
 
 fs.rmSync(binaries, { recursive: true, force: true });
-fs.mkdirSync(binaries, { recursive: true });
-fs.copyFileSync(source, bundled);
-fs.chmodSync(bundled, 0o755);
+
+const bundled = {};
+
+if (process.env.LUNAUT_BINARIES) {
+	for (const [platform, asset] of Object.entries(assets)) {
+		const source = path.resolve(process.env.LUNAUT_BINARIES, asset);
+
+		if (fs.existsSync(source)) {
+			bundled[platform] = bundle(platform, source);
+		} else {
+			console.warn(`no ${asset} in ${process.env.LUNAUT_BINARIES}, ${platform} users need lunaut on PATH`);
+		}
+	}
+} else {
+	const source = process.env.LUNAUT_BINARY || path.resolve(root, "..", "..", "build", getName(host));
+
+	if (fs.existsSync(source)) {
+		bundled[host] = bundle(host, source);
+	}
+}
+
+if (Object.keys(bundled).length === 0) {
+	console.error("no lunaut binary found, build the server first or set LUNAUT_BINARY or LUNAUT_BINARIES");
+	process.exit(1);
+}
+
 fs.copyFileSync(path.resolve(root, "..", "..", "LICENSE"), path.resolve(root, "LICENSE"));
-console.log(`bundled ${source} -> ${bundled} for ${target}`);
 
-const schemaBinary = process.env.LUNAUT_SCHEMA_BINARY || (target === host ? bundled : path.resolve(root, "..", "..", "build", hostName));
+const schemaBinary = process.env.LUNAUT_SCHEMA_BINARY || bundled[host];
 
-if (!fs.existsSync(schemaBinary)) {
-	console.warn(`no runnable lunaut at ${schemaBinary}, keeping the current fflag schema`);
+if (!schemaBinary || !fs.existsSync(schemaBinary)) {
+	console.warn("no lunaut that runs on this machine, keeping the current fflag schema");
 	process.exit(0);
 }
 

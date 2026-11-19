@@ -26,9 +26,19 @@ function getServerPath(context: vscode.ExtensionContext): string {
 		return configured;
 	}
 
-	const bundled = context.asAbsolutePath(path.join("bin", executableName));
+	const platforms = [`${process.platform}-${process.arch}`];
 
-	if (fs.existsSync(bundled)) {
+	if (process.platform === "darwin" && process.arch === "arm64") {
+		platforms.push("darwin-x64");
+	}
+
+	for (const platform of platforms) {
+		const bundled = context.asAbsolutePath(path.join("bin", platform, executableName));
+
+		if (!fs.existsSync(bundled)) {
+			continue;
+		}
+
 		if (process.platform !== "win32") {
 			try {
 				fs.accessSync(bundled, fs.constants.X_OK);

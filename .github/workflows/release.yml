@@ -157,64 +157,9 @@ jobs:
           path: ${{ matrix.asset }}
 
   extension:
-    needs: [check, build]
-    runs-on: windows-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - target: win32-x64
-            asset: lunaut-win-x64.exe
-          - target: linux-x64
-            asset: lunaut-linux-x64
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.check.outputs.sha }}
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: ${{ matrix.asset }}
-          path: server
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: lunaut-win-x64.exe
-          path: host
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Package
-        working-directory: editors/vscode
-        shell: bash
-        env:
-          LUNAUT_TARGET: ${{ matrix.target }}
-          LUNAUT_BINARY: ${{ github.workspace }}/server/${{ matrix.asset }}
-          LUNAUT_SCHEMA_BINARY: ${{ github.workspace }}/host/lunaut-win-x64.exe
-        run: |
-          npm ci
-          npm version ${{ needs.check.outputs.version }} --no-git-tag-version --allow-same-version
-          npm run package:target
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: lunaut-${{ matrix.target }}.vsix
-          path: editors/vscode/lunaut-${{ matrix.target }}.vsix
-
-  extension-macos:
     needs: [check, build, build-macos]
-    if: ${{ always() && needs.build.result == 'success' && needs.build-macos.result == 'success' }}
+    if: ${{ always() && needs.check.outputs.release == 'true' && needs.build.result == 'success' }}
     runs-on: windows-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - target: darwin-x64
-            asset: lunaut-osx-x64
-          - target: darwin-arm64
-            asset: lunaut-osx-arm64
     steps:
       - uses: actions/checkout@v4
         with:
@@ -222,13 +167,9 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: ${{ matrix.asset }}
+          pattern: lunaut-*
           path: server
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: lunaut-win-x64.exe
-          path: host
+          merge-multiple: true
 
       - uses: actions/setup-node@v4
         with:
@@ -238,21 +179,20 @@ jobs:
         working-directory: editors/vscode
         shell: bash
         env:
-          LUNAUT_TARGET: ${{ matrix.target }}
-          LUNAUT_BINARY: ${{ github.workspace }}/server/${{ matrix.asset }}
-          LUNAUT_SCHEMA_BINARY: ${{ github.workspace }}/host/lunaut-win-x64.exe
+          LUNAUT_BINARIES: ${{ github.workspace }}/server
+          LUNAUT_SCHEMA_BINARY: ${{ github.workspace }}/server/lunaut-win-x64.exe
         run: |
           npm ci
           npm version ${{ needs.check.outputs.version }} --no-git-tag-version --allow-same-version
-          npm run package:target
+          npm run package
 
       - uses: actions/upload-artifact@v4
         with:
-          name: lunaut-${{ matrix.target }}.vsix
-          path: editors/vscode/lunaut-${{ matrix.target }}.vsix
+          name: lunaut.vsix
+          path: editors/vscode/lunaut.vsix
 
   publish:
-    needs: [check, build, build-macos, extension, extension-macos]
+    needs: [check, build, build-macos, extension]
     if: ${{ always() && needs.check.outputs.release == 'true' && needs.build.result == 'success' && needs.extension.result == 'success' }}
     runs-on: ubuntu-latest
     env:
@@ -286,8 +226,8 @@ jobs:
 
       - name: Publish to the VS Code Marketplace
         if: ${{ !contains(needs.check.outputs.version, '-') && env.VSCE_PAT != '' }}
-        run: npx --yes @vscode/vsce@3 publish --packagePath assets/lunaut-*.vsix
+        run: npx --yes @vscode/vsce@3 publish --packagePath assets/lunaut.vsix
 
       - name: Publish to Open VSX
         if: ${{ !contains(needs.check.outputs.version, '-') && env.OVSX_PAT != '' }}
-        run: npx --yes ovsx@0.10 publish --packagePath assets/lunaut-*.vsix --pat "$OVSX_PAT"
+        run: npx --yes ovsx@0.10 publish --packagePath assets/lunaut.vsix --pat "$OVSX_PAT"
