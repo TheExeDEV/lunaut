@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Added
+
+- The Zed extension highlights Luau itself: grammar, highlighting, brackets, indentation and outline, so the separate Luau extension is no longer needed
+- **Lunaut: Show Status** and **Lunaut: Regenerate Rojo Sourcemap** in the code actions menu of Zed, Neovim and other editors, through `workspace/executeCommand`
+
+### Fixed
+
+- Editors that pass `vscode` settings in `initializationOptions` are no longer mistaken for the VS Code extension, so inserting `end` works there
+
 ## [0.0.7] - 2026-11-19
 
 ### Added

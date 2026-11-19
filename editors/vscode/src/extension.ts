@@ -95,7 +95,7 @@ function getServerSettings(): object {
 		flat["lunaut.rojo.autogenerate"] = false;
 	}
 
-	return { vscode: flat };
+	return { vscode: flat, client: "lunaut-vscode" };
 }
 
 async function startClient(context: vscode.ExtensionContext): Promise<void> {
