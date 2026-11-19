@@ -8,9 +8,12 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 CMAKE = ROOT / "CMakeLists.txt"
 PACKAGE = ROOT / "editors" / "vscode" / "package.json"
+ZED_EXTENSION = ROOT / "editors" / "zed" / "extension.toml"
+ZED_CARGO = ROOT / "editors" / "zed" / "Cargo.toml"
 CHANGELOG = ROOT / "CHANGELOG.md"
 VERSION_PATTERN = re.compile(r"^(\d+)\.(\d+)\.(\d+)(-[0-9A-Za-z.-]+)?$")
 PROJECT_PATTERN = re.compile(r"(project\(lunaut VERSION )(\d+\.\d+\.\d+)")
+MANIFEST_VERSION_PATTERN = re.compile(r'^(version = ")[^"]*(")', re.M)
 
 
 def get_version():
@@ -63,6 +66,10 @@ def write_versions(version):
 	data = json.loads(PACKAGE.read_text(encoding="utf-8"))
 	data["version"] = version
 	PACKAGE.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+	for manifest in (ZED_EXTENSION, ZED_CARGO):
+		text = manifest.read_text(encoding="utf-8")
+		manifest.write_text(MANIFEST_VERSION_PATTERN.sub(lambda match: match.group(1) + version + match.group(2), text, count=1), encoding="utf-8")
 
 
 def move_unreleased(version):

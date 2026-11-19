@@ -1,6 +1,6 @@
 id = "lunaut"
 name = "Lunaut"
-version = "0.0.6"
+version = "0.0.7"
 schema_version = 1
 authors = ["Exitedb"]
 description = "Luau language server written in C++: FFlags, prioritized .d.luau definitions and Rojo support"
