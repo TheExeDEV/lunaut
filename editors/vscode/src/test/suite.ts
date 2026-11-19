@@ -28,7 +28,7 @@ async function check(name: string, body: () => Promise<void>, results: string[])
 }
 
 export async function run(): Promise<void> {
-	const extension = vscode.extensions.getExtension("theexe.lunaut");
+	const extension = vscode.extensions.getExtension("exitedb.lunaut");
 	assert.ok(extension, "extension is installed");
 
 	const root = vscode.workspace.workspaceFolders![0].uri.fsPath;

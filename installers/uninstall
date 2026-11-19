@@ -34,7 +34,7 @@ for file in lunaut lunaut.download lunaut.vsix; do
 done
 
 if command -v code >/dev/null 2>&1; then
-	for extension_id in theexe.lunaut lunaut.lunaut; do
+	for extension_id in exitedb.lunaut theexe.lunaut lunaut.lunaut; do
 		if code --list-extensions 2>/dev/null | grep -qx "$extension_id"; then
 			code --uninstall-extension "$extension_id" >/dev/null && echo "Removed the lunaut extension from VS Code"
 		fi
@@ -125,7 +125,7 @@ exit 0
 	if (Get-Command code -ErrorAction SilentlyContinue) {
 		$extensions = & code --list-extensions 2>$null
 
-		foreach ($extensionId in @("theexe.lunaut", "lunaut.lunaut")) {
+		foreach ($extensionId in @("exitedb.lunaut", "theexe.lunaut", "lunaut.lunaut")) {
 			if ($extensions -contains $extensionId) {
 				& code --uninstall-extension $extensionId | Out-Null
 				Write-Host "Removed the lunaut extension from VS Code"
