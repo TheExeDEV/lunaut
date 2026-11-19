@@ -61,15 +61,15 @@ def get_next(kind="next"):
 
 def write_versions(version):
 	text = CMAKE.read_text(encoding="utf-8")
-	CMAKE.write_text(PROJECT_PATTERN.sub(lambda match: match.group(1) + version.split("-")[0], text), encoding="utf-8")
+	CMAKE.write_text(PROJECT_PATTERN.sub(lambda match: match.group(1) + version.split("-")[0], text), encoding="utf-8", newline="\n")
 
 	data = json.loads(PACKAGE.read_text(encoding="utf-8"))
 	data["version"] = version
-	PACKAGE.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+	PACKAGE.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
 
 	for manifest in (ZED_EXTENSION, ZED_CARGO):
 		text = manifest.read_text(encoding="utf-8")
-		manifest.write_text(MANIFEST_VERSION_PATTERN.sub(lambda match: match.group(1) + version + match.group(2), text, count=1), encoding="utf-8")
+		manifest.write_text(MANIFEST_VERSION_PATTERN.sub(lambda match: match.group(1) + version + match.group(2), text, count=1), encoding="utf-8", newline="\n")
 
 
 def move_unreleased(version):
@@ -84,7 +84,7 @@ def move_unreleased(version):
 	index = lines.index("## [Unreleased]")
 	date = datetime.date.today().isoformat()
 	lines[index:index + 1] = ["## [Unreleased]", "", f"## [{version}] - {date}"]
-	CHANGELOG.write_text("\n".join(lines).rstrip("\n") + "\n", encoding="utf-8")
+	CHANGELOG.write_text("\n".join(lines).rstrip("\n") + "\n", encoding="utf-8", newline="\n")
 
 
 def get_notes(version):
