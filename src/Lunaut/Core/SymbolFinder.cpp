@@ -53,8 +53,8 @@ struct write_collector final : Luau::AstVisitor
 	std::vector<Luau::Location> found;
 };
 
-std::optional<symbolinfo>
-make_member(const Luau::Module& module, const Luau::AstExpr* object, const std::string& name, Luau::Location origin);
+std::optional<symbolinfo> make_member(
+	const Luau::Module& module, const Luau::AstExpr* object, const std::string& name, Luau::Location origin);
 
 }
 }
@@ -145,8 +145,8 @@ std::vector<Luau::Location> symbolfinder::find_local_uses(const Luau::SourceModu
 	return collected.found;
 }
 
-std::vector<Luau::Location>
-symbolfinder::find_member_uses(const Luau::Module& module, const Luau::SourceModule& source, const symbolinfo& symbol)
+std::vector<Luau::Location> symbolfinder::find_member_uses(
+	const Luau::Module& module, const Luau::SourceModule& source, const symbolinfo& symbol)
 {
 	priv::member_collector collected(module, symbol);
 
@@ -158,8 +158,8 @@ symbolfinder::find_member_uses(const Luau::Module& module, const Luau::SourceMod
 	return collected.found;
 }
 
-std::vector<Luau::Location>
-symbolfinder::find_writes(const Luau::Module& module, const Luau::SourceModule& source, const symbolinfo& symbol)
+std::vector<Luau::Location> symbolfinder::find_writes(
+	const Luau::Module& module, const Luau::SourceModule& source, const symbolinfo& symbol)
 {
 	priv::write_collector collected(module, symbol);
 
@@ -314,8 +314,8 @@ void write_collector::add_target(Luau::AstExpr* target)
 	}
 }
 
-std::optional<symbolinfo>
-make_member(const Luau::Module& module, const Luau::AstExpr* object, const std::string& name, Luau::Location origin)
+std::optional<symbolinfo> make_member(
+	const Luau::Module& module, const Luau::AstExpr* object, const std::string& name, Luau::Location origin)
 {
 	const Luau::TypeId* type = module.astTypes.find(object);
 

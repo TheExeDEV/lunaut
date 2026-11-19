@@ -149,8 +149,8 @@ std::optional<json> workspace::make_import_edit(const Luau::ModuleName& name, co
 	return json{{"range", {{"start", at}, {"end", at}}}, {"newText", *statement + "\n"}};
 }
 
-std::optional<std::string>
-workspace::get_import_statement(const Luau::ModuleName& from, const std::string& target, const std::string& requested_symbol) const
+std::optional<std::string> workspace::get_import_statement(
+	const Luau::ModuleName& from, const std::string& target, const std::string& requested_symbol) const
 {
 	std::string symbol = requested_symbol.empty() ? priv::get_module_symbol(target) : requested_symbol;
 

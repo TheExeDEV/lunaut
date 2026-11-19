@@ -37,8 +37,8 @@ void apply_map(const std::map<std::string, std::string>& flags, enumitem_fflag_s
 }
 }
 
-std::vector<fflagstateinfo>
-fflagregistry::apply(const fflaginfo& info, const std::map<std::string, std::string>& cli, bool no_flags_enabled, client& owner)
+std::vector<fflagstateinfo> fflagregistry::apply(
+	const fflaginfo& info, const std::map<std::string, std::string>& cli, bool no_flags_enabled, client& owner)
 {
 	if (info.enable_by_default && !no_flags_enabled)
 	{

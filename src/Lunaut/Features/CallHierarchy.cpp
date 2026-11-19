@@ -51,10 +51,10 @@ std::vector<function_site> get_sites(const Luau::SourceModule& source);
 std::optional<function_site> find_site(const Luau::SourceModule& source, const Luau::Location& location);
 function_site find_enclosing(const Luau::SourceModule& source, const Luau::Position& position);
 Luau::Location get_callee_location(const Luau::AstExprCall* call);
-std::optional<definition>
-find_member_definition(const Luau::Module& module, const Luau::AstExpr* object, const std::string& name, const Luau::ModuleName& current);
-std::optional<definition>
-find_callee_definition(const Luau::Module& module, const Luau::AstExprCall* call, const Luau::ModuleName& current);
+std::optional<definition> find_member_definition(
+	const Luau::Module& module, const Luau::AstExpr* object, const std::string& name, const Luau::ModuleName& current);
+std::optional<definition> find_callee_definition(
+	const Luau::Module& module, const Luau::AstExprCall* call, const Luau::ModuleName& current);
 std::string get_function_name(Luau::AstExpr* expr);
 
 }
@@ -406,8 +406,8 @@ Luau::Location get_callee_location(const Luau::AstExprCall* call)
 	return call->func->location;
 }
 
-std::optional<definition>
-find_member_definition(const Luau::Module& module, const Luau::AstExpr* object, const std::string& name, const Luau::ModuleName& current)
+std::optional<definition> find_member_definition(
+	const Luau::Module& module, const Luau::AstExpr* object, const std::string& name, const Luau::ModuleName& current)
 {
 	const Luau::TypeId* owner = module.astTypes.find(object);
 	const Luau::TableType* table = owner != nullptr ? Luau::get<Luau::TableType>(Luau::follow(*owner)) : nullptr;

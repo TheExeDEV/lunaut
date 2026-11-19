@@ -48,8 +48,8 @@ bool glob_match(std::string_view pattern, std::string_view path)
 	return priv::match_parts(pattern_parts, 0, path_parts, 0);
 }
 
-std::vector<std::filesystem::path>
-find_files(const std::filesystem::path& root, std::string_view pattern, const std::vector<std::string>& ignore_globs)
+std::vector<std::filesystem::path> find_files(
+	const std::filesystem::path& root, std::string_view pattern, const std::vector<std::string>& ignore_globs)
 {
 	std::vector<std::filesystem::path> found;
 	std::error_code error;

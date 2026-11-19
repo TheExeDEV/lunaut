@@ -25,8 +25,8 @@ struct target
 
 std::optional<target> find_property(const Luau::Module& module, Luau::AstExprIndexName* index, const Luau::ModuleName& current);
 std::optional<Luau::ModuleName> find_expression_module(const Luau::ScopePtr& scope, Luau::AstExpr* expr);
-std::optional<Luau::Location>
-find_property_in_expression(const Luau::SourceModule& source, const Luau::AstExpr* expr, const std::string& property);
+std::optional<Luau::Location> find_property_in_expression(
+	const Luau::SourceModule& source, const Luau::AstExpr* expr, const std::string& property);
 const Luau::AstExpr* find_local_initializer(const Luau::SourceModule& source, const Luau::AstLocal* local);
 std::optional<std::string> get_key_name(const Luau::AstExpr* key);
 std::optional<Luau::ModuleName> find_imported_module(const Luau::ScopePtr& scope, const std::string& alias);
@@ -417,8 +417,8 @@ std::optional<std::string> get_key_name(const Luau::AstExpr* key)
 	return std::nullopt;
 }
 
-std::optional<Luau::Location>
-find_property_in_expression(const Luau::SourceModule& source, const Luau::AstExpr* expr, const std::string& property)
+std::optional<Luau::Location> find_property_in_expression(
+	const Luau::SourceModule& source, const Luau::AstExpr* expr, const std::string& property)
 {
 	if (expr == nullptr)
 	{

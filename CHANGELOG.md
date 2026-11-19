@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Method signatures no longer show empty generic lists such as `update<, , ...>`: unnamed generics are named `a`, `b`, ... and generics that only belong to `self` are hidden
+- `game:GetService("Players")`, `part:Clone()` and `FindFirstChildWhichIsA` show the service or class type in hover and inlay hints instead of `Instance`
+- A local narrowed by `if x == Enum.Item` checks keeps its declared type in hover and inlay hints, and every use of it gets the same semantic color
+- A function returning a nested table such as `dummies.table` shows `{}` instead of the alias that contains the table
+
+### Changed
+
+- The type display code is split into `Core/TypeDisplay`, `TypeAliases`, `TypeComparer` and `TypeLookup`, and `textDocument/typeDefinition` lives in its own feature file
+- clang-format no longer puts a return type on its own line
+
 ## [0.0.5] - 2026-11-18
 
 ### Added

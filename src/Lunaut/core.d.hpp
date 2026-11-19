@@ -405,8 +405,8 @@ std::vector<std::string> split(std::string_view value, char separator);
 
 bool has_wildcard(std::string_view pattern);
 bool glob_match(std::string_view pattern, std::string_view path);
-std::vector<std::filesystem::path>
-find_files(const std::filesystem::path& root, std::string_view pattern, const std::vector<std::string>& ignore_globs);
+std::vector<std::filesystem::path> find_files(
+	const std::filesystem::path& root, std::string_view pattern, const std::vector<std::string>& ignore_globs);
 }
 
 class uri
@@ -567,10 +567,10 @@ class robloxresolver
 public:
 	using virtualizer = std::function<std::optional<std::string>(const Luau::ModuleName&)>;
 
-	static std::optional<Luau::ModuleInfo>
-	resolve_expression(const sourcemap& map, const Luau::ModuleInfo* context, Luau::AstExpr* node, const virtualizer& to_virtual);
-	static std::optional<Luau::ModuleInfo>
-	resolve_string(const sourcemap& map, const Luau::ModuleInfo* context, const std::string& required);
+	static std::optional<Luau::ModuleInfo> resolve_expression(
+		const sourcemap& map, const Luau::ModuleInfo* context, Luau::AstExpr* node, const virtualizer& to_virtual);
+	static std::optional<Luau::ModuleInfo> resolve_string(
+		const sourcemap& map, const Luau::ModuleInfo* context, const std::string& required);
 };
 
 class instancetypes
@@ -602,8 +602,8 @@ public:
 	std::optional<std::string> get_markdown(const std::string& symbol) const;
 	std::optional<std::string> get_parameter_markdown(const std::string& symbol, size_t index) const;
 	static std::optional<std::string> get_comment_markdown(const Luau::SourceModule& source, const std::string& text, unsigned int line);
-	static std::optional<std::string>
-	get_comment_parameter(const Luau::SourceModule& source, const std::string& text, unsigned int line, const std::string& name);
+	static std::optional<std::string> get_comment_parameter(
+		const Luau::SourceModule& source, const std::string& text, unsigned int line, const std::string& name);
 
 private:
 	json entries = json::object();
@@ -626,8 +626,8 @@ public:
 class fflagregistry
 {
 public:
-	static std::vector<fflagstateinfo>
-	apply(const fflaginfo& info, const std::map<std::string, std::string>& cli, bool no_flags_enabled, client& owner);
+	static std::vector<fflagstateinfo> apply(
+		const fflaginfo& info, const std::map<std::string, std::string>& cli, bool no_flags_enabled, client& owner);
 	static std::vector<fflagstateinfo> get_flags();
 	static result<nothing> set_flag(const std::string& name, const std::string& value, enumitem_fflag_source source);
 	static result<std::map<std::string, std::string>> sync_from_roblox(bool refresh);
@@ -660,8 +660,8 @@ public:
 	static std::optional<symbolinfo> find(const Luau::Module& module, const Luau::SourceModule& source, Luau::Position position);
 	static std::optional<symbolinfo> get_member(const Luau::Module& module, const Luau::AstExpr* object, const std::string& name);
 	static std::vector<Luau::Location> find_local_uses(const Luau::SourceModule& source, Luau::AstLocal* local);
-	static std::vector<Luau::Location>
-	find_member_uses(const Luau::Module& module, const Luau::SourceModule& source, const symbolinfo& symbol);
+	static std::vector<Luau::Location> find_member_uses(
+		const Luau::Module& module, const Luau::SourceModule& source, const symbolinfo& symbol);
 	static std::vector<Luau::Location> find_writes(const Luau::Module& module, const Luau::SourceModule& source, const symbolinfo& symbol);
 };
 
@@ -670,6 +670,37 @@ class typenormalizer
 public:
 	static Luau::TypeId strip_refinements(Luau::TypeId type);
 	static bool is_refined(Luau::TypeId type);
+};
+
+struct namedtypeinfo
+{
+	std::string name;
+	Luau::TypeFun definition;
+	std::string display;
+};
+
+class typecomparer
+{
+public:
+	static bool is_primitive_like(Luau::TypeId type);
+	static bool is_same_type(Luau::TypeId left, Luau::TypeId right);
+	static bool is_same_type(Luau::TypeId left, Luau::TypeId right, const Luau::TypeFun& definition);
+	static bool may_be_same_type(Luau::TypeId left, Luau::TypeId right);
+	static void flatten_intersection(Luau::TypeId type, std::vector<Luau::TypeId>& parts);
+	static void collect_origin_modules(Luau::TypeId type, std::set<Luau::ModuleName>& modules);
+	static void collect_definition_locations(Luau::TypeId type, std::vector<declarationinfo>& locations);
+	static int definition_location_score(
+		const Luau::ModuleName& module, const std::optional<Luau::Location>& location, const std::vector<declarationinfo>& locations);
+};
+
+class typelookup
+{
+public:
+	static std::optional<namedtypeinfo> get_reference_alias(const Luau::ScopePtr& scope, const Luau::AstType* annotation);
+	static std::optional<Luau::Property> find_property(Luau::TypeId owner, const std::string& name, Luau::TypeId& base);
+	static std::optional<Luau::ModuleName> get_definition_module(Luau::TypeId type);
+	static std::optional<Luau::ModuleName> find_imported_module(const Luau::ScopePtr& scope, const std::string& alias);
+	static const Luau::AstExpr* find_initializer(const Luau::SourceModule& source, const Luau::AstLocal* local);
 };
 
 class fileresolver;
@@ -710,8 +741,8 @@ public:
 	explicit fileresolver(std::filesystem::path root);
 
 	std::optional<Luau::SourceCode> readSource(const Luau::ModuleName& name) override;
-	std::optional<Luau::ModuleInfo>
-	resolveModule(const Luau::ModuleInfo* context, Luau::AstExpr* expr, const Luau::TypeCheckLimits& limits) override;
+	std::optional<Luau::ModuleInfo> resolveModule(
+		const Luau::ModuleInfo* context, Luau::AstExpr* expr, const Luau::TypeCheckLimits& limits) override;
 	std::string getHumanReadableModuleName(const Luau::ModuleName& name) const override;
 	const Luau::Config& getConfig(const Luau::ModuleName& name, const Luau::TypeCheckLimits& limits) const override;
 
@@ -835,11 +866,11 @@ public:
 		const Luau::AstExpr* initializer = nullptr,
 		size_t max_length = 0,
 		std::vector<typelinkinfo>* links = nullptr) const;
-	typedisplayinfo
-	get_type_display(Luau::TypePackId pack, const Luau::Module& module, const Luau::ScopePtr& scope, size_t max_length = 0) const;
+	typedisplayinfo get_type_display(
+		Luau::TypePackId pack, const Luau::Module& module, const Luau::ScopePtr& scope, size_t max_length = 0) const;
 	std::string get_import_symbol(const Luau::ModuleName& name) const;
-	std::optional<std::string>
-	get_import_statement(const Luau::ModuleName& from, const Luau::ModuleName& target, const std::string& symbol = std::string()) const;
+	std::optional<std::string> get_import_statement(
+		const Luau::ModuleName& from, const Luau::ModuleName& target, const std::string& symbol = std::string()) const;
 	unsigned int get_import_line(const Luau::ModuleName& name, const textdocument& document);
 	json get_semantic_tokens(const json& params);
 	json get_code_actions(const json& params);
@@ -899,8 +930,8 @@ private:
 		Luau::ModuleName& module,
 		std::string& name,
 		const std::optional<Luau::ModuleName>& preferred = std::nullopt) const;
-	std::optional<Luau::TypeFun>
-	find_display_alias(Luau::TypeId type, const std::optional<Luau::ModuleName>& preferred, std::string& name, std::string& display) const;
+	std::optional<Luau::TypeFun> find_display_alias(
+		Luau::TypeId type, const std::optional<Luau::ModuleName>& preferred, std::string& name, std::string& display) const;
 	std::optional<Luau::TypeFun> find_expression_alias(
 		const Luau::Module& module,
 		const Luau::ScopePtr& scope,
@@ -935,8 +966,8 @@ private:
 	json get_location(const Luau::ModuleName& name, const Luau::Location& location) const;
 	json find_symbol_location(const json& params, bool declaration);
 	json get_declared_type_definition(const json& params);
-	std::optional<declarationinfo>
-	get_alias_declaration(const Luau::ModuleName& name, const Luau::Scope& scope, const Luau::AstTypeReference& reference) const;
+	std::optional<declarationinfo> get_alias_declaration(
+		const Luau::ModuleName& name, const Luau::Scope& scope, const Luau::AstTypeReference& reference) const;
 	std::optional<declarationinfo> get_type_declaration(Luau::TypeId type) const;
 	json make_type_hierarchy_item(Luau::TypeId type, const std::string& origin) const;
 

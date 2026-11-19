@@ -130,8 +130,8 @@ std::optional<Luau::SourceCode> fileresolver::readSource(const Luau::ModuleName&
 	return Luau::SourceCode{*text, type};
 }
 
-std::optional<Luau::ModuleInfo>
-fileresolver::resolveModule(const Luau::ModuleInfo* context, Luau::AstExpr* expr, const Luau::TypeCheckLimits& limits)
+std::optional<Luau::ModuleInfo> fileresolver::resolveModule(
+	const Luau::ModuleInfo* context, Luau::AstExpr* expr, const Luau::TypeCheckLimits& limits)
 {
 	bool rojo = map != nullptr && map->is_loaded();
 
