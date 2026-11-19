@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.0.6] - 2026-11-19
+
 ### Fixed
 
 - Method signatures no longer show empty generic lists such as `update<, , ...>`: unnamed generics are named `a`, `b`, ... and generics that only belong to `self` are hidden
@@ -13,6 +15,7 @@
 
 - The VS Code extension is published as `theexe.lunaut` and every release ships one VSIX per platform (`win32-x64`, `linux-x64`, `darwin-x64`, `darwin-arm64`) with its own server inside, instead of one VSIX with only the Windows server
 - Releases publish the extension to the VS Code Marketplace and Open VSX when the `VSCE_PAT` and `OVSX_PAT` secrets are set
+- The extension is on the VS Code Marketplace as `theexe.lunaut`; the `roblox` keyword is dropped because the Marketplace rejects it
 - The type display code is split into `Core/TypeDisplay`, `TypeAliases`, `TypeComparer` and `TypeLookup`, and `textDocument/typeDefinition` lives in its own feature file
 - clang-format no longer puts a return type on its own line
 
