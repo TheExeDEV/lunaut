@@ -13,3 +13,4 @@ tests/fixtures/**/sourcemap.json
 !tests/fixtures/rojo/sourcemap.json
 editors/vscode/LICENSE
 editors/vscode/.vscode-test/
+editors/zed/target/

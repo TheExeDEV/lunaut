@@ -149,6 +149,37 @@ async function stopClient(): Promise<void> {
 	}
 }
 
+async function regenerateSourcemap(): Promise<void> {
+	if (!client) {
+		vscode.window.showWarningMessage("Lunaut is not running");
+		return;
+	}
+
+	const results = await client.sendRequest<{ root: string; success: boolean; message: string; instances?: number }[]>("lunaut/sourcemap", {
+		regenerate: true,
+	});
+
+	if (results.length === 0) {
+		vscode.window.showWarningMessage("Lunaut: open a folder to regenerate its sourcemap");
+		return;
+	}
+
+	for (const result of results) {
+		const folder = path.basename(result.root) || result.root;
+
+		if (result.success) {
+			vscode.window.showInformationMessage(`Lunaut: sourcemap of ${folder} regenerated, ${result.instances ?? 0} instances`);
+			continue;
+		}
+
+		const choice = await vscode.window.showErrorMessage(`Lunaut: sourcemap of ${folder} was not regenerated: ${result.message}`, "Show Output");
+
+		if (choice === "Show Output") {
+			output?.show();
+		}
+	}
+}
+
 async function showJson(title: string, method: string, params: object = {}): Promise<void> {
 	if (!client) {
 		vscode.window.showWarningMessage("Lunaut is not running");
@@ -180,7 +211,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ getC
 				await showJson("FFlags", "lunaut/fflags", { filter });
 			}
 		}),
-		vscode.commands.registerCommand("lunaut.regenerateSourcemap", () => showJson("Sourcemap", "lunaut/sourcemap", { regenerate: true })),
+		vscode.commands.registerCommand("lunaut.regenerateSourcemap", () => regenerateSourcemap()),
 		vscode.commands.registerCommand("lunaut.showReferences", (uri: string, position: { line: number; character: number }, locations: { uri: string; range: object }[]) => {
 			const converter = client?.protocol2CodeConverter;
 

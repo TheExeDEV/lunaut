@@ -456,6 +456,7 @@ result<nothing> workspace::rebuild_sourcemap(bool regenerate)
 
 	std::filesystem::path file = root / settings.rojo.sourcemap_file;
 	std::error_code error;
+	std::string generation_error;
 
 	if (regenerate || !std::filesystem::exists(file, error))
 	{
@@ -467,6 +468,7 @@ result<nothing> workspace::rebuild_sourcemap(bool regenerate)
 		}
 		else
 		{
+			generation_error = generated.message;
 			owner.send_log(enumitem_message_type::Warning, "sourcemap generation skipped: " + generated.message);
 		}
 	}
@@ -477,7 +479,7 @@ result<nothing> workspace::rebuild_sourcemap(bool regenerate)
 	if (!std::filesystem::exists(file, error))
 	{
 		map.clear();
-		return result<nothing>::fail("sourcemap not found: " + file.generic_string());
+		return result<nothing>::fail(generation_error.empty() ? "sourcemap not found: " + file.generic_string() : generation_error);
 	}
 
 	result<nothing> loaded = map.load_from_file(file, root);
@@ -495,6 +497,11 @@ result<nothing> workspace::rebuild_sourcemap(bool regenerate)
 	resolver.set_sourcemap(&map);
 	instances.apply(frontend, map, settings.rojo.strict_datamodel_types);
 	owner.send_log(enumitem_message_type::Info, "sourcemap loaded: " + std::to_string(map.count()) + " instances");
+
+	if (!generation_error.empty())
+	{
+		return result<nothing>::fail(generation_error + ", the existing sourcemap is used");
+	}
 
 	return result<nothing>::ok({});
 }

@@ -591,6 +591,7 @@ class rojo
 {
 public:
 	static bool is_project(const std::filesystem::path& root, const rojoinfo& info);
+	static std::optional<std::string> find_project(const std::filesystem::path& root, const rojoinfo& info);
 	static result<nothing> generate_sourcemap(const std::filesystem::path& root, const rojoinfo& info);
 };
 

@@ -293,7 +293,7 @@ lunaut understands the settings of [luau-lsp](https://github.com/JohnnyMorganz/l
 | `luau-lsp.analyzeLuaFiles` | `lunaut.analyzeLuaFiles` |
 | `luau-lsp.server.baseLuaurc` | `lunaut.baseLuaurc` |
 
-The Roblox definitions and API docs are the same files luau-lsp uses, from `luau-lsp.pages.dev`, loaded as the `@roblox` package, so hover, completion and documentation symbols match.
+The Roblox definitions and API docs come from the [`definitions` release](https://github.com/TheExeDEV/lunaut/releases/tag/definitions) of this repository, refreshed every day by the [Definitions](.github/workflows/definitions.yml) workflow, and are loaded as the `@roblox` package. They are cached in the lunaut cache folder, so a project keeps working offline with the last downloaded copy.
 
 ---
 
