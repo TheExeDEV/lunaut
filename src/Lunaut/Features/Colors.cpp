@@ -26,7 +26,6 @@ struct color
 };
 
 using color_parser = std::optional<color> (*)(const Luau::AstExprCall& call);
-
 std::optional<double> get_number(const Luau::AstExprCall& call, size_t index);
 std::optional<color> parse_new(const Luau::AstExprCall& call);
 std::optional<color> parse_rgb(const Luau::AstExprCall& call);

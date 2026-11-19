@@ -47,3 +47,5 @@ BinPackArguments: false
 BinPackParameters: OnePerLine
 BinPackLongBracedList: false
 AlignArrayOfStructures: None
+PenaltyReturnTypeOnItsOwnLine: 1000000
+AlwaysBreakAfterReturnType: None

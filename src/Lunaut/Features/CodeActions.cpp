@@ -28,8 +28,8 @@ json make_action(const std::string& title, const json& diagnostic, const std::st
 json make_refactor(const std::string& title, const std::string& kind, const std::string& address, const json& edits);
 bool is_import(const Luau::AstStat* statement, bool& service, std::string& name);
 std::optional<json> make_sorted_imports(const textdocument& document, const Luau::SourceModule& source);
-std::optional<json>
-make_annotation(const Luau::Module& module, const Luau::SourceModule& source, const textdocument& document, Luau::Position cursor);
+std::optional<json> make_annotation(
+	const Luau::Module& module, const Luau::SourceModule& source, const textdocument& document, Luau::Position cursor);
 std::string get_relative_require(const std::string& from, const std::string& target);
 
 }
@@ -310,8 +310,8 @@ std::optional<json> make_sorted_imports(const textdocument& document, const Luau
 	return json{{"range", {{"start", start}, {"end", end}}}, {"newText", replacement}};
 }
 
-std::optional<json>
-make_annotation(const Luau::Module& module, const Luau::SourceModule& source, const textdocument& document, Luau::Position cursor)
+std::optional<json> make_annotation(
+	const Luau::Module& module, const Luau::SourceModule& source, const textdocument& document, Luau::Position cursor)
 {
 	Luau::AstLocal* local = Luau::findExprOrLocalAtPosition(source, cursor).getLocal();
 

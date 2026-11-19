@@ -193,8 +193,8 @@ std::optional<std::string> documentation::get_comment_markdown(const Luau::Sourc
 	return rendered;
 }
 
-std::optional<std::string>
-documentation::get_comment_parameter(const Luau::SourceModule& source, const std::string& text, unsigned int line, const std::string& name)
+std::optional<std::string> documentation::get_comment_parameter(
+	const Luau::SourceModule& source, const std::string& text, unsigned int line, const std::string& name)
 {
 	for (const std::string& raw : priv::collect_comment_lines(source, text, line))
 	{

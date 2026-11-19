@@ -124,8 +124,8 @@ std::optional<Luau::ModuleInfo> robloxresolver::resolve_expression(
 	return std::nullopt;
 }
 
-std::optional<Luau::ModuleInfo>
-robloxresolver::resolve_string(const sourcemap& map, const Luau::ModuleInfo* context, const std::string& required)
+std::optional<Luau::ModuleInfo> robloxresolver::resolve_string(
+	const sourcemap& map, const Luau::ModuleInfo* context, const std::string& required)
 {
 	if (context == nullptr || !sourcemap::is_virtual_path(context->name))
 	{

@@ -19,6 +19,196 @@ std::optional<Luau::TypeId> strip_optional(Luau::TypeId type);
 }
 }
 
+json workspace::get_type_definition(const json& params)
+{
+	std::string address = params["textDocument"].value("uri", "");
+	const textdocument* document = resolver.get_document(address);
+
+	if (document == nullptr)
+	{
+		return nullptr;
+	}
+
+	Luau::Position position = document->to_luau_position(params["position"]);
+	Luau::ModuleName name = resolver.get_module_name(address);
+	check_module(name, false);
+
+	const Luau::SourceModule* source = frontend.getSourceModule(name);
+	Luau::ModulePtr module = get_module(name, false);
+
+	if (source == nullptr || module == nullptr)
+	{
+		return nullptr;
+	}
+
+	Luau::ScopePtr scope = Luau::findScopeAtPosition(*module, position);
+	Luau::ExprOrLocal target = Luau::findExprOrLocalAtPosition(*source, position);
+	std::vector<Luau::AstNode*> ancestry = Luau::findAstAncestryOfPosition(*source, position, true);
+	Luau::AstNode* node = ancestry.empty() ? nullptr : ancestry.back();
+	std::optional<declarationinfo> found;
+
+	auto use_alias = [&](const Luau::TypeFun& definition, std::optional<Luau::ModuleName> origin)
+	{
+		if (!definition.definitionLocation)
+		{
+			return false;
+		}
+
+		Luau::ModuleName definition_module = origin.value_or(find_definition_module(*definition.definitionLocation).value_or(name));
+		found = declarationinfo{definition_module, *definition.definitionLocation};
+		return true;
+	};
+
+	auto use_type = [&](Luau::TypeId type)
+	{
+		Luau::TypeId followed = Luau::follow(type);
+
+		if (const Luau::MetatableType* metatable = Luau::get<Luau::MetatableType>(followed))
+		{
+			followed = Luau::follow(metatable->table);
+		}
+
+		if (const Luau::TableType* table = Luau::get<Luau::TableType>(followed); table != nullptr && !table->definitionModuleName.empty())
+		{
+			found = declarationinfo{table->definitionModuleName, table->definitionLocation};
+			return true;
+		}
+
+		if (const Luau::ExternType* extern_type = Luau::get<Luau::ExternType>(followed);
+			extern_type != nullptr && !extern_type->definitionModuleName.empty() && extern_type->definitionLocation)
+		{
+			found = declarationinfo{extern_type->definitionModuleName, *extern_type->definitionLocation};
+			return true;
+		}
+
+		std::string alias_name;
+		Luau::ModuleName alias_module;
+
+		if (std::optional<Luau::TypeFun> definition = find_return_alias(type, alias_name))
+		{
+			if (definition->definitionLocation)
+			{
+				Luau::ModuleName definition_module = find_definition_module(*definition->definitionLocation).value_or(name);
+				found = declarationinfo{definition_module, *definition->definitionLocation};
+				return true;
+			}
+		}
+
+		if (std::optional<Luau::TypeFun> definition = find_type_alias(followed, alias_module, alias_name))
+		{
+			if (definition->definitionLocation)
+			{
+				found = declarationinfo{alias_module, *definition->definitionLocation};
+				return true;
+			}
+		}
+
+		return false;
+	};
+
+	if (Luau::AstTypeReference* reference = node != nullptr ? node->as<Luau::AstTypeReference>() : nullptr)
+	{
+		if (scope != nullptr)
+		{
+			std::optional<Luau::TypeFun> definition = reference->prefix
+				? scope->lookupImportedType(reference->prefix->value, reference->name.value)
+				: scope->lookupType(reference->name.value);
+
+			if (definition)
+			{
+				std::optional<Luau::ModuleName> origin;
+
+				if (reference->prefix)
+				{
+					origin = typelookup::find_imported_module(scope, reference->prefix->value);
+				}
+				else if (reference->prefixLocal)
+				{
+					origin = typelookup::find_imported_module(scope, reference->prefixLocal->name.value);
+				}
+
+				use_alias(*definition, origin);
+			}
+		}
+	}
+	else if (Luau::AstStatTypeAlias* statement = node != nullptr ? node->as<Luau::AstStatTypeAlias>() : nullptr)
+	{
+		if (scope != nullptr)
+		{
+			if (std::optional<Luau::TypeFun> definition = scope->lookupType(statement->name.value))
+			{
+				use_alias(*definition, name);
+			}
+		}
+	}
+	else if (Luau::AstLocal* local = target.getLocal())
+	{
+		if (std::optional<namedtypeinfo> alias = typelookup::get_reference_alias(scope, local->annotation))
+		{
+			use_alias(alias->definition, name);
+		}
+		else if (std::optional<Luau::TypeId> type = scope->lookup(Luau::Symbol(local)))
+		{
+			use_type(*type);
+		}
+	}
+	else if (Luau::AstExpr* expr = target.getExpr())
+	{
+		if (Luau::AstExprLocal* reference = expr->as<Luau::AstExprLocal>())
+		{
+			if (std::optional<namedtypeinfo> alias = typelookup::get_reference_alias(scope, reference->local->annotation))
+			{
+				use_alias(alias->definition, name);
+			}
+		}
+
+		if (!found)
+		{
+			if (Luau::AstExprIndexName* index = expr->as<Luau::AstExprIndexName>())
+			{
+				if (const Luau::TypeId* owner = module->astTypes.find(index->expr))
+				{
+					Luau::TypeId base = Luau::follow(*owner);
+
+					if (std::optional<Luau::Property> property = typelookup::find_property(base, index->index.value, base))
+					{
+						if (property->typeLocation)
+						{
+							found = declarationinfo{typelookup::get_definition_module(base).value_or(name), *property->typeLocation};
+						}
+						else if (property->readTy)
+						{
+							use_type(*property->readTy);
+						}
+					}
+				}
+			}
+		}
+
+		if (!found)
+		{
+			if (const Luau::TypeId* type = module->astTypes.find(expr))
+			{
+				use_type(*type);
+			}
+		}
+	}
+	else if (Luau::AstType* annotation = node != nullptr ? node->asType() : nullptr)
+	{
+		if (const Luau::TypeId* resolved = module->astResolvedTypes.find(annotation))
+		{
+			use_type(*resolved);
+		}
+	}
+
+	if (!found)
+	{
+		return get_declared_type_definition(params);
+	}
+
+	return get_location(found->module, found->location);
+}
+
 json workspace::get_declared_type_definition(const json& params)
 {
 	std::string address = params["textDocument"].value("uri", "");
@@ -99,8 +289,8 @@ json workspace::get_declared_type_definition(const json& params)
 	return declaration ? get_location(declaration->module, declaration->location) : json(nullptr);
 }
 
-std::optional<declarationinfo>
-workspace::get_alias_declaration(const Luau::ModuleName& name, const Luau::Scope& scope, const Luau::AstTypeReference& reference) const
+std::optional<declarationinfo> workspace::get_alias_declaration(
+	const Luau::ModuleName& name, const Luau::Scope& scope, const Luau::AstTypeReference& reference) const
 {
 	std::string type_name = reference.name.value;
 

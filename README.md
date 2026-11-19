@@ -770,8 +770,9 @@ src/Lunaut/
 ├── Program.cpp       entry point, arguments
 ├── Cli/              analyze mode
 ├── Server/           JSON-RPC, LSP dispatch, protocol replies
-├── Core/             workspace, file resolver, FFlags, definitions, text documents
-├── Features/         diagnostics, hover, completion, definition, references, rename, symbols, signature help
+├── Core/             workspace, file resolver, FFlags, definitions, text documents,
+│                     type display (TypeDisplay, TypeAliases, TypeComparer, TypeLookup, TypeNormalizer)
+├── Features/         one LSP operation per file: hover, completion, definition, references, rename, ...
 ├── Models/           settings and enum names
 ├── Roblox/           sourcemap, instance requires, DataModel types, Rojo, Roblox types
 └── Util/             strings, glob, uri, processes, http, cache

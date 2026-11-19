@@ -29,7 +29,6 @@ struct commandinfo
 };
 
 using argument_handler = result<nothing> (*)(commandinfo& info, const std::string& value);
-
 result<nothing> read_flag(commandinfo& info, const std::string& value);
 result<nothing> read_definition(commandinfo& info, const std::string& value);
 result<nothing> read_settings(commandinfo& info, const std::string& value);

@@ -20,8 +20,8 @@ struct target
 	Luau::Location location;
 };
 
-std::optional<target>
-find_property(const Luau::Module& module, Luau::AstExprIndexName* index, const Luau::ModuleName& current, bool declaration);
+std::optional<target> find_property(
+	const Luau::Module& module, Luau::AstExprIndexName* index, const Luau::ModuleName& current, bool declaration);
 std::optional<Luau::Location> pick_location(const Luau::Property& property, bool declaration);
 
 }
@@ -139,8 +139,8 @@ namespace
 namespace priv
 {
 
-std::optional<target>
-find_property(const Luau::Module& module, Luau::AstExprIndexName* index, const Luau::ModuleName& current, bool declaration)
+std::optional<target> find_property(
+	const Luau::Module& module, Luau::AstExprIndexName* index, const Luau::ModuleName& current, bool declaration)
 {
 	const Luau::TypeId* owner = module.astTypes.find(index->expr);
 

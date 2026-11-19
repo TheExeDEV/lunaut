@@ -253,8 +253,8 @@ json analyzerplugin::to_json() const
 	};
 }
 
-std::optional<json>
-analyzerplugin::check(const std::string& module, const std::string& path, const std::string& source, const json& settings) const
+std::optional<json> analyzerplugin::check(
+	const std::string& module, const std::string& path, const std::string& source, const json& settings) const
 {
 	if (!loaded || run_check == nullptr)
 	{

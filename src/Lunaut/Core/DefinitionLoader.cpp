@@ -32,8 +32,8 @@ std::filesystem::path resolve_path(const std::filesystem::path& root, const std:
 }
 }
 
-std::vector<definitioninfo>
-definitionloader::collect(const std::filesystem::path& root, const settingsinfo& settings, bool roblox, client& owner)
+std::vector<definitioninfo> definitionloader::collect(
+	const std::filesystem::path& root, const settingsinfo& settings, bool roblox, client& owner)
 {
 	priv::collector collected;
 
