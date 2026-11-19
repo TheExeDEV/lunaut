@@ -2,6 +2,7 @@
 
 #define LUNAUT_NAME "lunaut"
 #define LUNAUT_DISPLAY_NAME "Lunaut - Luau Language Server"
+#define LUNAUT_DEFINITIONS_URL "https://github.com/TheExeDEV/lunaut/releases/download/definitions/"
 
 #ifndef LUNAUT_DEBUG
 #define LUNAUT_DEBUG 0

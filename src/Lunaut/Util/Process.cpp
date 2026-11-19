@@ -6,6 +6,7 @@
 #include "core.d.hpp"
 
 #include <array>
+#include <filesystem>
 #include <cstdio>
 
 namespace lunaut
@@ -65,6 +66,12 @@ result<std::string> process::invoke_command(const std::string& command)
 
 bool process::has_executable(const std::string& name)
 {
+	if (name.find_first_of("/\\") != std::string::npos)
+	{
+		std::error_code error;
+		return std::filesystem::is_regular_file(name, error);
+	}
+
 	FILE* pipe = priv::open_pipe(std::string(priv::lookup) + name + std::string(priv::silence));
 
 	if (pipe == nullptr)

@@ -1,0 +1,9 @@
+{
+	"name": "nested",
+	"tree": {
+		"$className": "DataModel",
+		"ReplicatedStorage": {
+			"$path": "src"
+		}
+	}
+}

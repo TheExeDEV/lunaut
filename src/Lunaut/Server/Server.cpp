@@ -630,13 +630,18 @@ json server::on_lunaut_sourcemap(const json& params)
 
 	for (const std::unique_ptr<workspace>& folder : workspaces)
 	{
+		std::string root = folder->get_root().generic_string();
+
 		if (!folder->is_roblox())
 		{
+			rebuilt.push_back(
+				{{"root", root}, {"success", false}, {"message", "not a Roblox project: no *.project.json or sourcemap found"}});
 			continue;
 		}
 
 		result<nothing> outcome = folder->rebuild_sourcemap(params.value("regenerate", true));
-		rebuilt.push_back({{"root", folder->get_root().generic_string()}, {"success", outcome.state}, {"message", outcome.message}});
+		size_t instances = folder->get_status().value("/sourcemap/nodes"_json_pointer, 0);
+		rebuilt.push_back({{"root", root}, {"success", outcome.state}, {"message", outcome.message}, {"instances", instances}});
 	}
 
 	return rebuilt;

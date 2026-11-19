@@ -24,8 +24,8 @@ struct docsource
 };
 
 const std::vector<docsource> relevant_sources = {
-	{"api-docs.luau.json", "https://luau-lsp.pages.dev/api-docs/luau-en-us.json", false},
-	{"api-docs.roblox.json", "https://luau-lsp.pages.dev/api-docs/en-us.json", true},
+	{"api-docs.luau.json", LUNAUT_DEFINITIONS_URL "api-docs.luau.json", false},
+	{"api-docs.roblox.json", LUNAUT_DEFINITIONS_URL "api-docs.roblox.json", true},
 };
 
 const std::vector<std::pair<std::string_view, std::string_view>> relevant_tags = {

@@ -14,7 +14,7 @@ namespace
 namespace priv
 {
 
-constexpr std::string_view endpoint = "https://luau-lsp.pages.dev/type-definitions/globalTypes.";
+constexpr std::string_view endpoint = LUNAUT_DEFINITIONS_URL "globalTypes.";
 
 const std::vector<std::string_view> security_levels = {"None", "LocalUserSecurity", "PluginSecurity", "RobloxScriptSecurity"};
 

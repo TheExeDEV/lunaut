@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### Added
+
+- Zed extension in `editors/zed`: downloads the server for the platform from the latest release and runs it for Luau files
+
+### Changed
+
+- Roblox type definitions and API docs are downloaded from the `definitions` release of this repository, refreshed every day, instead of `luau-lsp.pages.dev`
+
+### Fixed
+
+- A Rojo project file in a subfolder (for example `game/default.project.json`) turns on Roblox mode and is used to generate the sourcemap
+- `lunaut.rojo.executable` and `luau-lsp.sourcemap.rojoPath` given as a full path to the executable work instead of reporting that rojo is missing
+- *Regenerate Rojo Sourcemap* shows the result or the reason it failed instead of opening an empty document
+
 ## [0.0.6] - 2026-11-19
 
 ### Fixed
