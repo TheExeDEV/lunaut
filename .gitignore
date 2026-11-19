@@ -14,3 +14,4 @@ tests/fixtures/**/sourcemap.json
 editors/vscode/LICENSE
 editors/vscode/.vscode-test/
 editors/zed/target/
+editors/zed/extension.wasm
