@@ -20,6 +20,15 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Check the Luau submodule matches luau.version
+        shell: bash
+        run: |
+          version="$(tr -d '[:space:]' < luau.version)"
+          commit="$(git -C extern/luau rev-parse HEAD)"
+          git ls-remote --tags https://github.com/luau-lang/luau.git "refs/tags/$version" "refs/tags/$version^{}" | grep -q "^$commit" || { echo "extern/luau is at $commit, not at Luau $version"; exit 1; }
 
       - uses: actions/setup-python@v5
         with:

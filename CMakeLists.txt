@@ -25,11 +25,12 @@ include(FetchContent)
 
 set(LUAU_BUILD_CLI OFF CACHE BOOL "" FORCE)
 set(LUAU_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-FetchContent_Declare(luau
-	GIT_REPOSITORY https://github.com/luau-lang/luau.git
-	GIT_TAG ${LUNAUT_LUAU_VERSION}
-	GIT_SHALLOW TRUE
-)
+
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/extern/luau/CMakeLists.txt")
+	message(FATAL_ERROR "extern/luau is empty. Run: git submodule update --init")
+endif()
+
+add_subdirectory(extern/luau EXCLUDE_FROM_ALL)
 
 set(JSON_BuildTests OFF CACHE INTERNAL "")
 FetchContent_Declare(json
@@ -38,7 +39,7 @@ FetchContent_Declare(json
 	GIT_SHALLOW TRUE
 )
 
-FetchContent_MakeAvailable(luau json)
+FetchContent_MakeAvailable(json)
 
 configure_file(src/Lunaut/build.hpp.in "${CMAKE_BINARY_DIR}/generated/build.hpp" @ONLY)
 
