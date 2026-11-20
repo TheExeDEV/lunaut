@@ -2,7 +2,7 @@
   "name": "lunaut-luau",
   "displayName": "Lunaut - Luau Language Server",
   "description": "Luau language server written in C++: FFlags, prioritized .d.luau definitions and Rojo support",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "theexe",
   "license": "MIT",
   "repository": {
