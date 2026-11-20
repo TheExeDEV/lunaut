@@ -220,7 +220,7 @@ fi
 notes=""
 needs_server=0
 
-for kind in zed nvim helix path; do
+for kind in nvim helix path; do
 	if has_kind "$kind"; then
 		needs_server=1
 	fi
@@ -282,7 +282,7 @@ if has_kind helix; then
 fi
 
 if has_kind zed; then
-	notes="${notes}Zed: open Extensions (zed: extensions), search for Lunaut and install it; it uses the lunaut on PATH
+	notes="${notes}Zed: open Extensions (zed: extensions), search for Lunaut and install it; it downloads the server itself
 "
 fi
 
@@ -479,7 +479,7 @@ exit 0
 	}
 
 	$kinds = @($selected | ForEach-Object { $_.Kind })
-	$needsServer = @($kinds | Where-Object { @("zed", "nvim", "helix", "path") -contains $_ }).Count -gt 0
+	$needsServer = @($kinds | Where-Object { @("nvim", "helix", "path") -contains $_ }).Count -gt 0
 	$notes = New-Object System.Collections.ArrayList
 	$target = Join-Path $installDir "lunaut.exe"
 
@@ -532,7 +532,7 @@ exit 0
 	}
 
 	if ($kinds -contains "zed") {
-		[void]$notes.Add("Zed: open Extensions (zed: extensions), search for Lunaut and install it; it uses the lunaut on PATH")
+		[void]$notes.Add("Zed: open Extensions (zed: extensions), search for Lunaut and install it; it downloads the server itself")
 	}
 
 	if ($needsServer -and -not $env:LUNAUT_NO_PATH) {

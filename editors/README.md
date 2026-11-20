@@ -7,7 +7,7 @@ lunaut is a plain LSP server: `lunaut lsp` speaks JSON-RPC over stdio. VS Code h
 | VS Code | [`vscode/`](vscode) | Install [Lunaut from the VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=theexe.lunaut-luau), or `lunaut.vsix` from a release (the installers do it for you) |
 | Neovim 0.11+ | [`neovim/lunaut.lua`](neovim/lunaut.lua) | Copy into `~/.config/nvim/plugin/` or `require` it from your config |
 | Helix | [`helix/languages.toml`](helix/languages.toml) | Merge into `~/.config/helix/languages.toml` (or `.helix/languages.toml` in a project) |
-| Zed | [`zed/`](zed) | Install the **Lunaut** extension: it highlights Luau and downloads the server from the latest release. Remove the **Luau** extension if it is installed, both define the Luau language. Without the extension, merge [`zed/settings.json`](zed/settings.json) into Zed's settings to run lunaut in place of the luau-lsp binary |
+| Zed | [`zed/`](zed) | Install the **Lunaut** extension: it highlights Luau and downloads the server from the latest release, and keeps it up to date. A `lunaut` on `PATH` is used only when the download fails; to run your own build, set `lsp.lunaut.binary.path` in Zed's settings. Remove the **Luau** extension if it is installed, both define the Luau language. Without the extension, merge [`zed/settings.json`](zed/settings.json) into Zed's settings to run lunaut in place of the luau-lsp binary |
 
 ## Settings outside VS Code
 
