@@ -1,5 +1,7 @@
 # lunaut
 
+> **If you can support author:** [Place](https://www.roblox.com/games/104318394065422/donating)
+
 [![VS Code Marketplace](https://vsmarketplacebadges.dev/version-short/theexe.lunaut-luau.svg?label=VS%20Code%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=theexe.lunaut-luau) [![Installs](https://vsmarketplacebadges.dev/installs-short/theexe.lunaut-luau.svg)](https://marketplace.visualstudio.com/items?itemName=theexe.lunaut-luau) [![Release](https://img.shields.io/github/v/release/TheExeDEV/lunaut)](https://github.com/TheExeDEV/lunaut/releases/latest)
 
 A language server for Luau and Roblox, written in C++ on top of the official Luau analysis library.
