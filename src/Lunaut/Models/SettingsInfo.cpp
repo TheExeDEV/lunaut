@@ -5,6 +5,8 @@
 
 #include "core.d.hpp"
 
+#include <algorithm>
+
 namespace lunaut
 {
 namespace
@@ -339,7 +341,46 @@ settingsinfo settingsinfo::with_project(const std::filesystem::path& root, const
 		settings = settings.clone(read.value);
 	}
 
+	if (root.empty())
+	{
+		return settings;
+	}
+
+	for (const std::string& glob : crater::get_ignore_globs(root))
+	{
+		if (std::find(settings.ignore_globs.begin(), settings.ignore_globs.end(), glob) == settings.ignore_globs.end())
+		{
+			settings.ignore_globs.push_back(glob);
+		}
+	}
+
 	return settings;
+}
+
+std::map<std::string, std::string> settingsinfo::get_compatible_keys()
+{
+	std::map<std::string_view, std::string_view> owners;
+	std::map<std::string, std::string> keys;
+
+	for (const auto& [key, pointer] : priv::relevant_vscode_keys)
+	{
+		if (stdx::starts_with(key, "lunaut."))
+		{
+			owners[pointer] = key;
+		}
+	}
+
+	for (const auto& [key, pointer] : priv::relevant_vscode_keys)
+	{
+		const auto owner = owners.find(pointer);
+
+		if (stdx::starts_with(key, "luau-lsp.") && owner != owners.end())
+		{
+			keys[std::string(key)] = std::string(owner->second);
+		}
+	}
+
+	return keys;
 }
 
 json settingsinfo::to_json() const
@@ -474,6 +515,13 @@ std::string to_string_value(const json& value)
 
 void read_definitions(const json& data, std::vector<definitioninfo>& target)
 {
+	if (data.is_string())
+	{
+		target.clear();
+		target.push_back(definitioninfo{data.get<std::string>(), "", std::nullopt, false, enumitem_definition_source::Config});
+		return;
+	}
+
 	if (data.is_object())
 	{
 		target.clear();

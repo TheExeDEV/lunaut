@@ -961,6 +961,17 @@ void server::process_message(const json& message)
 void server::add_workspace(const std::string& address)
 {
 	std::filesystem::path root(uri::to_path(address));
+	result<bool> declared = declarefile::apply_missing(root);
+
+	if (!declared)
+	{
+		send_log(enumitem_message_type::Warning, declared.message);
+	}
+	else if (declared.value)
+	{
+		send_log(enumitem_message_type::Info, "added the missing keys to " + declarefile::get_path(root).generic_string());
+	}
+
 	workspaces.push_back(std::make_unique<workspace>(*this, root, get_settings_for(root)));
 }
 

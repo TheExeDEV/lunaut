@@ -327,6 +327,7 @@ struct settingsinfo
 	static settingsinfo from_json(const json& data, const settingsinfo& base);
 	static result<json> read_vscode_settings(const std::filesystem::path& file);
 	static json convert_vscode_settings(const json& data);
+	static std::map<std::string, std::string> get_compatible_keys();
 	settingsinfo clone(const json& change) const;
 	settingsinfo with_project(const std::filesystem::path& root, const std::optional<std::string>& extra_file) const;
 	json to_json() const;
@@ -396,6 +397,7 @@ bool check(bool condition, const std::string& message);
 
 std::optional<std::string> read_file(const std::filesystem::path& path);
 bool write_file(const std::filesystem::path& path, const std::string& contents);
+bool set_hidden(const std::filesystem::path& path, bool hidden);
 
 bool starts_with(std::string_view value, std::string_view prefix);
 bool ends_with(std::string_view value, std::string_view suffix);
@@ -595,6 +597,13 @@ public:
 	static result<nothing> generate_sourcemap(const std::filesystem::path& root, const rojoinfo& info);
 };
 
+class crater
+{
+public:
+	static std::vector<std::string> get_package_folders(const std::filesystem::path& root);
+	static std::vector<std::string> get_ignore_globs(const std::filesystem::path& root);
+};
+
 class documentation
 {
 public:
@@ -640,6 +649,15 @@ public:
 	static std::vector<definitioninfo> collect(const std::filesystem::path& root, const settingsinfo& settings, bool roblox, client& owner);
 	static std::optional<int> get_directive_priority(const std::string& source);
 	static std::string get_package_name(const definitioninfo& info, const std::filesystem::path& path);
+};
+
+class declarefile
+{
+public:
+	static json make_content();
+	static std::filesystem::path get_path(const std::filesystem::path& root);
+	static result<std::string> make_file(const std::filesystem::path& root);
+	static result<bool> apply_missing(const std::filesystem::path& root);
 };
 
 struct symbolinfo

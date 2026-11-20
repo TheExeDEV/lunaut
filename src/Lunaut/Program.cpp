@@ -6,6 +6,7 @@
 #include "core.d.hpp"
 
 #include <iostream>
+#include <unordered_map>
 
 #if LUNAUT_PLATFORM_WINDOWS
 #include <fcntl.h>
@@ -49,12 +50,34 @@ const std::vector<std::pair<std::string_view, argument_handler>> relevant_argume
 	{"--clientProcessId=", &read_ignored},
 };
 
-const std::vector<std::string_view> commands = {"lsp", "analyze", "stats", "flags", "version", "help"};
-
+using command_handler = int (*)(const commandinfo& info);
 result<commandinfo> parse(int argc, char** argv);
 int invoke_lsp(const commandinfo& info);
+int invoke_analyze(const commandinfo& info);
+int invoke_stats(const commandinfo& info);
 int invoke_flags(const commandinfo& info);
+int invoke_init(const commandinfo& info);
+int invoke_declare(const commandinfo& info);
+int invoke_version(const commandinfo& info);
+int invoke_help(const commandinfo& info);
 void print_help();
+
+const std::unordered_map<std::string_view, command_handler> relevant_commands = {
+	{"lsp", &invoke_lsp},
+	{"analyze", &invoke_analyze},
+	{"stats", &invoke_stats},
+	{"flags", &invoke_flags},
+	{"init", &invoke_init},
+	{"declare", &invoke_declare},
+	{"version", &invoke_version},
+	{"help", &invoke_help},
+};
+
+const std::unordered_map<std::string_view, std::string_view> relevant_default_inputs = {
+	{"analyze", "."},
+	{"stats", "."},
+	{"init", "."},
+};
 
 }
 }
@@ -75,37 +98,7 @@ int main(int argc, char** argv)
 	}
 
 	const priv::commandinfo& info = parsed.value;
-
-	if (info.command == "version")
-	{
-		std::cout << LUNAUT_NAME << " " << LUNAUT_VERSION << " (Luau " << LUNAUT_LUAU_VERSION << ", " << LUNAUT_COMPILER << ")\n";
-		return 0;
-	}
-
-	if (info.command == "help")
-	{
-		priv::print_help();
-		return 0;
-	}
-
-	if (info.command == "flags")
-	{
-		return priv::invoke_flags(info);
-	}
-
-	if (info.command == "analyze")
-	{
-		console output(info.verbose, info.json_output);
-		return output.invoke_analyze(info.inputs, info.options);
-	}
-
-	if (info.command == "stats")
-	{
-		console output(info.verbose, info.json_output);
-		return output.invoke_stats(info.inputs, info.options);
-	}
-
-	return priv::invoke_lsp(info);
+	return priv::relevant_commands.at(info.command)(info);
 }
 
 namespace lunaut
@@ -171,7 +164,7 @@ result<commandinfo> parse(int argc, char** argv)
 			return result<commandinfo>::fail("unknown option: " + argument);
 		}
 
-		if (i == 1 && std::find(commands.begin(), commands.end(), argument) != commands.end())
+		if (i == 1 && relevant_commands.find(argument) != relevant_commands.end())
 		{
 			info.command = argument;
 			continue;
@@ -180,14 +173,11 @@ result<commandinfo> parse(int argc, char** argv)
 		info.inputs.push_back(argument);
 	}
 
-	if (info.command == "analyze" && info.inputs.empty())
-	{
-		info.inputs.emplace_back(".");
-	}
+	const auto default_input = relevant_default_inputs.find(info.command);
 
-	if (info.command == "stats" && info.inputs.empty())
+	if (default_input != relevant_default_inputs.end() && info.inputs.empty())
 	{
-		info.inputs.emplace_back(".");
+		info.inputs.emplace_back(default_input->second);
 	}
 
 	return result<commandinfo>::ok(info);
@@ -284,6 +274,57 @@ int invoke_lsp(const commandinfo& info)
 	return instance.run();
 }
 
+int invoke_analyze(const commandinfo& info)
+{
+	console output(info.verbose, info.json_output);
+	return output.invoke_analyze(info.inputs, info.options);
+}
+
+int invoke_stats(const commandinfo& info)
+{
+	console output(info.verbose, info.json_output);
+	return output.invoke_stats(info.inputs, info.options);
+}
+
+int invoke_init(const commandinfo& info)
+{
+	int code = 0;
+
+	for (const std::string& input : info.inputs)
+	{
+		result<std::string> made = declarefile::make_file(std::filesystem::path(input));
+
+		if (!made)
+		{
+			std::cerr << made.message << '\n';
+			code = 1;
+			continue;
+		}
+
+		std::cout << made.value << '\n';
+	}
+
+	return code;
+}
+
+int invoke_declare(const commandinfo& info)
+{
+	std::cout << declarefile::make_content().dump(2) << '\n';
+	return 0;
+}
+
+int invoke_version(const commandinfo& info)
+{
+	std::cout << LUNAUT_NAME << " " << LUNAUT_VERSION << " (Luau " << LUNAUT_LUAU_VERSION << ", " << LUNAUT_COMPILER << ")\n";
+	return 0;
+}
+
+int invoke_help(const commandinfo& info)
+{
+	print_help();
+	return 0;
+}
+
 int invoke_flags(const commandinfo& info)
 {
 	console output(info.verbose);
@@ -321,6 +362,8 @@ void print_help()
 			  << "  lunaut analyze [options] <paths>  check files or folders and print diagnostics\n"
 			  << "  lunaut stats [options] <paths>    report type statistics for files or folders\n"
 			  << "  lunaut flags [options]            list Luau FFlags and their values\n"
+			  << "  lunaut init [folders]             write .lunaut-declare into project folders\n"
+			  << "  lunaut declare [--json]           print the .lunaut-declare of this lunaut\n"
 			  << "  lunaut version                    print the version\n\n"
 			  << "Options:\n"
 			  << "  --flag:<Name>=<Value>             set a Luau FFlag\n"
@@ -329,7 +372,7 @@ void print_help()
 			  << "                                    load a definitions file (.d.luau)\n"
 			  << "  --settings=<file>                 extra settings file (.vscode/settings.json format)\n"
 			  << "  --verbose                         print server log to stderr\n"
-			  << "  --json                            print flags or statistics as JSON\n";
+			  << "  --json                            print flags, statistics or the declaration as JSON\n";
 }
 
 }

@@ -11,6 +11,10 @@
 #include <iostream>
 #include <sstream>
 
+#if LUNAUT_PLATFORM_WINDOWS
+#include <windows.h>
+#endif
+
 namespace lunaut::stdx
 {
 
@@ -72,6 +76,23 @@ bool write_file(const std::filesystem::path& path, const std::string& contents)
 
 	stream << contents;
 	return static_cast<bool>(stream);
+}
+
+bool set_hidden(const std::filesystem::path& path, bool hidden)
+{
+#if LUNAUT_PLATFORM_WINDOWS
+	DWORD attributes = GetFileAttributesW(path.wstring().c_str());
+
+	if (attributes == INVALID_FILE_ATTRIBUTES)
+	{
+		return false;
+	}
+
+	attributes = hidden ? (attributes | FILE_ATTRIBUTE_HIDDEN) : (attributes & ~DWORD(FILE_ATTRIBUTE_HIDDEN));
+	return SetFileAttributesW(path.wstring().c_str(), attributes) != 0;
+#else
+	return true;
+#endif
 }
 
 bool starts_with(std::string_view value, std::string_view prefix)

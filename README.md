@@ -62,17 +62,18 @@ lunaut is your astronaut in Luau code: it checks types and lint while you type, 
 10. [Editor features](#editor-features)
 11. [References and rename](#references-and-rename)
 12. [Requires and .luaurc](#requires-and-luaurc)
-13. [Command reference](#command-reference)
-14. [Custom LSP methods](#custom-lsp-methods)
-15. [Environment variables](#environment-variables)
-16. [Tests](#tests)
-17. [Luau updates](#luau-updates)
-18. [Releasing](#releasing)
-19. [Building from source](#building-from-source)
-20. [Source layout](#source-layout)
-21. [Limitations](#limitations)
-22. [Acknowledgements](#acknowledgements)
-23. [License](#license)
+13. [.lunaut-declare](#lunaut-declare)
+14. [Command reference](#command-reference)
+15. [Custom LSP methods](#custom-lsp-methods)
+16. [Environment variables](#environment-variables)
+17. [Tests](#tests)
+18. [Luau updates](#luau-updates)
+19. [Releasing](#releasing)
+20. [Building from source](#building-from-source)
+21. [Source layout](#source-layout)
+22. [Limitations](#limitations)
+23. [Acknowledgements](#acknowledgements)
+24. [License](#license)
 
 ---
 
@@ -262,7 +263,7 @@ All settings live in VS Code settings under `lunaut.*` (luau-lsp settings work t
 | `lunaut.rojo.executable` | `rojo` | Rojo command |
 | `lunaut.diagnostics.lint` | `true` | run Luau lint |
 | `lunaut.diagnostics.includeDependents` | `true` | re-check open files that require a changed module |
-| `lunaut.ignoreGlobs` | `["**/_Index/**"]` | files that never get diagnostics and are never discovered |
+| `lunaut.ignoreGlobs` | `["**/_Index/**"]` | files that never get diagnostics and are never discovered; crater package folders are added on top, see [crater packages](#crater-packages) |
 | `lunaut.analyzeLuaFiles` | `true` | check `.lua` files too, not only `.luau` |
 | `lunaut.baseLuaurc` | `""` | a `.luaurc` applied under every other one, relative to the workspace |
 | `lunaut.inlayHints.variableTypes` | `true` | type hints after locals and loop variables |
@@ -384,6 +385,7 @@ Where files come from:
 | settings | `"lunaut.definitions": [{ "path": "types/base.d.luau", "priority": 100 }]` |
 | settings with a glob | `"lunaut.definitions": [{ "path": "types/**/*.d.luau", "priority": 10 }]` |
 | settings as a map | `"lunaut.definitions": { "@roblox": "types/globalTypes.d.luau" }` |
+| settings as one path | `"lunaut.definitions": "types/globals.d.luau"` |
 | command line | `--definition=@base=types/base.d.luau#100` |
 | discovery | every `*.d.luau` in the workspace when `lunaut.discoverDefinitions` is on |
 | Roblox | `globalTypes.<security_level>.d.luau`, priority `lunaut.roblox.typesPriority` |
@@ -633,6 +635,80 @@ Inside `require("...")` completion lists the aliases and `./`, `../` first, then
 
 ---
 
+## .lunaut-declare
+
+`lunaut init` writes `.lunaut-declare` into the project folder: a JSON file that says the project uses lunaut and tells other tools, crater first of all, what this lunaut supports and how to read its settings, so they don't have to guess from `PATH` or from keys in `settings.json`. `lunaut declare --json` prints the same content for the installed lunaut, without a file in the project.
+
+```json
+{
+  "api_version": 1,
+  "lunaut_version": "0.0.9",
+  "features": { "analyzer": 1, "base_luaurc": 1, "crater_packages": 1, "definition_priority": 1, "definitions": 1, "fflags": 1, "rojo": 1, "settings": 1, "show_as_module": 1 },
+  "settings": {
+    "file": ".vscode/settings.json",
+    "prefix": "lunaut.",
+    "compatible_prefix": "luau-lsp.",
+    "compatible": { "luau-lsp.types.definitionFiles": "lunaut.definitions", "luau-lsp.ignoreGlobs": "lunaut.ignoreGlobs", "...": "..." },
+    "precedence": "lunaut"
+  },
+  "definitions": {
+    "setting": "lunaut.definitions",
+    "compatible_setting": "luau-lsp.types.definitionFiles",
+    "merge_with_compatible": false,
+    "forms": { "array": "...", "string": "one path", "object": "a map of name to path" },
+    "entry": {
+      "path": { "type": "string", "required": true, "globs": true, "relative_to": "workspace root" },
+      "name": { "type": "string", "default": "", "globs": "ignored for wildcard paths" },
+      "priority": { "type": "integer", "default": 0, "order": "higher loads first" },
+      "show_as_module": { "type": "boolean", "default": false }
+    },
+    "default_name": "@ + file name without .d.luau, .d.lua, .luau or .lua",
+    "name_prefix": "@",
+    "priority_sources": ["settings", "directive", "default"],
+    "priority_directive": { "text": "--!priority", "lines": 32 },
+    "duplicates": "first",
+    "show_as_module_name": { "strip": "first @", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+    "reserved_names": ["@roblox"],
+    "roblox_priority_setting": "lunaut.roblox.typesPriority"
+  },
+  "schemas": { "settings": "https://raw.githubusercontent.com/TheExeDEV/lunaut/v0.0.9/editors/vscode/package.json" },
+  "cli": { "json_output": { "declare": 1, "flags": 1, "stats": 1 } }
+}
+```
+
+| Key | What it tells other tools |
+| --- | --- |
+| `api_version` | The format of this file. Starts at `1`. |
+| `lunaut_version` | The lunaut that wrote or last completed the file. |
+| `features` | Each feature and the version of its format. A version goes up when the format of that feature changes, so a tool can support some features and skip the rest. |
+| `settings.file`, `settings.prefix` | Settings live in `.vscode/settings.json` under `lunaut.` keys. |
+| `settings.compatible` | Every `luau-lsp.*` key lunaut reads and the `lunaut.*` key it stands for. |
+| `settings.precedence` | When both keys are set, the `lunaut.*` one wins. |
+| `definitions.setting`, `compatible_setting`, `merge_with_compatible` | `lunaut.definitions` and `luau-lsp.types.definitionFiles` are not added together: only one list is read, and `lunaut.definitions` wins. |
+| `definitions.forms` | The setting is an array of entries (a path string or an object), one path string, or a map of name to path. |
+| `definitions.entry` | Fields of an entry with their types and defaults. `path` may be a glob; `name` is ignored for globs. |
+| `definitions.priority_sources` | Where a priority comes from, first match wins: `priority` in settings, then the `--!priority N` line in the first 32 lines of the file, then `0`. Higher loads first. |
+| `definitions.duplicates` | A file listed twice is loaded once, with the first priority found. |
+| `definitions.default_name`, `name_prefix` | A file without `name` is called `@` plus its file name; a name always starts with `@`. |
+| `definitions.show_as_module_name` | With `show_as_module`, the first `@` of the name is dropped and the rest has to be an identifier, so `@base` gives `base.Vehicle`. |
+| `definitions.reserved_names` | `@roblox` is the downloaded Roblox API. Another file with that name gets `@roblox_2`. |
+| `schemas.settings` | The VS Code extension manifest; `contributes.configuration.properties` is the JSON schema of every setting. |
+| `cli.json_output` | Each command that prints JSON with `--json` and the version of that output. |
+
+The file is hidden (a dot file, and marked hidden on Windows) and should be committed with the project. New lunaut versions only add keys and never rename or remove old ones. When the file exists, the server adds the missing keys on start without a message, raises `api_version` and feature versions that went up, and sets `lunaut_version`; a complete file is not touched. `lunaut init` on an existing file does the same and says what it did. Without the file nothing is created: run `lunaut init` once.
+
+### crater packages
+
+When the project has a [`.crater-declare`](https://github.com/TheExeDEV/crater#crater-declare), lunaut reads crater's package folders from it and adds them to `lunaut.ignoreGlobs`, so installed packages give no diagnostics and are never discovered as definitions:
+
+- the folders of `sync.packages`
+- the vendor folders, `vendor.folders.*.path`
+- the realm folders from the crater settings file it names (`path_to_crater_settings`): `client`, `server` and `develop`, `Packages`, `ServerPackages` and `DevPackages` when a realm is not set, nothing when its path is empty
+
+Requires into those folders keep working; only their own diagnostics are hidden.
+
+---
+
 ## Command reference
 
 | Command | What it does |
@@ -641,6 +717,8 @@ Inside `require("...")` completion lists the aliases and `./`, `../` first, then
 | `lunaut analyze [paths]` | checks files and folders (default `.`), prints diagnostics, exit code `1` on errors |
 | `lunaut stats [paths] [--json]` | reports type statistics for files and folders (default `.`): totals, origins, kinds, hierarchy and aliases |
 | `lunaut flags` | lists every Luau FFlag with its value and source |
+| `lunaut init [folders]` | writes [`.lunaut-declare`](#lunaut-declare) into each folder (default `.`), or adds the missing keys to an existing one |
+| `lunaut declare [--json]` | prints the `.lunaut-declare` content of this lunaut |
 | `lunaut version` | version, Luau version and compiler |
 | `lunaut help` | usage |
 
@@ -653,7 +731,7 @@ Options for every command:
 | `--definition=[@name=]path[#priority]` | load a definition file, can repeat |
 | `--settings=file` | extra settings in `.vscode/settings.json` format, applied last |
 | `--verbose` | print the server log to stderr |
-| `--json` | print `flags` or `stats` as JSON |
+| `--json` | print `flags`, `stats` or `declare` as JSON |
 
 ---
 
@@ -794,11 +872,11 @@ src/Lunaut/
 ├── Program.cpp       entry point, arguments
 ├── Cli/              analyze mode
 ├── Server/           JSON-RPC, LSP dispatch, protocol replies
-├── Core/             workspace, file resolver, FFlags, definitions, text documents,
+├── Core/             workspace, file resolver, FFlags, definitions, .lunaut-declare, text documents,
 │                     type display (TypeDisplay, TypeAliases, TypeComparer, TypeLookup, TypeNormalizer)
 ├── Features/         one LSP operation per file: hover, completion, definition, references, rename, ...
 ├── Models/           settings and enum names
-├── Roblox/           sourcemap, instance requires, DataModel types, Rojo, Roblox types
+├── Roblox/           sourcemap, instance requires, DataModel types, Rojo, crater packages, Roblox types
 └── Util/             strings, glob, uri, processes, http, cache
 editors/vscode/       VS Code extension
 installers/           install and uninstall scripts
