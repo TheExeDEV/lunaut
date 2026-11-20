@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Added
+
+- The installer lists the editors it finds (VS Code, VS Code Insiders, Cursor, Windsurf, VSCodium, Zed, Neovim, Helix) and the terminal, and asks where to install lunaut; `LUNAUT_EDITORS` picks them without asking
+- The uninstaller lists what it finds (the extension in each editor, the Zed extension and its downloaded servers, the Neovim config, the `lunaut` command, the download cache) and asks what to remove
+
 ### Changed
 
 - The VS Code extension id is `theexe.lunaut-luau` because the Marketplace keeps the name `lunaut` reserved; its display name is Lunaut - Luau Language Server for the same reason

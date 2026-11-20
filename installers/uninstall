@@ -7,7 +7,9 @@ repository="${LUNAUT_REPOSITORY:-TheExeDEV/lunaut}"
 script_url="https://raw.githubusercontent.com/$repository/main/installers/uninstall"
 install_dir="${LUNAUT_INSTALL_DIR:-$HOME/.lunaut/bin}"
 cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/lunaut"
+config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
 purge="${LUNAUT_PURGE:-}"
+extension_ids="theexe.lunaut-luau theexe.lunaut exitedb.lunaut lunaut.lunaut"
 
 for argument in "$@"; do
 	case "$argument" in
@@ -17,28 +19,217 @@ for argument in "$@"; do
 done
 
 case "$(uname -s)" in
+	Darwin) zed_data="$HOME/Library/Application Support/Zed" ;;
 	MINGW* | MSYS* | CYGWIN*)
 		LUNAUT_PURGE="$purge" powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm $script_url | iex"
 		exit $?
 		;;
+	*) zed_data="${XDG_DATA_HOME:-$HOME/.local/share}/zed" ;;
 esac
 
-removed=0
+find_command() {
+	for candidate in "$@"; do
+		case "$candidate" in
+			/*)
+				if [ -x "$candidate" ]; then
+					echo "$candidate"
+					return 0
+				fi
+				;;
+			*)
+				if command -v "$candidate" >/dev/null 2>&1; then
+					command -v "$candidate"
+					return 0
+				fi
+				;;
+		esac
+	done
 
-for file in lunaut lunaut.download lunaut.vsix; do
-	if [ -e "$install_dir/$file" ]; then
-		rm -f "$install_dir/$file"
-		echo "Removed $install_dir/$file"
-		removed=$((removed + 1))
-	fi
-done
+	return 1
+}
 
-if command -v code >/dev/null 2>&1; then
-	for extension_id in theexe.lunaut-luau theexe.lunaut exitedb.lunaut lunaut.lunaut; do
-		if code --list-extensions 2>/dev/null | grep -qx "$extension_id"; then
-			code --uninstall-extension "$extension_id" >/dev/null && echo "Removed the lunaut extension from VS Code"
+targets=""
+count=0
+
+add_target() {
+	count=$((count + 1))
+	targets="$targets$count|$1|$2|$3|$4
+"
+}
+
+has_extension() {
+	installed="$("$1" --list-extensions 2>/dev/null || true)"
+
+	for extension_id in $extension_ids; do
+		if echo "$installed" | grep -qix "$extension_id"; then
+			return 0
 		fi
 	done
+
+	return 1
+}
+
+add_code_editor() {
+	key="$1"
+	name="$2"
+	shift 2
+
+	if found="$(find_command "$@")" && has_extension "$found"; then
+		add_target "$key" vscode "$name" "$found"
+	fi
+}
+
+add_code_editor code "VS Code" code "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code"
+add_code_editor code-insiders "VS Code Insiders" code-insiders "/Applications/Visual Studio Code - Insiders.app/Contents/Resources/app/bin/code-insiders"
+add_code_editor cursor "Cursor" cursor "/Applications/Cursor.app/Contents/Resources/app/bin/cursor"
+add_code_editor windsurf "Windsurf" windsurf "/Applications/Windsurf.app/Contents/Resources/app/bin/windsurf"
+add_code_editor codium "VSCodium" codium "/Applications/VSCodium.app/Contents/Resources/app/bin/codium"
+
+if [ -e "$zed_data/extensions/installed/lunaut" ] || [ -L "$zed_data/extensions/installed/lunaut" ] || [ -d "$zed_data/extensions/work/lunaut" ]; then
+	add_target zed zed "Zed (the Lunaut extension and the servers it downloaded)" ""
+fi
+
+if [ -f "$config_home/nvim/plugin/lunaut.lua" ]; then
+	add_target nvim nvim "Neovim (nvim/plugin/lunaut.lua)" ""
+fi
+
+if [ -e "$install_dir/lunaut" ] || [ -e "$install_dir/lunaut.download" ]; then
+	add_target path path "Terminal (the lunaut command in $install_dir and its PATH entries)" ""
+fi
+
+if [ -d "$cache_dir" ]; then
+	add_target cache cache "Download cache (FFlags, Roblox types)" ""
+fi
+
+if [ "$count" -eq 0 ]; then
+	echo "lunaut was not found on this computer."
+	exit 0
+fi
+
+can_ask() {
+	[ -t 1 ] && (exec </dev/tty) 2>/dev/null
+}
+
+is_number() {
+	case "$1" in
+		'' | *[!0-9]*) return 1 ;;
+	esac
+
+	[ "$1" -ge 1 ] && [ "$1" -le "$count" ]
+}
+
+selected=""
+
+select_defaults() {
+	while IFS='|' read -r index key kind name command; do
+		if [ -n "$index" ] && { [ "$kind" != "cache" ] || [ -n "$purge" ] || [ "${1:-}" = "all" ]; }; then
+			selected="$selected $index "
+		fi
+	done <<EOF
+$targets
+EOF
+}
+
+if can_ask; then
+	echo "What should be removed?"
+
+	while IFS='|' read -r index key kind name command; do
+		if [ -n "$index" ]; then
+			echo "  $index) $name"
+		fi
+	done <<EOF
+$targets
+EOF
+
+	if [ -n "$purge" ]; then
+		hint="press Enter for all"
+	else
+		hint="press Enter for all except the cache"
+	fi
+
+	while :; do
+		printf 'Type numbers separated by spaces, "all", or %s: ' "$hint"
+		answer=""
+		read -r answer </dev/tty || true
+		answer="$(echo "$answer" | tr ',' ' ')"
+		selected=""
+		valid=1
+
+		if [ -z "$answer" ]; then
+			select_defaults
+			break
+		fi
+
+		if [ "$answer" = "all" ]; then
+			select_defaults all
+			break
+		fi
+
+		for token in $answer; do
+			if is_number "$token"; then
+				selected="$selected $token "
+			else
+				valid=0
+			fi
+		done
+
+		if [ "$valid" -eq 1 ] && [ -n "$selected" ]; then
+			break
+		fi
+
+		echo "Use the numbers from the list, for example: 1 3"
+	done
+else
+	select_defaults
+fi
+
+is_selected() {
+	case "$selected" in
+		*" $1 "*) return 0 ;;
+	esac
+
+	return 1
+}
+
+has_kind() {
+	while IFS='|' read -r index key kind name command; do
+		if [ "$kind" = "$1" ] && is_selected "$index"; then
+			return 0
+		fi
+	done <<EOF
+$targets
+EOF
+
+	return 1
+}
+
+while IFS='|' read -r index key kind name command; do
+	if [ "$kind" != "vscode" ] || ! is_selected "$index"; then
+		continue
+	fi
+
+	installed="$("$command" --list-extensions 2>/dev/null || true)"
+
+	for extension_id in $extension_ids; do
+		if echo "$installed" | grep -qix "$extension_id"; then
+			"$command" --uninstall-extension "$extension_id" >/dev/null 2>&1 || true
+		fi
+	done
+
+	echo "Removed the extension from $name"
+done <<EOF
+$targets
+EOF
+
+if has_kind zed; then
+	rm -f "$zed_data/extensions/installed/lunaut" 2>/dev/null || rm -rf "$zed_data/extensions/installed/lunaut"
+	rm -rf "$zed_data/extensions/work/lunaut"
+	echo "Removed the Lunaut extension from Zed, restart Zed to finish"
+fi
+
+if has_kind nvim; then
+	rm -f "$config_home/nvim/plugin/lunaut.lua"
+	echo "Removed $config_home/nvim/plugin/lunaut.lua"
 fi
 
 remove_if_empty() {
@@ -61,29 +252,32 @@ remove_from_path() {
 	echo "Removed lunaut from PATH in $file"
 }
 
-remove_if_empty "$install_dir"
-remove_if_empty "$(dirname "$install_dir")"
+if has_kind path; then
+	for file in lunaut lunaut.download lunaut.vsix; do
+		if [ -e "$install_dir/$file" ]; then
+			rm -f "$install_dir/$file"
+			echo "Removed $install_dir/$file"
+		fi
+	done
 
-for file in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
-	remove_from_path "$file"
-done
+	remove_if_empty "$install_dir"
+	remove_if_empty "$(dirname "$install_dir")"
 
-rm -f "$HOME/.config/fish/conf.d/lunaut.fish"
+	for file in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
+		remove_from_path "$file"
+	done
 
-if [ -n "$purge" ] && [ -d "$cache_dir" ]; then
+	rm -f "$config_home/fish/conf.d/lunaut.fish"
+	echo "Open a new terminal to refresh PATH."
+fi
+
+if has_kind cache; then
 	rm -rf "$cache_dir"
 	echo "Removed $cache_dir"
 fi
 
-if [ "$removed" -eq 0 ]; then
-	echo "lunaut was not found in $install_dir"
-	exit 0
-fi
-
-echo "lunaut is uninstalled. Open a new terminal to refresh PATH."
-
-if [ -z "$purge" ]; then
-	echo "The download cache (FFlags, Roblox types) was kept. Add --purge to remove it too."
+if [ -d "$cache_dir" ] && ! has_kind cache; then
+	echo "The download cache in $cache_dir was kept. Add --purge to remove it too."
 fi
 
 exit 0
@@ -104,68 +298,187 @@ exit 0
 	$installDir = if ($env:LUNAUT_INSTALL_DIR) { $env:LUNAUT_INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA "lunaut\bin" }
 	$root = Join-Path $env:LOCALAPPDATA "lunaut"
 	$cacheDir = Join-Path $root "cache"
+	$zedExtensions = Join-Path $env:LOCALAPPDATA "Zed\extensions"
+	$nvimPlugin = Join-Path $env:LOCALAPPDATA "nvim\plugin\lunaut.lua"
 	$purge = [bool]$env:LUNAUT_PURGE
-	$removed = 0
+	$extensionIds = @("theexe.lunaut-luau", "theexe.lunaut", "exitedb.lunaut", "lunaut.lunaut")
+	$programs = Join-Path $env:LOCALAPPDATA "Programs"
 
-	foreach ($file in @("lunaut.exe", "lunaut.exe.download", "lunaut.vsix")) {
-		$path = Join-Path $installDir $file
+	function Find-Command($names, $paths) {
+		foreach ($name in $names) {
+			$found = Get-Command $name -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
 
-		if (Test-Path -LiteralPath $path) {
-			try {
-				Remove-Item -LiteralPath $path -Force
-			} catch {
-				throw "Could not remove $path. Close VS Code and every running lunaut, then try again."
-			}
-
-			Write-Host "Removed $path"
-			$removed++
-		}
-	}
-
-	if (Get-Command code -ErrorAction SilentlyContinue) {
-		$extensions = & code --list-extensions 2>$null
-
-		foreach ($extensionId in @("theexe.lunaut-luau", "theexe.lunaut", "exitedb.lunaut", "lunaut.lunaut")) {
-			if ($extensions -contains $extensionId) {
-				& code --uninstall-extension $extensionId | Out-Null
-				Write-Host "Removed the lunaut extension from VS Code"
+			if ($found) {
+				return $found.Source
 			}
 		}
+
+		foreach ($path in $paths) {
+			if ($path -and (Test-Path -LiteralPath $path)) {
+				return $path
+			}
+		}
+
+		return $null
 	}
 
-	if ((Test-Path -LiteralPath $installDir) -and -not (Get-ChildItem -LiteralPath $installDir -Force | Select-Object -First 1)) {
-		Remove-Item -LiteralPath $installDir -Force
+	function Get-InstalledIds($command) {
+		$installed = @(& $command --list-extensions 2>$null)
+		return @($extensionIds | Where-Object { $installed -contains $_ })
 	}
 
-	$userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+	function Remove-Folder($path) {
+		$item = Get-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
 
-	if ($userPath) {
-		$entries = @($userPath.Split(";") | Where-Object { $_ -ne "" })
-		$kept = @($entries | Where-Object { $_.TrimEnd("\") -ne $installDir.TrimEnd("\") })
+		if (-not $item) {
+			return
+		}
 
-		if ($kept.Count -ne $entries.Count) {
-			[Environment]::SetEnvironmentVariable("Path", $kept -join ";", "User")
-			Write-Host "Removed lunaut from PATH"
+		if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+			[IO.Directory]::Delete($path)
+			return
+		}
+
+		Remove-Item -LiteralPath $path -Recurse -Force
+	}
+
+	$targets = New-Object System.Collections.ArrayList
+
+	$codeEditors = @(
+		@{ Key = "code"; Name = "VS Code"; Names = @("code.cmd", "code"); Paths = @("$programs\Microsoft VS Code\bin\code.cmd", "$env:ProgramFiles\Microsoft VS Code\bin\code.cmd") },
+		@{ Key = "code-insiders"; Name = "VS Code Insiders"; Names = @("code-insiders.cmd"); Paths = @("$programs\Microsoft VS Code Insiders\bin\code-insiders.cmd", "$env:ProgramFiles\Microsoft VS Code Insiders\bin\code-insiders.cmd") },
+		@{ Key = "cursor"; Name = "Cursor"; Names = @("cursor.cmd"); Paths = @("$programs\cursor\resources\app\bin\cursor.cmd") },
+		@{ Key = "windsurf"; Name = "Windsurf"; Names = @("windsurf.cmd"); Paths = @("$programs\Windsurf\bin\windsurf.cmd") },
+		@{ Key = "codium"; Name = "VSCodium"; Names = @("codium.cmd"); Paths = @("$programs\VSCodium\bin\codium.cmd", "$env:ProgramFiles\VSCodium\bin\codium.cmd") }
+	)
+
+	foreach ($editor in $codeEditors) {
+		$command = Find-Command $editor.Names $editor.Paths
+
+		if ($command -and (Get-InstalledIds $command).Count -gt 0) {
+			[void]$targets.Add(@{ Kind = "vscode"; Name = $editor.Name; Command = $command })
 		}
 	}
 
-	if ($purge -and (Test-Path -LiteralPath $cacheDir)) {
+	if ((Test-Path -LiteralPath (Join-Path $zedExtensions "installed\lunaut")) -or (Test-Path -LiteralPath (Join-Path $zedExtensions "work\lunaut"))) {
+		[void]$targets.Add(@{ Kind = "zed"; Name = "Zed (the Lunaut extension and the servers it downloaded)" })
+	}
+
+	if (Test-Path -LiteralPath $nvimPlugin) {
+		[void]$targets.Add(@{ Kind = "nvim"; Name = "Neovim (nvim\plugin\lunaut.lua)" })
+	}
+
+	if ((Test-Path -LiteralPath (Join-Path $installDir "lunaut.exe")) -or (Test-Path -LiteralPath (Join-Path $installDir "lunaut.exe.download"))) {
+		[void]$targets.Add(@{ Kind = "path"; Name = "Terminal (the lunaut command in $installDir and its PATH entry)" })
+	}
+
+	if (Test-Path -LiteralPath $cacheDir) {
+		[void]$targets.Add(@{ Kind = "cache"; Name = "Download cache (FFlags, Roblox types)" })
+	}
+
+	if ($targets.Count -eq 0) {
+		Write-Host "lunaut was not found on this computer."
+		return
+	}
+
+	$defaults = @($targets | Where-Object { $_.Kind -ne "cache" -or $purge })
+	$selected = $defaults
+
+	if ([Environment]::UserInteractive -and -not [Console]::IsInputRedirected) {
+		Write-Host "What should be removed?"
+
+		for ($index = 0; $index -lt $targets.Count; $index++) {
+			Write-Host "  $($index + 1)) $($targets[$index].Name)"
+		}
+
+		$hint = if ($purge) { "press Enter for all" } else { "press Enter for all except the cache" }
+
+		while ($true) {
+			$answer = (Read-Host "Type numbers separated by spaces, `"all`", or $hint").Trim()
+
+			if ($answer -eq "") {
+				$selected = $defaults
+				break
+			}
+
+			if ($answer -eq "all") {
+				$selected = @($targets)
+				break
+			}
+
+			$tokens = @($answer -split '[,\s]+' | Where-Object { $_ -ne "" })
+			$numbers = @($tokens | Where-Object { $_ -match '^\d+$' -and [int]$_ -ge 1 -and [int]$_ -le $targets.Count } | ForEach-Object { [int]$_ } | Select-Object -Unique)
+
+			if ($numbers.Count -gt 0 -and $numbers.Count -eq @($tokens | Select-Object -Unique).Count) {
+				$selected = @($numbers | ForEach-Object { $targets[$_ - 1] })
+				break
+			}
+
+			Write-Host "Use the numbers from the list, for example: 1 3"
+		}
+	}
+
+	$kinds = @($selected | ForEach-Object { $_.Kind })
+
+	foreach ($editor in @($selected | Where-Object { $_.Kind -eq "vscode" })) {
+		foreach ($extensionId in (Get-InstalledIds $editor.Command)) {
+			& $editor.Command --uninstall-extension $extensionId 2>$null | Out-Null
+		}
+
+		Write-Host "Removed the extension from $($editor.Name)"
+	}
+
+	if ($kinds -contains "zed") {
+		Remove-Folder (Join-Path $zedExtensions "installed\lunaut")
+		Remove-Folder (Join-Path $zedExtensions "work\lunaut")
+		Write-Host "Removed the Lunaut extension from Zed, restart Zed to finish"
+	}
+
+	if ($kinds -contains "nvim") {
+		Remove-Item -LiteralPath $nvimPlugin -Force
+		Write-Host "Removed $nvimPlugin"
+	}
+
+	if ($kinds -contains "path") {
+		foreach ($file in @("lunaut.exe", "lunaut.exe.download", "lunaut.vsix")) {
+			$path = Join-Path $installDir $file
+
+			if (Test-Path -LiteralPath $path) {
+				try {
+					Remove-Item -LiteralPath $path -Force
+				} catch {
+					throw "Could not remove $path. Close every editor that runs lunaut, then try again."
+				}
+
+				Write-Host "Removed $path"
+			}
+		}
+
+		if ((Test-Path -LiteralPath $installDir) -and -not (Get-ChildItem -LiteralPath $installDir -Force | Select-Object -First 1)) {
+			Remove-Item -LiteralPath $installDir -Force
+		}
+
+		$userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+
+		if ($userPath) {
+			$entries = @($userPath.Split(";") | Where-Object { $_ -ne "" })
+			$kept = @($entries | Where-Object { $_.TrimEnd("\") -ne $installDir.TrimEnd("\") })
+
+			if ($kept.Count -ne $entries.Count) {
+				[Environment]::SetEnvironmentVariable("Path", $kept -join ";", "User")
+				Write-Host "Removed lunaut from PATH. Open a new terminal to refresh it."
+			}
+		}
+	}
+
+	if ($kinds -contains "cache") {
 		Remove-Item -LiteralPath $cacheDir -Recurse -Force
 		Write-Host "Removed $cacheDir"
+	} elseif (Test-Path -LiteralPath $cacheDir) {
+		Write-Host 'The download cache was kept. Run $env:LUNAUT_PURGE=1 before the command to remove it too.'
 	}
 
 	if ((Test-Path -LiteralPath $root) -and -not (Get-ChildItem -LiteralPath $root -Force | Select-Object -First 1)) {
 		Remove-Item -LiteralPath $root -Force
-	}
-
-	if ($removed -eq 0) {
-		Write-Host "lunaut was not found in $installDir"
-		return
-	}
-
-	Write-Host "lunaut is uninstalled. Open a new terminal to refresh PATH."
-
-	if (-not $purge) {
-		Write-Host 'The download cache (FFlags, Roblox types) was kept. Run $env:LUNAUT_PURGE=1 before the command to remove it too.'
 	}
 }

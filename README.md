@@ -90,9 +90,28 @@ irm https://raw.githubusercontent.com/TheExeDEV/lunaut/main/installers/install |
 curl -fsSL https://raw.githubusercontent.com/TheExeDEV/lunaut/main/installers/install | sh
 ```
 
-Both lines run the same file. It downloads the latest release into `%LOCALAPPDATA%\lunaut\bin` (Windows) or `~/.lunaut/bin`, adds that folder to `PATH` and, when the `code` command is available, installs the VS Code extension too. Open a new terminal and run `lunaut --version`.
+Both lines run the same file. It lists the editors it finds and asks where to install lunaut:
 
-Options, set before the command: `LUNAUT_VERSION=0.1.0` installs a specific version, `LUNAUT_INSTALL_DIR` changes the folder, `LUNAUT_NO_PATH=1` leaves `PATH` alone, `LUNAUT_NO_EXTENSION=1` skips VS Code. In PowerShell: `$env:LUNAUT_VERSION = "0.1.0"`.
+```
+Where should lunaut be installed?
+  1) VS Code
+  2) Zed
+  3) Neovim
+  4) Terminal (the lunaut command on PATH)
+Type numbers separated by spaces, or press Enter for all:
+```
+
+| Choice | What it does |
+| --- | --- |
+| VS Code, VS Code Insiders, Cursor, Windsurf, VSCodium | installs `lunaut.vsix`, which carries its own server |
+| Zed | puts the server on `PATH` and reminds you to install the **Lunaut** extension from Zed's Extensions panel |
+| Neovim | puts the server on `PATH` and copies [`lunaut.lua`](editors/neovim/lunaut.lua) into `nvim/plugin` |
+| Helix | puts the server on `PATH` and writes [`languages.toml`](editors/helix/languages.toml) when you have none yet |
+| Terminal | puts the server into `%LOCALAPPDATA%\lunaut\bin` (Windows) or `~/.lunaut/bin` and adds that folder to `PATH` |
+
+Without a terminal to ask in (CI, scripts), it installs into everything it found. Open a new terminal and run `lunaut --version`.
+
+Options, set before the command: `LUNAUT_VERSION=0.1.0` installs a specific version, `LUNAUT_INSTALL_DIR` changes the folder, `LUNAUT_NO_PATH=1` leaves `PATH` alone, `LUNAUT_NO_EXTENSION=1` skips the VS Code family, `LUNAUT_EDITORS=code,zed,nvim,helix,path` picks the targets without asking (`cursor`, `windsurf`, `codium`, `code-insiders` and `all` work too). In PowerShell: `$env:LUNAUT_VERSION = "0.1.0"`.
 
 **Manually:** download `lunaut-<platform>` from the latest release, rename it to `lunaut` (or `lunaut.exe`) and put it on your `PATH`. Install `lunaut.vsix` with `code --install-extension lunaut.vsix`, or find Lunaut (`theexe.lunaut-luau`) in the VS Code Marketplace.
 
@@ -108,7 +127,7 @@ irm https://raw.githubusercontent.com/TheExeDEV/lunaut/main/installers/uninstall
 curl -fsSL https://raw.githubusercontent.com/TheExeDEV/lunaut/main/installers/uninstall | sh
 ```
 
-It removes the executable, the VS Code extension and the `PATH` entries the installer added. The download cache (synced FFlags, Roblox definitions) is kept; to remove it too:
+It lists what it finds (the extension in each VS Code-like editor, the Zed extension with the servers it downloaded, the Neovim config, the `lunaut` command with its `PATH` entries, the download cache) and asks what to remove. Enter removes everything except the download cache (synced FFlags, Roblox definitions); type `all`, or run it like this, to remove the cache too:
 
 ```powershell
 $env:LUNAUT_PURGE = 1; irm https://raw.githubusercontent.com/TheExeDEV/lunaut/main/installers/uninstall | iex
@@ -658,6 +677,7 @@ Other editors can pass settings in `initializationOptions` and `workspace/didCha
 | `LUNAUT_INSTALL_DIR` | installer, uninstaller | install folder |
 | `LUNAUT_NO_PATH` | installer | do not touch `PATH` |
 | `LUNAUT_NO_EXTENSION` | installer | do not install the VS Code extension |
+| `LUNAUT_EDITORS` | installer | targets to install into without asking: `code`, `code-insiders`, `cursor`, `windsurf`, `codium`, `zed`, `nvim`, `helix`, `path` or `all` |
 | `LUNAUT_PURGE` | uninstaller | also remove the cache |
 | `LUNAUT_REPOSITORY` | installer, uninstaller | GitHub repository to download from |
 | `LUNAUT_BINARY` | tests, extension packaging | path to the server executable |
