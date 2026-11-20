@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-20
+
 ### Added
 
 - `end` is inserted in every editor through `textDocument/onTypeFormatting` on Enter: Zed, Neovim and Helix get it now, and VS Code uses the same path with the cursor kept on the new line
