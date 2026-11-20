@@ -161,6 +161,25 @@ class NavigationTests(unittest.TestCase):
 		for index, (text, line, character, expected) in enumerate(cases):
 			self.assertEqual(self.apply_on_type_end(f"body_end_{index}.luau", text, line, character), expected, text)
 
+	def test_autocomplete_end_takes_the_indent_of_its_block(self):
+		cases = [
+			("local function f()\n\tfor i = 1, 3 do\n\t\t\nend\n", 2, 2, "local function f()\n\tfor i = 1, 3 do\n\t\t\n\tend\nend\n"),
+			("local function f()\n    for i = 1, 3 do\n        \nend\n", 2, 8, "local function f()\n    for i = 1, 3 do\n        \n    end\nend\n"),
+			(
+				"local function f()\n\tif ready then\n\t\twhile true do\n\t\t\t\n\tend\nend\n",
+				3,
+				3,
+				"local function f()\n\tif ready then\n\t\twhile true do\n\t\t\t\n\t\tend\n\tend\nend\n",
+			),
+			("local t = {\n\tf = function()\n\t\t\n}\n", 2, 2, "local t = {\n\tf = function()\n\t\t\n\tend\n}\n"),
+			("local function f()\n\tlocal g = function()\n\t\t\nend\n", 2, 2, "local function f()\n\tlocal g = function()\n\t\t\n\tend\nend\n"),
+			("if a then\n\tprint(a)\nelseif b then\n\t\nend\n", 3, 1, "if a then\n\tprint(a)\nelseif b then\n\t\nend\n"),
+			("local function f()\n\tfor i = 1, 3 do\n\t\tprint(i)\n\t\t\n", 3, 2, "local function f()\n\tfor i = 1, 3 do\n\t\tprint(i)\n\t\t\n\tend\n"),
+		]
+
+		for index, (text, line, character, expected) in enumerate(cases):
+			self.assertEqual(self.apply_on_type_end(f"indent_end_{index}.luau", text, line, character), expected, text)
+
 	def test_autocomplete_end_on_type(self):
 		self.assertEqual(self.client.capabilities["documentOnTypeFormattingProvider"]["moreTriggerCharacter"], ["\n"])
 		self.assertNotIn("\n", self.client.capabilities["completionProvider"]["triggerCharacters"])
