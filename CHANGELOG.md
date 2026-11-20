@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-20
+
 ### Fixed
 
 - The Zed extension runs the newest released server instead of whatever `lunaut` is on `PATH`, so an old copy from the installer no longer hides new versions; `PATH` is only a fallback when the download fails, and `lsp.lunaut.binary.path` still picks a server by hand
