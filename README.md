@@ -94,7 +94,7 @@ Both lines run the same file. It downloads the latest release into `%LOCALAPPDAT
 
 Options, set before the command: `LUNAUT_VERSION=0.1.0` installs a specific version, `LUNAUT_INSTALL_DIR` changes the folder, `LUNAUT_NO_PATH=1` leaves `PATH` alone, `LUNAUT_NO_EXTENSION=1` skips VS Code. In PowerShell: `$env:LUNAUT_VERSION = "0.1.0"`.
 
-**Manually:** download `lunaut-<platform>` from the latest release, rename it to `lunaut` (or `lunaut.exe`) and put it on your `PATH`. Install `lunaut.vsix` with `code --install-extension lunaut.vsix`, or find Lunaut (`theexe.lunaut`) in the VS Code Marketplace.
+**Manually:** download `lunaut-<platform>` from the latest release, rename it to `lunaut` (or `lunaut.exe`) and put it on your `PATH`. Install `lunaut.vsix` with `code --install-extension lunaut.vsix`, or find Lunaut (`theexe.lunaut-luau`) in the VS Code Marketplace.
 
 ### Uninstall
 

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- The VS Code extension id is `theexe.lunaut-luau` because the Marketplace keeps the name `lunaut` reserved; its display name is Lunaut - Luau Language Server for the same reason
+
 ## [0.0.8] - 2026-11-19
 
 ### Added
