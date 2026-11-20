@@ -539,7 +539,7 @@ Without a diagnostic:
 
 ### Typing
 
-Pressing Enter after `function ...`, `if ... then`, `for ... do`, `while ... do`, `do` or `repeat` adds the closing `end` or `until` when the block is still open, and adds a missing `then` or `do` (`lunaut.completion.autocompleteEnd`). Typing `{` inside a `"string"` or `'string'` turns it into `` `string {` `` (`lunaut.format.convertQuotes`); the extension turns on `editor.formatOnType` for Luau so this works out of the box.
+Pressing Enter after `function ...`, `if ... then`, `for ... do`, `while ... do`, `do` or `repeat` adds the closing `end` or `until` when the block is still open, and adds a missing `then` or `do` (`lunaut.completion.autocompleteEnd`). The same happens on Enter after the last line of a block that has no `end` yet. Text after the cursor moves behind the `end`, so `foo(function()` + Enter gives `end)`, and every block left open gets its own `end`. It works through on-type formatting, in VS Code, Zed and every other editor that supports it. Typing `{` inside a `"string"` or `'string'` turns it into `` `string {` `` (`lunaut.format.convertQuotes`); the extension turns on `editor.formatOnType` for Luau so this works out of the box.
 
 ### Formatting
 

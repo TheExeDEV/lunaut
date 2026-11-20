@@ -100,6 +100,27 @@ class SymbolTests(unittest.TestCase):
 		self.assertEqual(resolved["command"]["command"], "lunaut.showReferences")
 		self.assertTrue(resolved["command"]["arguments"][2][0]["uri"].endswith("main.luau"))
 
+	def test_document_symbols_stay_inside_their_range(self):
+		sources = [
+			"local first = 1\nconst",
+			"local first = 1\nlocal",
+			"local function\n",
+			"function module.\n",
+			"type\n",
+			"export type Name = \n",
+			"const value = 1\nconst other",
+		]
+
+		for index, source in enumerate(sources):
+			uri, _ = self.client.open(f"broken_symbols_{index}.luau", source)
+			symbols = self.client.request("textDocument/documentSymbol", {"textDocument": {"uri": uri}})
+
+			for symbol in symbols:
+				outer, inner = symbol["range"], symbol["selectionRange"]
+				self.assertFalse(symbol["name"].startswith("%"), (source, symbol))
+				self.assertLessEqual((outer["start"]["line"], outer["start"]["character"]), (inner["start"]["line"], inner["start"]["character"]), (source, symbol))
+				self.assertLessEqual((inner["end"]["line"], inner["end"]["character"]), (outer["end"]["line"], outer["end"]["character"]), (source, symbol))
+
 	def test_selection_range(self):
 		line, character = position_of(self.main, "1, 2")
 		ranges = self.client.request(

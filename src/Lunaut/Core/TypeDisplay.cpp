@@ -37,6 +37,7 @@ struct generic_collector final : Luau::TypeOnceVisitor
 
 std::string make_generic_name(size_t index);
 std::string replace_unknown_error(const std::string& text, bool enabled);
+std::string cut_text(const std::string& text, size_t limit);
 
 }
 }
@@ -112,6 +113,7 @@ std::string workspace::render_type_display(
 	}
 
 	std::set<Luau::TypeId> active;
+	std::set<Luau::TypePackId> active_packs;
 	std::map<Luau::TypeId, std::optional<std::string>> alias_cache;
 	size_t alias_budget = 160;
 	size_t render_budget = 768;
@@ -539,6 +541,11 @@ std::string workspace::render_type_display(
 				}
 
 				result += "}";
+
+				if (options.maxTableLength > 0 && result.size() > options.maxTableLength)
+				{
+					result = priv::cut_text(result, options.maxTableLength) + "... *TRUNCATED*";
+				}
 			}
 		}
 		else if (const Luau::FunctionType* function = Luau::get<Luau::FunctionType>(value))
@@ -742,7 +749,18 @@ std::string workspace::render_type_display(
 
 		if (tail)
 		{
-			std::string rest = render_pack(*tail);
+			Luau::TypePackId followed_tail = Luau::follow(*tail);
+			std::string rest;
+
+			if (followed_tail == followed_pack || !active_packs.insert(followed_tail).second)
+			{
+				rest = Luau::toString(followed_tail, options);
+			}
+			else
+			{
+				rest = render_pack(followed_tail);
+				active_packs.erase(followed_tail);
+			}
 
 			if (!rest.empty())
 			{
@@ -763,6 +781,11 @@ std::string workspace::render_type_display(
 	if (result.empty())
 	{
 		result = fallback(followed);
+	}
+
+	if (options.maxTypeLength > 0 && result.size() > options.maxTypeLength)
+	{
+		result = priv::cut_text(result, options.maxTypeLength) + "... *TRUNCATED*";
 	}
 
 	return priv::replace_unknown_error(result, settings.features.unknown_error);
@@ -1033,7 +1056,9 @@ std::string workspace::render_type_pack_display(
 
 	if (tail)
 	{
-		std::string rest = render_type_pack_display(*tail, module_name, scope, max_length);
+		Luau::TypePackId followed_tail = Luau::follow(*tail);
+		std::string rest = followed_tail == followed ? Luau::toString(followed_tail)
+													 : render_type_pack_display(followed_tail, module_name, scope, max_length);
 
 		if (!rest.empty())
 		{
@@ -1089,6 +1114,18 @@ bool generic_collector::visit(Luau::TypePackId pack, const Luau::GenericTypePack
 bool generic_collector::visit(Luau::TypeId type, const Luau::ExternType& extern_type)
 {
 	return false;
+}
+
+std::string cut_text(const std::string& text, size_t limit)
+{
+	size_t cut = std::min(limit, text.size());
+
+	while (cut > 0 && cut < text.size() && (static_cast<unsigned char>(text[cut]) & 0xC0) == 0x80)
+	{
+		--cut;
+	}
+
+	return text.substr(0, cut);
 }
 
 std::string replace_unknown_error(const std::string& text, bool enabled)

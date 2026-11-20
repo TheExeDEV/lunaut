@@ -212,6 +212,9 @@ class LspClient:
 		return [message["params"]["message"] for message in self.history if message.get("method") == "window/logMessage"]
 
 	def close(self):
+		if self.process.poll() is not None:
+			return self.process.returncode
+
 		try:
 			self.request("shutdown", None, timeout=30)
 			self.notify("exit", None)

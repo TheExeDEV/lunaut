@@ -108,6 +108,93 @@ class NavigationTests(unittest.TestCase):
 		changes = next(iter(edit["changes"].values()))
 		self.assertEqual(changes[0]["newText"], "end\n")
 
+	def apply_on_type_end(self, name, text, line, character):
+		uri, _ = self.client.open(name, text)
+		edits = self.client.request(
+			"textDocument/onTypeFormatting",
+			{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}, "ch": "\n", "options": {"tabSize": 4, "insertSpaces": False}},
+		)
+		lines = text.split("\n")
+
+		def offset(position):
+			return sum(len(item) + 1 for item in lines[: position["line"]]) + position["character"]
+
+		for edit in sorted(edits or [], key=lambda edit: offset(edit["range"]["start"]), reverse=True):
+			text = text[: offset(edit["range"]["start"])] + edit["newText"] + text[offset(edit["range"]["end"]) :]
+
+		return text
+
+	def test_autocomplete_end_before_trailing_text(self):
+		cases = [
+			("foo(function()\n\t)\n", 1, 1, "foo(function()\n\t\nend)\n"),
+			("foo(1, function(x)\n\t, 2)\n", 1, 1, "foo(1, function(x)\n\t\nend, 2)\n"),
+			("local t = {\n\tf = function()\n\t\t,\n}\n", 2, 2, "local t = {\n\tf = function()\n\t\t\n\tend,\n}\n"),
+			("foo(function()\n\tif x then\n\t\t)\n", 2, 2, "foo(function()\n\tif x then\n\t\t\n\tend\nend)\n"),
+			("foo(function()\n\t)", 1, 1, "foo(function()\n\t\nend)"),
+			("task.spawn(function()\n\tend)\n", 1, 1, "task.spawn(function()\n\tend)\n"),
+			("foo(function()\n\t\n)\n", 1, 1, "foo(function()\n\t\nend)\n"),
+			("foo(function()\n\t\n, 2)\n", 1, 1, "foo(function()\n\t\nend, 2)\n"),
+			("local t = {\n\tf = function()\n\t\t\n}\n", 2, 2, "local t = {\n\tf = function()\n\t\t\n\tend\n}\n"),
+		]
+
+		for index, (text, line, character, expected) in enumerate(cases):
+			self.assertEqual(self.apply_on_type_end(f"trailing_end_{index}.luau", text, line, character), expected, text)
+
+	def test_autocomplete_end_after_the_last_line_of_an_open_block(self):
+		cases = [
+			(
+				'for index, item in ipairs({ "a", "b" }) do\n\tprint(index, item)\n\t',
+				2,
+				1,
+				'for index, item in ipairs({ "a", "b" }) do\n\tprint(index, item)\n\t\nend',
+			),
+			(
+				"local function f()\n\tlocal x = 1\n\tif x then\n\t\tprint(x)\n\t\t\n",
+				4,
+				2,
+				"local function f()\n\tlocal x = 1\n\tif x then\n\t\tprint(x)\n\t\t\n\tend\n",
+			),
+			("local function f()\n\tprint(1)\n\t\nend\n", 2, 1, "local function f()\n\tprint(1)\n\t\nend\n"),
+			("for i = 1, 3 do\n\tprint(i)\n\t\n\tprint(i)\n", 2, 1, "for i = 1, 3 do\n\tprint(i)\n\t\n\tprint(i)\n"),
+		]
+
+		for index, (text, line, character, expected) in enumerate(cases):
+			self.assertEqual(self.apply_on_type_end(f"body_end_{index}.luau", text, line, character), expected, text)
+
+	def test_autocomplete_end_on_type(self):
+		self.assertEqual(self.client.capabilities["documentOnTypeFormattingProvider"]["moreTriggerCharacter"], ["\n"])
+		self.assertNotIn("\n", self.client.capabilities["completionProvider"]["triggerCharacters"])
+
+		cases = [
+			("local function test()\n\t\n", {"line": 1, "character": 1}, ["end\n"]),
+			("if ready then\n\t\n", {"line": 1, "character": 1}, ["end\n"]),
+			("for i = 1, 3\n\t\n", {"line": 1, "character": 1}, [" do", "end\n"]),
+			("repeat\n\t\n", {"line": 1, "character": 1}, ["until \n"]),
+			("local function done()\n\t\nend\n", {"line": 1, "character": 1}, None),
+		]
+
+		for index, (text, position, expected) in enumerate(cases):
+			uri, _ = self.client.open(f"typed_end_{index}.luau", text)
+			edits = self.client.request(
+				"textDocument/onTypeFormatting",
+				{"textDocument": {"uri": uri}, "position": position, "ch": "\n", "options": {"tabSize": 4, "insertSpaces": False}},
+			)
+			self.assertEqual(None if edits is None else [edit["newText"] for edit in edits], expected, text)
+
+	def test_vscode_extension_gets_end_on_type(self):
+		client = LspClient(FIXTURES / "basic", {"vscode": {"lunaut.fflags.sync": False}, "client": "lunaut-vscode"})
+
+		try:
+			self.assertEqual(client.capabilities["documentOnTypeFormattingProvider"]["moreTriggerCharacter"], ["\n"])
+			uri, _ = client.open("ending_vscode.luau", "local function test()\n\t\n")
+			edits = client.request(
+				"textDocument/onTypeFormatting",
+				{"textDocument": {"uri": uri}, "position": {"line": 1, "character": 1}, "ch": "\n", "options": {"tabSize": 4, "insertSpaces": False}},
+			)
+			self.assertEqual([edit["newText"] for edit in edits], ["end\n"])
+		finally:
+			client.close()
+
 	def test_convert_quotes(self):
 		uri, _ = self.client.open("quotes.luau", 'local s = "hello {"\n')
 		edits = self.client.request(

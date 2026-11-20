@@ -45,6 +45,7 @@ struct hint_collector final : Luau::AstVisitor
 		Luau::AstLocal* local, std::optional<Luau::TypeId> type, const Luau::ScopePtr& scope, const Luau::AstExpr* initializer = nullptr);
 	void add_type(Luau::Position position, const Luau::ToStringResult& text, const json& edits = json());
 	bool is_visible(Luau::Position position) const;
+	bool is_annotated(Luau::Position position) const;
 
 	workspace& owner;
 	const Luau::Module& module;
@@ -53,6 +54,7 @@ struct hint_collector final : Luau::AstVisitor
 	unsigned int first;
 	unsigned int last;
 	Luau::ToStringOptions options;
+	std::vector<size_t> line_starts;
 	json hints = json::array();
 };
 
@@ -65,6 +67,7 @@ std::string name_prefix(const std::string& name);
 bool raw_annotation_visible(const Luau::ScopePtr& scope, const std::string& text);
 std::optional<std::string> find_imported_symbol(const Luau::ScopePtr& scope, const Luau::ModuleName& module);
 std::string replace_error_type(const std::string& text);
+std::string shorten(const std::string& text, size_t limit);
 
 }
 }
@@ -122,6 +125,15 @@ hint_collector::hint_collector(
 {
 	options.maxTableLength = 30;
 	options.maxTypeLength = static_cast<size_t>(std::max(10, info.max_length));
+	line_starts.push_back(0);
+
+	for (size_t index = 0; index < document.get_text().size(); ++index)
+	{
+		if (document.get_text()[index] == '\n')
+		{
+			line_starts.push_back(index + 1);
+		}
+	}
 }
 
 bool hint_collector::visit(Luau::AstStatLocal* node)
@@ -285,7 +297,7 @@ bool hint_collector::visit(Luau::AstExprCall* node)
 void hint_collector::add_variable(
 	Luau::AstLocal* local, std::optional<Luau::TypeId> type, const Luau::ScopePtr& scope, const Luau::AstExpr* initializer)
 {
-	if (!type || local->name == "_" || !is_visible(local->location.end))
+	if (!type || local->name == "_" || !is_visible(local->location.end) || is_annotated(local->location.end))
 	{
 		return;
 	}
@@ -389,16 +401,23 @@ void hint_collector::add_type(Luau::Position position, const Luau::ToStringResul
 	}
 
 	std::string name = owner.get_settings().features.unknown_error ? replace_error_type(text.name) : text.name;
+	std::string label = shorten(name, static_cast<size_t>(std::max(10, info.max_length)));
+	const bool shortened = label.size() != name.size();
 
 	json hint = {
 		{"position", document.to_lsp_position(position)},
-		{"label", ": " + name},
+		{"label", ": " + label},
 		{"kind", kind_type},
 	};
 
+	if (shortened)
+	{
+		hint["tooltip"] = name;
+	}
+
 	const bool negated = name.find('~') != std::string::npos;
 
-	if (info.insertable && !text.invalid && !text.truncated && !text.error && !text.cycle && !negated)
+	if (info.insertable && !shortened && !text.invalid && !text.truncated && !text.error && !text.cycle && !negated)
 	{
 		if (!edits.is_null())
 		{
@@ -412,6 +431,41 @@ void hint_collector::add_type(Luau::Position position, const Luau::ToStringResul
 	}
 
 	hints.push_back(hint);
+}
+
+bool hint_collector::is_annotated(Luau::Position position) const
+{
+	if (position.line >= line_starts.size())
+	{
+		return false;
+	}
+
+	const std::string& text = document.get_text();
+	size_t offset = line_starts[position.line] + position.column;
+
+	while (offset < text.size() && (text[offset] == ' ' || text[offset] == '\t'))
+	{
+		++offset;
+	}
+
+	return offset < text.size() && text[offset] == ':';
+}
+
+std::string shorten(const std::string& text, size_t limit)
+{
+	if (text.size() <= limit)
+	{
+		return text;
+	}
+
+	size_t cut = limit;
+
+	while (cut > 0 && (static_cast<unsigned char>(text[cut]) & 0xC0) == 0x80)
+	{
+		--cut;
+	}
+
+	return text.substr(0, cut) + "...";
 }
 
 bool is_identifier(const std::string& name)

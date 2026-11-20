@@ -913,6 +913,7 @@ public:
 	json get_supertypes(const json& params);
 	json get_subtypes(const json& params);
 	void invoke_end_completion(const json& params);
+	json get_end_edits(const json& params);
 	std::optional<Luau::TypeId> get_initializer_type(const Luau::Module& module, const Luau::AstExpr* initializer) const;
 	void publish_workspace_diagnostics();
 	void apply_plugin_tree(const json& tree);

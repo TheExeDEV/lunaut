@@ -98,7 +98,7 @@ bool typecomparer::is_primitive_like(Luau::TypeId type)
 
 	if (const Luau::TableType* table = Luau::get<Luau::TableType>(type))
 	{
-		return table->props.empty() && !table->indexer && !table->name && !table->syntheticName;
+		return table->props.empty() && !table->indexer && !table->name;
 	}
 
 	return Luau::get<Luau::AnyType>(type) != nullptr || Luau::get<Luau::UnknownType>(type) != nullptr ||

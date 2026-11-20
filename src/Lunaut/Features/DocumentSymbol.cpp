@@ -117,16 +117,18 @@ bool collector::visit(Luau::AstStatTypeAlias* node)
 
 void collector::add(const std::string& name, enumitem_symbol_kind kind, const Luau::Location& range, const Luau::Location& selection)
 {
-	if (name.empty())
+	if (name.empty() || name.front() == '%')
 	{
 		return;
 	}
+
+	bool contained = range.begin <= selection.begin && selection.end <= range.end;
 
 	symbols.push_back({
 		{"name", name},
 		{"kind", static_cast<int>(kind)},
 		{"range", document.to_lsp_range(range)},
-		{"selectionRange", document.to_lsp_range(selection)},
+		{"selectionRange", document.to_lsp_range(contained ? selection : range)},
 	});
 }
 

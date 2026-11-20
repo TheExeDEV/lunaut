@@ -107,6 +107,31 @@ async function startClient(context: vscode.ExtensionContext): Promise<void> {
 	};
 
 	const clientOptions: LanguageClientOptions = {
+		middleware: {
+			provideOnTypeFormattingEdits: async (document, position, character, options, token, next) => {
+				const edits = await next(document, position, character, options, token);
+
+				if (character === "\n" && edits && edits.length > 0) {
+					const listener = vscode.workspace.onDidChangeTextDocument((event) => {
+						if (event.document !== document) {
+							return;
+						}
+
+						listener.dispose();
+						setTimeout(() => {
+							const editor = vscode.window.activeTextEditor;
+
+							if (editor && editor.document === document && !editor.selection.active.isEqual(position)) {
+								editor.selection = new vscode.Selection(position, position);
+							}
+						}, 0);
+					});
+					setTimeout(() => listener.dispose(), 2000);
+				}
+
+				return edits;
+			},
+		},
 		documentSelector: [
 			{ scheme: "file", language: "luau" },
 			{ scheme: "untitled", language: "luau" },

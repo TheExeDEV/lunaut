@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+### Added
+
+- `end` is inserted in every editor through `textDocument/onTypeFormatting` on Enter: Zed, Neovim and Helix get it now, and VS Code uses the same path with the cursor kept on the new line
+- `end` goes in front of text that follows the cursor: `foo(function()` + Enter gives `end)`, `, 2)` becomes `end, 2)`, and every block still open on the way out gets its own `end` at its own indentation
+- `end` is also inserted when Enter is pressed after the last line of a block that has no `end` yet, not only right after `do`, `then` or `function()`
+- Inlay hints respect `lunaut.inlayHints.typeHintMaxLength`: longer types are cut with `...`, the full type is in the tooltip, and a cut hint cannot be inserted
+- Type display respects the `LuauTypeMaximumStringifierLength` and `LuauTableTypeMaximumStringifierLength` FFlags for the types it builds itself
+- Tests for every setting that had none, and VS Code checks now run against the freshly built server
+
+### Fixed
+
+- `textDocument/documentSymbol` no longer fails in VS Code with "selectionRange must be contained in fullRange" while a line such as `const` is half typed (#4)
+- An empty table `{}` is no longer shown as an unrelated empty alias such as `BatchDataStoreGetOptions` (#5)
+- Inlay hints no longer overflow the stack on recursive types such as a metatable whose `__mul` returns the same metatable, which crashed the server
+- A variable that already has a type annotation no longer gets a type hint that can be inserted again and again
+
 ### Changed
 
 - Luau is a git submodule in `extern/luau` instead of a CMake download; clone with `--recursive`. The daily Luau update moves the submodule to the new tag together with `luau.version`, and CI checks that both match

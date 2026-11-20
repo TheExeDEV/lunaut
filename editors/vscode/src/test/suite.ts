@@ -240,6 +240,54 @@ export async function run(): Promise<void> {
 	);
 
 	await check(
+		"inserts end after Enter",
+		async () => {
+			const document = await vscode.workspace.openTextDocument({ language: "luau", content: "local function test()" });
+			const editor = await vscode.window.showTextDocument(document);
+			const end = document.lineAt(0).range.end;
+			editor.selection = new vscode.Selection(end, end);
+			await waitFor(async () => {
+				const symbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>("vscode.executeDocumentSymbolProvider", document.uri);
+				return symbols && symbols.length > 0 ? symbols : undefined;
+			});
+			await vscode.commands.executeCommand("type", { text: "\n" });
+			await waitFor(() => (document.getText().includes("end") ? true : undefined), 20000);
+			assert.ok(/^local function test\(\)\r?\n\s*\r?\nend/.test(document.getText()), JSON.stringify(document.getText()));
+			assert.strictEqual(editor.selection.active.line, 1);
+		},
+		results,
+	);
+
+	await check(
+		"inserts end before a closing parenthesis",
+		async () => {
+			const document = await vscode.workspace.openTextDocument({ language: "luau", content: "foo(function())" });
+			const editor = await vscode.window.showTextDocument(document);
+			const inside = new vscode.Position(0, "foo(function()".length);
+			editor.selection = new vscode.Selection(inside, inside);
+			await waitFor(() => (vscode.languages.getDiagnostics(document.uri).length > 0 ? true : undefined));
+			await vscode.commands.executeCommand("type", { text: "\n" });
+			await waitFor(() => (document.getText().includes("end") ? true : undefined), 20000).catch(() => assert.fail(JSON.stringify(document.getText())));
+			assert.ok(/^foo\(function\(\)\r?\n\s*\r?\nend\)$/.test(document.getText()), JSON.stringify(document.getText()));
+			assert.strictEqual(editor.selection.active.line, 1);
+		},
+		results,
+	);
+
+	await check(
+		"lists symbols of a half-typed file",
+		async () => {
+			const document = await vscode.workspace.openTextDocument({ language: "luau", content: "local first = 1\nconst" });
+			await vscode.window.showTextDocument(document);
+			const symbols = await waitFor(
+				async () => (await vscode.commands.executeCommand<vscode.DocumentSymbol[]>("vscode.executeDocumentSymbolProvider", document.uri)) ?? undefined,
+			);
+			assert.ok(symbols.some((symbol) => symbol.name === "first"));
+		},
+		results,
+	);
+
+	await check(
 		"runs the status command",
 		async () => {
 			await vscode.commands.executeCommand("lunaut.showStatus");
