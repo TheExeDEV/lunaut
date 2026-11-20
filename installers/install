@@ -7,6 +7,7 @@ repository="${LUNAUT_REPOSITORY:-TheExeDEV/lunaut}"
 script_url="https://raw.githubusercontent.com/$repository/main/installers/install"
 version="${LUNAUT_VERSION:-latest}"
 install_dir="${LUNAUT_INSTALL_DIR:-$HOME/.lunaut/bin}"
+config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
 
 case "$(uname -s)" in
 	Linux) system="linux" ;;
@@ -28,8 +29,16 @@ asset="lunaut-$system-$architecture"
 
 if [ "$version" = "latest" ]; then
 	base_url="https://github.com/$repository/releases/latest/download"
+	source_url="https://raw.githubusercontent.com/$repository/main"
 else
 	base_url="https://github.com/$repository/releases/download/v${version#v}"
+	source_url="https://raw.githubusercontent.com/$repository/v${version#v}"
+fi
+
+if [ "$system" = "osx" ]; then
+	zed_data="$HOME/Library/Application Support/Zed"
+else
+	zed_data="${XDG_DATA_HOME:-$HOME/.local/share}/zed"
 fi
 
 download() {
@@ -43,27 +52,238 @@ download() {
 	fi
 }
 
-mkdir -p "$install_dir"
-target="$install_dir/lunaut.download"
+find_command() {
+	for candidate in "$@"; do
+		case "$candidate" in
+			/*)
+				if [ -x "$candidate" ]; then
+					echo "$candidate"
+					return 0
+				fi
+				;;
+			*)
+				if command -v "$candidate" >/dev/null 2>&1; then
+					command -v "$candidate"
+					return 0
+				fi
+				;;
+		esac
+	done
 
-echo "Downloading lunaut for $system $architecture"
-download "$base_url/$asset" "$target"
+	return 1
+}
 
-chmod +x "$target"
-mv "$target" "$install_dir/lunaut"
+targets=""
+count=0
 
-if [ -z "${LUNAUT_NO_EXTENSION:-}" ] && command -v code >/dev/null 2>&1; then
+add_target() {
+	count=$((count + 1))
+	targets="$targets$count|$1|$2|$3|$4
+"
+}
+
+add_code_editor() {
+	key="$1"
+	name="$2"
+	shift 2
+
+	if found="$(find_command "$@")"; then
+		add_target "$key" vscode "$name" "$found"
+	fi
+}
+
+add_code_editor code "VS Code" code "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code"
+add_code_editor code-insiders "VS Code Insiders" code-insiders "/Applications/Visual Studio Code - Insiders.app/Contents/Resources/app/bin/code-insiders"
+add_code_editor cursor "Cursor" cursor "/Applications/Cursor.app/Contents/Resources/app/bin/cursor"
+add_code_editor windsurf "Windsurf" windsurf "/Applications/Windsurf.app/Contents/Resources/app/bin/windsurf"
+add_code_editor codium "VSCodium" codium "/Applications/VSCodium.app/Contents/Resources/app/bin/codium"
+
+if find_command zed zeditor >/dev/null || [ -d "/Applications/Zed.app" ] || [ -d "$zed_data" ]; then
+	add_target zed zed "Zed" ""
+fi
+
+if found="$(find_command nvim)"; then
+	add_target nvim nvim "Neovim" "$found"
+fi
+
+if found="$(find_command hx helix)"; then
+	add_target helix helix "Helix" "$found"
+fi
+
+add_target path path "Terminal (the lunaut command on PATH)" ""
+
+can_ask() {
+	[ -t 1 ] && (exec </dev/tty) 2>/dev/null
+}
+
+is_number() {
+	case "$1" in
+		'' | *[!0-9]*) return 1 ;;
+	esac
+
+	[ "$1" -ge 1 ] && [ "$1" -le "$count" ]
+}
+
+selected=""
+
+select_by_keys() {
+	for wanted in $(echo "$1" | tr ',' ' '); do
+		while IFS='|' read -r index key kind name command; do
+			if [ -n "$index" ] && { [ "$wanted" = "all" ] || [ "$wanted" = "$key" ]; }; then
+				selected="$selected $index "
+			fi
+		done <<EOF
+$targets
+EOF
+	done
+}
+
+if [ -n "${LUNAUT_EDITORS:-}" ]; then
+	select_by_keys "$LUNAUT_EDITORS"
+elif can_ask; then
+	echo "Where should lunaut be installed?"
+
+	while IFS='|' read -r index key kind name command; do
+		if [ -n "$index" ]; then
+			echo "  $index) $name"
+		fi
+	done <<EOF
+$targets
+EOF
+
+	while :; do
+		printf 'Type numbers separated by spaces, or press Enter for all: '
+		answer=""
+		read -r answer </dev/tty || true
+		answer="$(echo "$answer" | tr ',' ' ')"
+		selected=""
+		valid=1
+
+		if [ -z "$answer" ] || [ "$answer" = "all" ]; then
+			select_by_keys all
+			break
+		fi
+
+		for token in $answer; do
+			if is_number "$token"; then
+				selected="$selected $token "
+			else
+				valid=0
+			fi
+		done
+
+		if [ "$valid" -eq 1 ] && [ -n "$selected" ]; then
+			break
+		fi
+
+		echo "Use the numbers from the list, for example: 1 3"
+	done
+else
+	select_by_keys all
+fi
+
+if [ -n "${LUNAUT_NO_EXTENSION:-}" ]; then
+	while IFS='|' read -r index key kind name command; do
+		if [ "$kind" = "vscode" ]; then
+			selected="$(echo "$selected" | sed "s/ $index / /g")"
+		fi
+	done <<EOF
+$targets
+EOF
+fi
+
+is_selected() {
+	case "$selected" in
+		*" $1 "*) return 0 ;;
+	esac
+
+	return 1
+}
+
+has_kind() {
+	while IFS='|' read -r index key kind name command; do
+		if [ "$kind" = "$1" ] && is_selected "$index"; then
+			return 0
+		fi
+	done <<EOF
+$targets
+EOF
+
+	return 1
+}
+
+if [ -z "$(echo "$selected" | tr -d ' ')" ]; then
+	echo "Nothing selected, nothing was installed."
+	exit 0
+fi
+
+notes=""
+needs_server=0
+
+for kind in zed nvim helix path; do
+	if has_kind "$kind"; then
+		needs_server=1
+	fi
+done
+
+if [ "$needs_server" -eq 1 ]; then
+	mkdir -p "$install_dir"
+	target="$install_dir/lunaut.download"
+
+	echo "Downloading lunaut for $system $architecture"
+	download "$base_url/$asset" "$target"
+
+	chmod +x "$target"
+	mv "$target" "$install_dir/lunaut"
+fi
+
+if has_kind vscode; then
+	mkdir -p "$install_dir"
 	extension="$install_dir/lunaut.vsix"
 
-	echo "Installing the VS Code extension"
+	echo "Downloading the extension"
+	download "$base_url/lunaut.vsix" "$extension"
 
-	if download "$base_url/lunaut.vsix" "$extension" && code --install-extension "$extension" --force >/dev/null; then
-		echo "Installed the lunaut extension for VS Code"
-	else
-		echo "Could not install the VS Code extension, the server is installed anyway." >&2
-	fi
+	while IFS='|' read -r index key kind name command; do
+		if [ "$kind" != "vscode" ] || ! is_selected "$index"; then
+			continue
+		fi
+
+		if "$command" --install-extension "$extension" --force >/dev/null 2>&1; then
+			echo "Installed the extension in $name"
+		else
+			echo "Could not install the extension in $name" >&2
+		fi
+	done <<EOF
+$targets
+EOF
 
 	rm -f "$extension"
+fi
+
+if has_kind nvim; then
+	plugin_dir="$config_home/nvim/plugin"
+	mkdir -p "$plugin_dir"
+	download "$source_url/editors/neovim/lunaut.lua" "$plugin_dir/lunaut.lua"
+	echo "Installed the Neovim config in $plugin_dir/lunaut.lua"
+fi
+
+if has_kind helix; then
+	helix_config="$config_home/helix/languages.toml"
+
+	if [ -f "$helix_config" ]; then
+		notes="${notes}Helix: $helix_config already exists, merge $source_url/editors/helix/languages.toml into it
+"
+	else
+		mkdir -p "$(dirname "$helix_config")"
+		download "$source_url/editors/helix/languages.toml" "$helix_config"
+		echo "Installed the Helix config in $helix_config"
+	fi
+fi
+
+if has_kind zed; then
+	notes="${notes}Zed: open Extensions (zed: extensions), search for Lunaut and install it; it uses the lunaut on PATH
+"
 fi
 
 path_line="export PATH=\"$install_dir:\$PATH\""
@@ -79,10 +299,10 @@ add_to_path() {
 	echo "Added lunaut to PATH in $file"
 }
 
-case ":$PATH:" in
-	*":$install_dir:"*) ;;
-	*)
-		if [ -z "${LUNAUT_NO_PATH:-}" ]; then
+if [ "$needs_server" -eq 1 ] && [ -z "${LUNAUT_NO_PATH:-}" ]; then
+	case ":$PATH:" in
+		*":$install_dir:"*) ;;
+		*)
 			shell_name="$(basename "${SHELL:-sh}")"
 
 			if [ -f "$HOME/.bashrc" ] || [ "$shell_name" = "bash" ]; then
@@ -95,18 +315,26 @@ case ":$PATH:" in
 
 			add_to_path "$HOME/.profile"
 
-			if [ -d "$HOME/.config/fish" ]; then
-				mkdir -p "$HOME/.config/fish/conf.d"
-				echo "fish_add_path $install_dir" > "$HOME/.config/fish/conf.d/lunaut.fish"
+			if [ -d "$config_home/fish" ]; then
+				mkdir -p "$config_home/fish/conf.d"
+				echo "fish_add_path $install_dir" > "$config_home/fish/conf.d/lunaut.fish"
 			fi
 
-			echo "Open a new terminal, or run this to use lunaut right now:"
-			echo "  $path_line"
-		fi
-		;;
-esac
+			notes="${notes}Open a new terminal, or run this to use lunaut right now: $path_line
+"
+			;;
+	esac
+fi
 
-"$install_dir/lunaut" --version
+if [ -n "$notes" ]; then
+	echo
+	printf '%s' "$notes"
+fi
+
+if [ "$needs_server" -eq 1 ]; then
+	"$install_dir/lunaut" --version
+fi
+
 exit 0
 #>
 
@@ -131,8 +359,10 @@ exit 0
 
 	if ($version -eq "latest") {
 		$baseUrl = "https://github.com/$repository/releases/latest/download"
+		$sourceUrl = "https://raw.githubusercontent.com/$repository/main"
 	} else {
 		$baseUrl = "https://github.com/$repository/releases/download/v$($version.TrimStart('v'))"
+		$sourceUrl = "https://raw.githubusercontent.com/$repository/v$($version.TrimStart('v'))"
 	}
 
 	function Get-File($url, $output) {
@@ -150,31 +380,162 @@ exit 0
 		}
 	}
 
+	function Find-Command($names, $paths) {
+		foreach ($name in $names) {
+			$found = Get-Command $name -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+
+			if ($found) {
+				return $found.Source
+			}
+		}
+
+		foreach ($path in $paths) {
+			if ($path -and (Test-Path -LiteralPath $path)) {
+				return $path
+			}
+		}
+
+		return $null
+	}
+
+	$programs = Join-Path $env:LOCALAPPDATA "Programs"
+	$targets = New-Object System.Collections.ArrayList
+
+	$codeEditors = @(
+		@{ Key = "code"; Name = "VS Code"; Names = @("code.cmd", "code"); Paths = @("$programs\Microsoft VS Code\bin\code.cmd", "$env:ProgramFiles\Microsoft VS Code\bin\code.cmd") },
+		@{ Key = "code-insiders"; Name = "VS Code Insiders"; Names = @("code-insiders.cmd"); Paths = @("$programs\Microsoft VS Code Insiders\bin\code-insiders.cmd", "$env:ProgramFiles\Microsoft VS Code Insiders\bin\code-insiders.cmd") },
+		@{ Key = "cursor"; Name = "Cursor"; Names = @("cursor.cmd"); Paths = @("$programs\cursor\resources\app\bin\cursor.cmd") },
+		@{ Key = "windsurf"; Name = "Windsurf"; Names = @("windsurf.cmd"); Paths = @("$programs\Windsurf\bin\windsurf.cmd") },
+		@{ Key = "codium"; Name = "VSCodium"; Names = @("codium.cmd"); Paths = @("$programs\VSCodium\bin\codium.cmd", "$env:ProgramFiles\VSCodium\bin\codium.cmd") }
+	)
+
+	foreach ($editor in $codeEditors) {
+		$command = Find-Command $editor.Names $editor.Paths
+
+		if ($command) {
+			[void]$targets.Add(@{ Key = $editor.Key; Kind = "vscode"; Name = $editor.Name; Command = $command })
+		}
+	}
+
+	if ((Find-Command @("zed") @("$programs\Zed\Zed.exe")) -or (Test-Path -LiteralPath (Join-Path $env:LOCALAPPDATA "Zed"))) {
+		[void]$targets.Add(@{ Key = "zed"; Kind = "zed"; Name = "Zed"; Command = $null })
+	}
+
+	$nvim = Find-Command @("nvim") @("$env:ProgramFiles\Neovim\bin\nvim.exe")
+
+	if ($nvim) {
+		[void]$targets.Add(@{ Key = "nvim"; Kind = "nvim"; Name = "Neovim"; Command = $nvim })
+	}
+
+	$helix = Find-Command @("hx") @()
+
+	if ($helix) {
+		[void]$targets.Add(@{ Key = "helix"; Kind = "helix"; Name = "Helix"; Command = $helix })
+	}
+
+	[void]$targets.Add(@{ Key = "path"; Kind = "path"; Name = "Terminal (the lunaut command on PATH)"; Command = $null })
+
+	$selected = @()
+
+	if ($env:LUNAUT_EDITORS) {
+		$wanted = @($env:LUNAUT_EDITORS -split '[,\s]+' | Where-Object { $_ -ne "" })
+		$selected = @($targets | Where-Object { $wanted -contains "all" -or $wanted -contains $_.Key })
+	} elseif ([Environment]::UserInteractive -and -not [Console]::IsInputRedirected) {
+		Write-Host "Where should lunaut be installed?"
+
+		for ($index = 0; $index -lt $targets.Count; $index++) {
+			Write-Host "  $($index + 1)) $($targets[$index].Name)"
+		}
+
+		while ($true) {
+			$answer = (Read-Host "Type numbers separated by spaces, or press Enter for all").Trim()
+
+			if ($answer -eq "" -or $answer -eq "all") {
+				$selected = @($targets)
+				break
+			}
+
+			$tokens = @($answer -split '[,\s]+' | Where-Object { $_ -ne "" })
+			$numbers = @($tokens | Where-Object { $_ -match '^\d+$' -and [int]$_ -ge 1 -and [int]$_ -le $targets.Count } | ForEach-Object { [int]$_ } | Select-Object -Unique)
+
+			if ($numbers.Count -gt 0 -and $numbers.Count -eq @($tokens | Select-Object -Unique).Count) {
+				$selected = @($numbers | ForEach-Object { $targets[$_ - 1] })
+				break
+			}
+
+			Write-Host "Use the numbers from the list, for example: 1 3"
+		}
+	} else {
+		$selected = @($targets)
+	}
+
+	if ($env:LUNAUT_NO_EXTENSION) {
+		$selected = @($selected | Where-Object { $_.Kind -ne "vscode" })
+	}
+
+	if ($selected.Count -eq 0) {
+		Write-Host "Nothing selected, nothing was installed."
+		return
+	}
+
+	$kinds = @($selected | ForEach-Object { $_.Kind })
+	$needsServer = @($kinds | Where-Object { @("zed", "nvim", "helix", "path") -contains $_ }).Count -gt 0
+	$notes = New-Object System.Collections.ArrayList
+	$target = Join-Path $installDir "lunaut.exe"
+
 	New-Item -ItemType Directory -Force -Path $installDir | Out-Null
 
-	$target = Join-Path $installDir "lunaut.exe"
-	$download = "$target.download"
+	if ($needsServer) {
+		$download = "$target.download"
 
-	Write-Host "Downloading lunaut for windows $architecture"
-	Get-File "$baseUrl/$asset" $download
-	Move-Item -Path $download -Destination $target -Force
+		Write-Host "Downloading lunaut for windows $architecture"
+		Get-File "$baseUrl/$asset" $download
+		Move-Item -Path $download -Destination $target -Force
+	}
 
-	if (-not $env:LUNAUT_NO_EXTENSION -and (Get-Command code -ErrorAction SilentlyContinue)) {
+	if ($kinds -contains "vscode") {
 		$extension = Join-Path $installDir "lunaut.vsix"
-		Write-Host "Installing the VS Code extension"
 
-		try {
-			Get-File "$baseUrl/lunaut.vsix" $extension
-			& code --install-extension $extension --force | Out-Null
-			Write-Host "Installed the lunaut extension for VS Code"
-		} catch {
-			Write-Host "Could not install the VS Code extension, the server is installed anyway."
+		Write-Host "Downloading the extension"
+		Get-File "$baseUrl/lunaut.vsix" $extension
+
+		foreach ($editor in @($selected | Where-Object { $_.Kind -eq "vscode" })) {
+			& $editor.Command --install-extension $extension --force 2>$null | Out-Null
+
+			if ($LASTEXITCODE -eq 0) {
+				Write-Host "Installed the extension in $($editor.Name)"
+			} else {
+				Write-Host "Could not install the extension in $($editor.Name)"
+			}
 		}
 
 		Remove-Item -LiteralPath $extension -Force -ErrorAction SilentlyContinue
 	}
 
-	if (-not $env:LUNAUT_NO_PATH) {
+	if ($kinds -contains "nvim") {
+		$pluginDir = Join-Path $env:LOCALAPPDATA "nvim\plugin"
+		New-Item -ItemType Directory -Force -Path $pluginDir | Out-Null
+		Get-File "$sourceUrl/editors/neovim/lunaut.lua" (Join-Path $pluginDir "lunaut.lua")
+		Write-Host "Installed the Neovim config in $pluginDir\lunaut.lua"
+	}
+
+	if ($kinds -contains "helix") {
+		$helixConfig = Join-Path $env:APPDATA "helix\languages.toml"
+
+		if (Test-Path -LiteralPath $helixConfig) {
+			[void]$notes.Add("Helix: $helixConfig already exists, merge $sourceUrl/editors/helix/languages.toml into it")
+		} else {
+			New-Item -ItemType Directory -Force -Path (Split-Path $helixConfig) | Out-Null
+			Get-File "$sourceUrl/editors/helix/languages.toml" $helixConfig
+			Write-Host "Installed the Helix config in $helixConfig"
+		}
+	}
+
+	if ($kinds -contains "zed") {
+		[void]$notes.Add("Zed: open Extensions (zed: extensions), search for Lunaut and install it; it uses the lunaut on PATH")
+	}
+
+	if ($needsServer -and -not $env:LUNAUT_NO_PATH) {
 		$userPath = [Environment]::GetEnvironmentVariable("Path", "User")
 		$entries = @()
 
@@ -192,5 +553,16 @@ exit 0
 		}
 	}
 
-	& $target --version
+	if ((Test-Path -LiteralPath $installDir) -and -not (Get-ChildItem -LiteralPath $installDir -Force | Select-Object -First 1)) {
+		Remove-Item -LiteralPath $installDir -Force
+	}
+
+	if ($notes.Count -gt 0) {
+		Write-Host ""
+		$notes | ForEach-Object { Write-Host $_ }
+	}
+
+	if ($needsServer) {
+		& $target --version
+	}
 }
