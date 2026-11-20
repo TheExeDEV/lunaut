@@ -109,7 +109,7 @@ Type numbers separated by spaces, or press Enter for all:
 | Choice | What it does |
 | --- | --- |
 | VS Code, VS Code Insiders, Cursor, Windsurf, VSCodium | installs `lunaut.vsix`, which carries its own server |
-| Zed | puts the server on `PATH` and reminds you to install the **Lunaut** extension from Zed's Extensions panel |
+| Zed | reminds you to install the **Lunaut** extension from Zed's Extensions panel; the extension downloads the newest server itself |
 | Neovim | puts the server on `PATH` and copies [`lunaut.lua`](editors/neovim/lunaut.lua) into `nvim/plugin` |
 | Helix | puts the server on `PATH` and writes [`languages.toml`](editors/helix/languages.toml) when you have none yet |
 | Terminal | puts the server into `%LOCALAPPDATA%\lunaut\bin` (Windows) or `~/.lunaut/bin` and adds that folder to `PATH` |

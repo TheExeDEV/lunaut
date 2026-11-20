@@ -39,16 +39,22 @@ impl LunautExtension {
     }
 
     fn get_binary_path(&mut self, language_server_id: &LanguageServerId, worktree: &zed::Worktree) -> Result<String> {
-        if let Some(path) = worktree.which(SERVER_NAME) {
-            return Ok(path);
-        }
-
         if let Some(path) = &self.cached_binary_path {
             if Self::is_file(path) {
                 return Ok(path.clone());
             }
         }
 
+        match self.download_latest(language_server_id) {
+            Ok(path) => Ok(path),
+            Err(error) => {
+                zed::set_language_server_installation_status(language_server_id, &zed::LanguageServerInstallationStatus::None);
+                worktree.which(SERVER_NAME).ok_or(error)
+            }
+        }
+    }
+
+    fn download_latest(&mut self, language_server_id: &LanguageServerId) -> Result<String> {
         zed::set_language_server_installation_status(language_server_id, &zed::LanguageServerInstallationStatus::CheckingForUpdate);
 
         let release = zed::latest_github_release(
