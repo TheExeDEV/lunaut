@@ -1,5 +1,7 @@
 # lunaut
 
+[![VS Code Marketplace](https://vsmarketplacebadges.dev/version-short/theexe.lunaut-luau.svg?label=VS%20Code%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=theexe.lunaut-luau) [![Installs](https://vsmarketplacebadges.dev/installs-short/theexe.lunaut-luau.svg)](https://marketplace.visualstudio.com/items?itemName=theexe.lunaut-luau) [![Release](https://img.shields.io/github/v/release/TheExeDEV/lunaut)](https://github.com/TheExeDEV/lunaut/releases/latest)
+
 A language server for Luau and Roblox, written in C++ on top of the official Luau analysis library.
 
 lunaut is your astronaut in Luau code: it checks types and lint while you type, completes names, shows types on hover and jumps to definitions. It reads the same `.luaurc` as the Luau CLI, loads `.d.luau` definition files in the order you choose, follows Rojo projects through the sourcemap and keeps Luau FFlags in sync with Roblox Studio.
@@ -76,7 +78,9 @@ lunaut is your astronaut in Luau code: it checks types and lint while you type, 
 
 ## Installation
 
-One script for every system. It detects Windows, Linux or macOS and the processor (x64 or arm64) by itself.
+**VS Code:** install [Lunaut from the VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=theexe.lunaut-luau), or run `ext install theexe.lunaut-luau` in Quick Open (`Ctrl+P`). The extension carries the server for Windows, Linux and macOS, nothing else is needed.
+
+**Any editor:** one script for every system. It detects Windows, Linux or macOS and the processor (x64 or arm64) by itself.
 
 **Windows** (PowerShell):
 
@@ -113,7 +117,7 @@ Without a terminal to ask in (CI, scripts), it installs into everything it found
 
 Options, set before the command: `LUNAUT_VERSION=0.1.0` installs a specific version, `LUNAUT_INSTALL_DIR` changes the folder, `LUNAUT_NO_PATH=1` leaves `PATH` alone, `LUNAUT_NO_EXTENSION=1` skips the VS Code family, `LUNAUT_EDITORS=code,zed,nvim,helix,path` picks the targets without asking (`cursor`, `windsurf`, `codium`, `code-insiders` and `all` work too). In PowerShell: `$env:LUNAUT_VERSION = "0.1.0"`.
 
-**Manually:** download `lunaut-<platform>` from the latest release, rename it to `lunaut` (or `lunaut.exe`) and put it on your `PATH`. Install `lunaut.vsix` with `code --install-extension lunaut.vsix`, or find Lunaut (`theexe.lunaut-luau`) in the VS Code Marketplace.
+**Manually:** download `lunaut-<platform>` from the latest release, rename it to `lunaut` (or `lunaut.exe`) and put it on your `PATH`. Install `lunaut.vsix` with `code --install-extension lunaut.vsix`, or install [Lunaut (`theexe.lunaut-luau`) from the VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=theexe.lunaut-luau).
 
 ### Uninstall
 
@@ -177,7 +181,7 @@ Open the folder in VS Code with the extension installed and the same diagnostics
 
 ## VS Code
 
-The extension lives in [`editors/vscode`](editors/vscode). It starts the bundled server, or the one from `lunaut.path`, or `lunaut` from `PATH`.
+Install it from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=theexe.lunaut-luau) or with the installer. The extension lives in [`editors/vscode`](editors/vscode). It starts the bundled server, or the one from `lunaut.path`, or `lunaut` from `PATH`.
 
 Commands (`Ctrl+Shift+P`):
 
