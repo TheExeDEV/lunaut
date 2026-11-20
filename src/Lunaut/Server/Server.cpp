@@ -508,7 +508,15 @@ json server::on_outgoing_calls(const json& params)
 
 json server::on_on_type_formatting(const json& params)
 {
-	return get_workspace(params["textDocument"].value("uri", "")).get_on_type_edits(params);
+	workspace& folder = get_workspace(params["textDocument"].value("uri", ""));
+
+	if (params.value("ch", "") != "\n")
+	{
+		return folder.get_on_type_edits(params);
+	}
+
+	json edits = folder.get_end_edits(params).value("edits", json::array());
+	return edits.empty() ? json(nullptr) : edits;
 }
 
 json server::on_formatting(const json& params)
