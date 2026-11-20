@@ -1,6 +1,6 @@
 import unittest
 
-from lsp_client import FIXTURES, LspClient
+from lsp_client import FIXTURES, LspClient, run_cli
 
 
 def get_actions(client, uri):
@@ -27,7 +27,8 @@ class ServerActionTests(unittest.TestCase):
 
 			client.request("workspace/executeCommand", {"command": "lunaut.server.showStatus", "arguments": [uri]})
 			status = client.wait_for("window/showMessage", lambda params: "solver" in params["message"], timeout=30)
-			self.assertTrue(status["message"].startswith("Lunaut 0.0."), status)
+			version = run_cli("version").stdout.split()[1]
+			self.assertTrue(status["message"].startswith(f"Lunaut {version} "), status)
 			self.assertIn("standard", status["message"])
 
 			client.request("workspace/executeCommand", {"command": "lunaut.server.regenerateSourcemap", "arguments": [uri]})
