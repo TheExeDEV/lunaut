@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Luau is a git submodule in `extern/luau` instead of a CMake download; clone with `--recursive`. The daily Luau update moves the submodule to the new tag together with `luau.version`, and CI checks that both match
+
 ## [0.0.9] - 2026-11-20
 
 ### Added

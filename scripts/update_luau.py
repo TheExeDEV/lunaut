@@ -7,6 +7,7 @@ import release
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 VERSION_FILE = ROOT / "luau.version"
+SUBMODULE = ROOT / "extern" / "luau"
 CHANGELOG = ROOT / "CHANGELOG.md"
 REPOSITORY = "https://github.com/luau-lang/luau"
 
@@ -25,6 +26,11 @@ def get_latest_tag():
 		raise RuntimeError("no Luau release tags found")
 
 	return max(versions)[1]
+
+
+def checkout_submodule(version):
+	subprocess.check_call(["git", "-C", str(SUBMODULE), "fetch", "--depth", "1", "origin", f"refs/tags/{version}:refs/tags/{version}"], stdout=sys.stderr)
+	subprocess.check_call(["git", "-C", str(SUBMODULE), "checkout", "--detach", version], stdout=sys.stderr)
 
 
 def get_minor(version):
@@ -62,7 +68,8 @@ def main():
 		print(f"Luau {current} is up to date", file=sys.stderr)
 		return 0
 
-	VERSION_FILE.write_text(latest + "\n", encoding="utf-8")
+	checkout_submodule(latest)
+	VERSION_FILE.write_text(latest + "\n", encoding="utf-8", newline="\n")
 	update_changelog(latest)
 
 	next_version = release.get_next()

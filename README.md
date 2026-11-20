@@ -794,9 +794,9 @@ Fixtures live in [`tests/fixtures`](tests/fixtures): a plain Luau project, two d
 
 ## Luau updates
 
-The Luau version is a single line in [`luau.version`](luau.version). CMake fetches exactly that tag.
+Luau is the git submodule [`extern/luau`](extern/luau), checked out at a release tag, and [`luau.version`](luau.version) holds the same tag for the version string. CI checks that both point at the same Luau.
 
-Every day [`update-luau.yml`](.github/workflows/update-luau.yml) runs [`scripts/update_luau.py`](scripts/update_luau.py): it finds the newest Luau release, writes it to `luau.version`, adds `Sync to upstream Luau X` to the changelog, builds lunaut, runs every test and opens a pull request. Merge it and the next release ships the new Luau. Run the same thing by hand:
+Every day [`update-luau.yml`](.github/workflows/update-luau.yml) runs [`scripts/update_luau.py`](scripts/update_luau.py): it finds the newest Luau release, moves the submodule to that tag, writes it to `luau.version`, adds `Sync to upstream Luau X` to the changelog, bumps the lunaut version, builds lunaut, runs every test and opens a pull request. Merge it and the release goes out with the new Luau. Run the same thing by hand:
 
 ```bash
 python scripts/update_luau.py
@@ -844,7 +844,17 @@ or import the JSON files in Settings → Rules → Rulesets → Import a ruleset
 
 ## Building from source
 
-Needs CMake 3.20+, a C++17 compiler (MSVC, GCC or Clang, MinGW works) and git.
+Needs CMake 3.20+, a C++17 compiler (MSVC, GCC or Clang, MinGW works) and git. Luau is a git submodule in `extern/luau`, so clone with it:
+
+```bash
+git clone --recursive https://github.com/TheExeDEV/lunaut.git
+```
+
+In a clone made without `--recursive`:
+
+```bash
+git submodule update --init
+```
 
 ```bash
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
@@ -854,7 +864,7 @@ cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ```
 
-The result is `build/lunaut(.exe)`, statically linked. Luau and nlohmann/json are fetched by CMake; point to local copies with `-DFETCHCONTENT_SOURCE_DIR_LUAU=path` and `-DFETCHCONTENT_SOURCE_DIR_JSON=path`. `-DLUNAUT_DEBUG=ON` turns on debug logging.
+The result is `build/lunaut(.exe)`, statically linked. nlohmann/json is fetched by CMake; point to a local copy with `-DFETCHCONTENT_SOURCE_DIR_JSON=path`. `-DLUNAUT_DEBUG=ON` turns on debug logging.
 
 Code style is in [`AGENTS.md`](AGENTS.md); format with `clang-format -i` and the root `.clang-format`.
 
@@ -878,6 +888,7 @@ src/Lunaut/
 ├── Models/           settings and enum names
 ├── Roblox/           sourcemap, instance requires, DataModel types, Rojo, crater packages, Roblox types
 └── Util/             strings, glob, uri, processes, http, cache
+extern/luau/          Luau, a git submodule
 editors/vscode/       VS Code extension
 installers/           install and uninstall scripts
 scripts/              Luau update, release and ruleset scripts
