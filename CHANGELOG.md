@@ -2,8 +2,14 @@
 
 ## [Unreleased]
 
+## [0.0.9] - 2026-11-20
+
 ### Added
 
+- `.lunaut-declare`: `lunaut init` writes a JSON file that tells other tools, crater first of all, that the project uses lunaut and what it supports: `api_version`, `lunaut_version`, feature versions, where settings live and which `luau-lsp.*` keys map to which `lunaut.*` keys, the exact format of `lunaut.definitions` and the commands with `--json`. The server adds missing keys on start and never renames or removes old ones; the file is hidden on Windows and is meant to be committed
+- `lunaut declare [--json]` prints the same declaration for the installed lunaut, without a file in the project
+- crater projects: package folders from `.crater-declare` (`sync.packages`, vendor folders, the `client`, `server` and `develop` folders) are added to `lunaut.ignoreGlobs`, so installed packages give no diagnostics
+- `lunaut.definitions` also accepts a single path string
 - The installer lists the editors it finds (VS Code, VS Code Insiders, Cursor, Windsurf, VSCodium, Zed, Neovim, Helix) and the terminal, and asks where to install lunaut; `LUNAUT_EDITORS` picks them without asking
 - The uninstaller lists what it finds (the extension in each editor, the Zed extension and its downloaded servers, the Neovim config, the `lunaut` command, the download cache) and asks what to remove
 
