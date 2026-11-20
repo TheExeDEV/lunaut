@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- An inserted `end` takes the indentation of the block it closes, so `for ... do` inside a function gets its `end` under the `for`, not at the function's level
+
 ## [0.1.1] - 2026-11-20
 
 ### Fixed

@@ -124,11 +124,11 @@ json workspace::get_end_edits(const json& params)
 		Luau::Position next{position.line + 1, 0};
 		bool last_line = position.line + 1 >= lines.size();
 
-		std::vector<std::pair<unsigned int, std::string>> openers = priv::collect_closings(ancestry);
+		Luau::AstNode* opener = priv::get_parent(ancestry);
 
-		if (!openers.empty() && openers.front().first < lines.size())
+		if (opener != nullptr && opener->location.begin.line < lines.size())
 		{
-			indent = priv::get_indent(lines[openers.front().first]);
+			indent = priv::get_indent(lines[opener->location.begin.line]);
 		}
 		else if (position.line > 0 && position.line - 1 < lines.size())
 		{

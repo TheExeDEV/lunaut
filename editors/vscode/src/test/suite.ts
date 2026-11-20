@@ -275,6 +275,44 @@ export async function run(): Promise<void> {
 	);
 
 	await check(
+		"indents end like its block",
+		async () => {
+			const document = await vscode.workspace.openTextDocument({ language: "luau", content: "local function f()\n\tfor i = 1, 3 do\nend" });
+			const editor = await vscode.window.showTextDocument(document);
+			const inside = document.lineAt(1).range.end;
+			editor.selection = new vscode.Selection(inside, inside);
+			await waitFor(async () => {
+				const symbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>("vscode.executeDocumentSymbolProvider", document.uri);
+				return symbols && symbols.length > 0 ? symbols : undefined;
+			});
+			await vscode.commands.executeCommand("type", { text: "\n" });
+			await waitFor(() => (document.lineCount >= 5 ? true : undefined), 20000).catch(() => assert.fail(JSON.stringify(document.getText())));
+			const lines = document.getText().split(/\r?\n/);
+			assert.deepStrictEqual([lines[3], lines[4]], ["\tend", "end"], JSON.stringify(document.getText()));
+			assert.strictEqual(editor.selection.active.line, 2);
+		},
+		results,
+	);
+
+	await check(
+		"completes type names in annotations",
+		async () => {
+			const document = await vscode.workspace.openTextDocument({ language: "luau", content: "type PlayerData = { name: string }\nlocal a: Pl" });
+			await vscode.window.showTextDocument(document);
+			const list = await waitFor(async () => {
+				const result = await vscode.commands.executeCommand<vscode.CompletionList>(
+					"vscode.executeCompletionItemProvider",
+					document.uri,
+					document.lineAt(1).range.end,
+				);
+				return result && result.items.some((item) => (typeof item.label === "string" ? item.label : item.label.label) === "PlayerData") ? result : undefined;
+			});
+			assert.ok(list.items.length > 0);
+		},
+		results,
+	);
+
+	await check(
 		"lists symbols of a half-typed file",
 		async () => {
 			const document = await vscode.workspace.openTextDocument({ language: "luau", content: "local first = 1\nconst" });
