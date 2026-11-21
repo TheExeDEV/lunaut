@@ -460,14 +460,17 @@ The Lunaut plugin sends the instance tree of the open place from Studio to the e
 
 1. Install it: pick *Roblox Studio* in the [installer](#installation), or download `LunautPlugin.rbxm` from the latest release into `%LOCALAPPDATA%\Roblox\Plugins` (Windows) or `~/Documents/Roblox/Plugins` (macOS) and restart Studio.
 2. Turn on `lunaut.studioPlugin.enabled` in VS Code. The extension listens on `127.0.0.1:3667` (`lunaut.studioPlugin.port`).
-3. In Studio open *Plugins > Lunaut*:
+3. In Studio press *Plugins > Lunaut*. The window has:
 
-| Button | What it does |
+| Part | What it does |
 | --- | --- |
-| **Sync** | sends the tree now and again half a second after instances are added or removed; stays on between sessions |
-| **Send** | sends the tree once |
-| **Clear** | removes the instances the plugin sent from the editor |
-| **Port** | changes the port, the same number as `lunaut.studioPlugin.port` |
+| **Start Sync** / **Stop Sync** | sends the tree now and again half a second after instances are added or removed |
+| **Sync on Start** | starts syncing as soon as Studio opens a place |
+| **Silent Mode** | only errors go to the Output window |
+| **Open on Start** | opens the window when Studio starts |
+| **Send Once** | sends the tree once |
+| **Clear Editor** | removes the instances the plugin sent from the editor |
+| **Port** | the same number as `lunaut.studioPlugin.port`; in VS Code change it with *Lunaut menu > Change Port* |
 
 The first time it sends, Studio asks whether the plugin may make HTTP requests to `localhost`; allow it. The plugin sends the services that hold game content (Workspace, ReplicatedStorage, ServerScriptService, StarterPlayer, Lighting and the like), up to 200 000 instances, and only names and classes, never scripts or properties. It runs in edit mode only, not during play tests.
 
