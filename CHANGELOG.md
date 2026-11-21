@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Completing a child whose name is not a plain identifier, such as `Accessory (D4)`, inserts `rig["Accessory (D4)"]` instead of the broken `rig.Accessory (D4)`; quotes in the name are escaped and keywords such as `end` get brackets too
+
+### Removed
+
+- The quick fix that moved `@native` and `@[deprecated]` above a table field to the function, and the completion for attributes: Luau does not allow these attributes there, so the fix produced code that still did not compile
+
 ## [0.1.4] - 2026-11-21
 
 ### Added
