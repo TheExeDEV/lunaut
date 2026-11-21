@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### Added
+
+- The Lunaut plugin for Roblox Studio (`LunautPlugin.rbxm` in every release): Sync, Send, Clear and Port buttons send the instance tree of the open place to the editor, so instances that live only in Studio get types and completion. The installer can put it into Studio's plugin folder
+- Rename and find references for type aliases, across modules through `require` (`types.Point`), and for globals across the workspace; built-in globals such as `print` are left alone
+- A quick fix moves a misplaced attribute to its function: `@native` above `has_nodes = function()` becomes `has_nodes = @native function()`
+- Completion for attributes after `@` and inside `@[ ... ]`: `native`, `deprecated` and a `deprecated { use, reason }` snippet
+- A **Lunaut** button in the VS Code status bar opens a menu like Rojo's: server version, Install Roblox Studio Plugin, Studio sync on or off, restart, reload, regenerate sourcemap, status, FFlags, definitions, docs and issues
+- Zed and other editors get **Lunaut: Reload Workspace** and **Lunaut: Install Roblox Studio Plugin** in the code actions menu (`Ctrl+.`); the server downloads the plugin of its own version into Studio's plugin folder
+- Definition files and FFlags reload without a restart: changing `lunaut.definitions`, FFlags or the Roblox security level, or saving a `.d.luau` file, rebuilds the workspace and keeps the open files
+
+### Fixed
+
+- A `require` of a file that does not exist is reported as `Unknown require` in non-strict files and with the new solver too, not only in `--!strict` files
+- `lunaut analyze` uses less than half the memory (511 MB to 214 MB on a 220-file Roblox project): it no longer keeps the type graphs hover needs, nor the API documentation
+- Zed block comments use `--[[ ]]`
+
+
 ## [0.1.3] - 2026-11-21
 
 ### Added

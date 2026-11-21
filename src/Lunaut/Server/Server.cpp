@@ -9,6 +9,9 @@
 
 LUAU_FASTFLAG(LuauSolverV2)
 
+#include <algorithm>
+#include <cstdlib>
+
 namespace lunaut
 {
 namespace
@@ -83,12 +86,20 @@ const std::unordered_map<std::string_view, notification_handler> relevant_notifi
 const std::vector<std::pair<std::string_view, std::string_view>> relevant_actions = {
 	{"Lunaut: Regenerate Rojo Sourcemap", "lunaut.server.regenerateSourcemap"},
 	{"Lunaut: Show Status", "lunaut.server.showStatus"},
+	{"Lunaut: Reload Workspace", "lunaut.server.reloadWorkspace"},
+	{"Lunaut: Install Roblox Studio Plugin", "lunaut.server.installStudioPlugin"},
 };
 
 const std::unordered_map<std::string_view, request_handler> relevant_commands = {
 	{"lunaut.server.regenerateSourcemap", &server::invoke_regenerate_sourcemap},
 	{"lunaut.server.showStatus", &server::invoke_show_status},
+	{"lunaut.server.reloadWorkspace", &server::invoke_reload_workspace},
+	{"lunaut.server.installStudioPlugin", &server::invoke_install_studio_plugin},
 };
+
+constexpr std::string_view studio_plugin_url =
+	"https://github.com/TheExeDEV/lunaut/releases/download/v" LUNAUT_VERSION "/LunautPlugin.rbxm";
+constexpr std::string_view studio_plugin_name = "LunautPlugin.rbxm";
 
 constexpr std::string_view extension_client_name = "lunaut-vscode";
 
@@ -100,6 +111,7 @@ const std::vector<std::pair<std::string_view, std::string_view>> relevant_refres
 const std::vector<std::string_view> watched_globs = {"**/*.luau", "**/*.lua", "**/.luaurc", "**/sourcemap.json", "**/*.project.json"};
 
 json get_client_settings(const json& value);
+std::optional<std::filesystem::path> get_studio_plugins_folder();
 
 }
 }
@@ -651,6 +663,58 @@ json server::invoke_show_status(const json& arguments)
 	return nullptr;
 }
 
+json server::invoke_install_studio_plugin(const json& arguments)
+{
+	std::optional<std::filesystem::path> folder = priv::get_studio_plugins_folder();
+
+	if (!folder)
+	{
+		send_window_message(enumitem_message_type::Error, "Lunaut: Roblox Studio was not found on this computer");
+		return nullptr;
+	}
+
+	std::error_code error;
+	std::filesystem::create_directories(*folder, error);
+	std::filesystem::path target = *folder / std::string(priv::studio_plugin_name);
+	result<nothing> downloaded = http::download_file(std::string(priv::studio_plugin_url), target);
+
+	if (!downloaded)
+	{
+		send_window_message(enumitem_message_type::Error, "Lunaut: could not install the Roblox Studio plugin: " + downloaded.message);
+		return nullptr;
+	}
+
+	send_window_message(
+		enumitem_message_type::Info,
+		"Lunaut: installed the Roblox Studio plugin into " + target.generic_string() +
+			". Restart Studio, then press Plugins > Lunaut > Sync, and turn on lunaut.studioPlugin.enabled in VS Code");
+	return {{"path", target.generic_string()}};
+}
+
+json server::invoke_reload_workspace(const json& arguments)
+{
+	std::vector<workspace*> folders;
+
+	for (const std::unique_ptr<workspace>& folder : workspaces)
+	{
+		folders.push_back(folder.get());
+	}
+
+	fflags = fflagregistry::apply(
+		get_settings_for(folders.empty() ? std::filesystem::path() : folders.front()->get_root()).fflags,
+		options.fflags,
+		options.no_flags_enabled,
+		*this);
+
+	for (workspace* folder : folders)
+	{
+		reload_workspace(folder, "reload requested");
+	}
+
+	send_window_message(enumitem_message_type::Info, "Lunaut: reloaded " + std::to_string(folders.size()) + " workspace(s)");
+	return nullptr;
+}
+
 json server::on_lunaut_status(const json& params)
 {
 	json statuses = json::array();
@@ -801,9 +865,30 @@ void server::on_did_change_configuration(const json& params)
 {
 	client_settings = priv::get_client_settings(params.value("settings", json::object()));
 
+	std::vector<workspace*> reloads;
+
 	for (const std::unique_ptr<workspace>& folder : workspaces)
 	{
-		folder->set_settings(get_settings_for(folder->get_root()));
+		settingsinfo next = get_settings_for(folder->get_root());
+
+		if (folder->needs_reload(next))
+		{
+			reloads.push_back(folder.get());
+			continue;
+		}
+
+		folder->set_settings(std::move(next));
+	}
+
+	if (!reloads.empty() && !workspaces.empty())
+	{
+		fflags =
+			fflagregistry::apply(get_settings_for(workspaces.front()->get_root()).fflags, options.fflags, options.no_flags_enabled, *this);
+	}
+
+	for (workspace* folder : reloads)
+	{
+		reload_workspace(folder, "settings for definitions or FFlags changed");
 	}
 
 	for (const auto& [capability, method] : priv::relevant_refreshes)
@@ -826,8 +911,43 @@ void server::on_did_change_watched_files(const json& params)
 
 	for (auto& [folder, changes] : grouped)
 	{
+		bool definitions = std::any_of(
+			changes.begin(),
+			changes.end(),
+			[folder](const json& change) { return folder->is_definition_file(uri::to_path(change.value("uri", ""))); });
+
+		if (definitions)
+		{
+			reload_workspace(folder, "a definition file changed");
+			continue;
+		}
+
 		folder->apply_watched_changes(changes);
 	}
+}
+
+void server::reload_workspace(workspace* folder, const std::string& reason)
+{
+	const auto found = std::find_if(
+		workspaces.begin(), workspaces.end(), [folder](const std::unique_ptr<workspace>& item) { return item.get() == folder; });
+
+	if (found == workspaces.end())
+	{
+		return;
+	}
+
+	std::filesystem::path root = folder->get_root();
+	std::vector<textdocument> open = folder->get_open_documents();
+
+	*found = std::make_unique<workspace>(*this, root, get_settings_for(root));
+	(*found)->initialize();
+
+	for (const textdocument& document : open)
+	{
+		(*found)->open_document(document.get_uri(), document.get_text(), document.get_version());
+	}
+
+	send_log(enumitem_message_type::Info, "reloaded " + root.generic_string() + ": " + reason);
 }
 
 void server::on_did_change_workspace_folders(const json& params)
@@ -1048,6 +1168,29 @@ namespace
 {
 namespace priv
 {
+
+std::optional<std::filesystem::path> get_studio_plugins_folder()
+{
+	std::error_code error;
+
+#if LUNAUT_PLATFORM_WINDOWS
+	const char* local = std::getenv("LOCALAPPDATA");
+
+	if (local != nullptr && std::filesystem::is_directory(std::filesystem::path(local) / "Roblox", error))
+	{
+		return std::filesystem::path(local) / "Roblox" / "Plugins";
+	}
+#else
+	const char* home = std::getenv("HOME");
+
+	if (home != nullptr && std::filesystem::is_directory(std::filesystem::path(home) / "Documents" / "Roblox", error))
+	{
+		return std::filesystem::path(home) / "Documents" / "Roblox" / "Plugins";
+	}
+#endif
+
+	return std::nullopt;
+}
 
 json get_client_settings(const json& value)
 {

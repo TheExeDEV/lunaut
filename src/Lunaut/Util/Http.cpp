@@ -19,6 +19,41 @@ constexpr std::string_view downloader = "curl -fsSL --max-time 30 --user-agent "
 }
 }
 
+result<nothing> http::download_file(const std::string& url, const std::filesystem::path& target)
+{
+	if (std::getenv("LUNAUT_OFFLINE") != nullptr)
+	{
+		return result<nothing>::fail("offline mode (LUNAUT_OFFLINE)");
+	}
+
+	std::string path = target.generic_string();
+
+	if (url.find_first_of("\"'`$ ") != std::string::npos || path.find_first_of("\"'`$") != std::string::npos)
+	{
+		return result<nothing>::fail("refusing unsafe url or path: " + url);
+	}
+
+	result<std::string> response =
+		process::invoke_command(std::string(priv::downloader) + "--location --output \"" + path + ".download\" \"" + url + "\"");
+
+	if (!response)
+	{
+		std::error_code error;
+		std::filesystem::remove(path + ".download", error);
+		return result<nothing>::fail("download failed (" + url + "): " + stdx::trim(response.value));
+	}
+
+	std::error_code error;
+	std::filesystem::rename(path + ".download", target, error);
+
+	if (error)
+	{
+		return result<nothing>::fail("cannot write " + path + ": " + error.message());
+	}
+
+	return result<nothing>::ok({});
+}
+
 result<std::string> http::get_text(const std::string& url)
 {
 	if (std::getenv("LUNAUT_OFFLINE") != nullptr)

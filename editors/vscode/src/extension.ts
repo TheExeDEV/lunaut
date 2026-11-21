@@ -205,6 +205,55 @@ async function regenerateSourcemap(): Promise<void> {
 	}
 }
 
+async function runServerCommand(command: string): Promise<void> {
+	if (!client) {
+		vscode.window.showWarningMessage("Lunaut is not running");
+		return;
+	}
+
+	await client.sendRequest("workspace/executeCommand", { command, arguments: [] });
+}
+
+type MenuEntry = vscode.QuickPickItem & { run?: () => unknown };
+
+async function openMenu(context: vscode.ExtensionContext): Promise<void> {
+	const version = client?.initializeResult?.serverInfo?.version ?? context.extension.packageJSON.version;
+	const studio = vscode.workspace.getConfiguration("lunaut").get<boolean>("studioPlugin.enabled", false);
+	const port = vscode.workspace.getConfiguration("lunaut").get<number>("studioPlugin.port", 3667);
+	const repository = "https://github.com/TheExeDEV/lunaut";
+
+	const entries: MenuEntry[] = [
+		{
+			label: `$(zap) Lunaut v${version}`,
+			detail: client ? "The server is running. Click for its status." : "The server is not running. Click to start it.",
+			run: () => vscode.commands.executeCommand(client ? "lunaut.showStatus" : "lunaut.restart"),
+		},
+		{
+			label: "$(plug) Install Roblox Studio Plugin",
+			description: "Click to install.",
+			run: () => runServerCommand("lunaut.server.installStudioPlugin"),
+		},
+		{
+			label: studio ? "$(broadcast) Studio sync is on" : "$(circle-slash) Studio sync is off",
+			description: studio ? `Listening on port ${port}. Click to stop.` : `Click to listen for the plugin on port ${port}.`,
+			run: () => vscode.workspace.getConfiguration("lunaut").update("studioPlugin.enabled", !studio, vscode.ConfigurationTarget.Global),
+		},
+		{ label: "Server", kind: vscode.QuickPickItemKind.Separator },
+		{ label: "$(debug-restart) Restart Server", run: () => vscode.commands.executeCommand("lunaut.restart") },
+		{ label: "$(refresh) Reload Definitions and FFlags", run: () => runServerCommand("lunaut.server.reloadWorkspace") },
+		{ label: "$(sync) Regenerate Rojo Sourcemap", run: () => vscode.commands.executeCommand("lunaut.regenerateSourcemap") },
+		{ label: "$(info) Show Status", run: () => vscode.commands.executeCommand("lunaut.showStatus") },
+		{ label: "$(symbol-constant) Show FFlags", run: () => vscode.commands.executeCommand("lunaut.showFFlags") },
+		{ label: "$(file-code) Show Loaded Definitions", run: () => vscode.commands.executeCommand("lunaut.showDefinitions") },
+		{ label: "Help", kind: vscode.QuickPickItemKind.Separator },
+		{ label: "$(book) Open Lunaut Docs", run: () => vscode.env.openExternal(vscode.Uri.parse(`${repository}#readme`)) },
+		{ label: "$(github) Report an Issue", description: "Click to open a new issue on GitHub", run: () => vscode.env.openExternal(vscode.Uri.parse(`${repository}/issues/new`)) },
+	];
+
+	const picked = await vscode.window.showQuickPick(entries, { title: "Lunaut", matchOnDescription: true });
+	await picked?.run?.();
+}
+
 async function showJson(title: string, method: string, params: object = {}): Promise<void> {
 	if (!client) {
 		vscode.window.showWarningMessage("Lunaut is not running");
@@ -220,6 +269,13 @@ async function showJson(title: string, method: string, params: object = {}): Pro
 export async function activate(context: vscode.ExtensionContext): Promise<{ getClient: () => LanguageClient | undefined }> {
 	output = vscode.window.createOutputChannel("Lunaut");
 	context.subscriptions.push(output);
+
+	const statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+	statusItem.text = "$(zap) Lunaut";
+	statusItem.tooltip = "Open the Lunaut menu";
+	statusItem.command = "lunaut.openMenu";
+	statusItem.show();
+	context.subscriptions.push(statusItem);
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand("lunaut.restart", async () => {
@@ -237,6 +293,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ getC
 			}
 		}),
 		vscode.commands.registerCommand("lunaut.regenerateSourcemap", () => regenerateSourcemap()),
+		vscode.commands.registerCommand("lunaut.openMenu", () => openMenu(context)),
+		vscode.commands.registerCommand("lunaut.installStudioPlugin", () => runServerCommand("lunaut.server.installStudioPlugin")),
 		vscode.commands.registerCommand("lunaut.showReferences", (uri: string, position: { line: number; character: number }, locations: { uri: string; range: object }[]) => {
 			const converter = client?.protocol2CodeConverter;
 
@@ -264,7 +322,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ getC
 				startStudioServer(() => client, output!);
 			}
 
-			if (event.affectsConfiguration("lunaut.path") || event.affectsConfiguration("lunaut.fflags") || event.affectsConfiguration("luau-lsp.fflags")) {
+			if (event.affectsConfiguration("lunaut.path")) {
 				const choice = await vscode.window.showInformationMessage("Lunaut needs a restart to apply this change.", "Restart");
 
 				if (choice === "Restart") {

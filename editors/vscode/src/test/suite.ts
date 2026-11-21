@@ -346,6 +346,16 @@ export async function run(): Promise<void> {
 	);
 
 	await check(
+		"registers the Lunaut menu",
+		async () => {
+			const commands = await vscode.commands.getCommands(true);
+			assert.ok(commands.includes("lunaut.openMenu"));
+			assert.ok(commands.includes("lunaut.installStudioPlugin"));
+		},
+		results,
+	);
+
+	await check(
 		"runs the status command",
 		async () => {
 			await vscode.commands.executeCommand("lunaut.showStatus");

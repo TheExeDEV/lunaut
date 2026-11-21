@@ -39,8 +39,10 @@ int console::invoke_analyze(const std::vector<std::string>& files, const options
 	settingsinfo settings = priv::load_settings(root, options);
 
 	fflagregistry::apply(settings.fflags, options.fflags, options.no_flags_enabled, *this);
+	settings.features.documentation = false;
 
 	workspace folder(*this, root, settings);
+	folder.set_retain_types(false);
 	folder.initialize();
 
 	std::vector<std::filesystem::path> inputs = priv::expand_inputs(files, settings);

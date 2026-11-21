@@ -5,6 +5,8 @@
 
 #include "core.d.hpp"
 
+#include "Luau/AstQuery.h"
+
 #include <algorithm>
 #include <stdexcept>
 
@@ -39,8 +41,30 @@ const std::set<std::string_view> reserved_words = {
 	"while",
 };
 
+struct name_collector final : Luau::AstVisitor
+{
+	bool global = false;
+	std::string name;
+	std::vector<Luau::Location> plain;
+	std::vector<std::pair<std::string, Luau::Location>> prefixed;
+
+	bool visit(Luau::AstType* node) override;
+	bool visit(Luau::AstTypePack* node) override;
+	bool visit(Luau::AstTypeReference* node) override;
+	bool visit(Luau::AstStatTypeAlias* node) override;
+	bool visit(Luau::AstExprGlobal* node) override;
+};
+
 bool is_identifier(const std::string& name);
 bool is_renamable(const symbolinfo& symbol);
+std::optional<renametargetinfo> find_target(
+	const Luau::SourceModule& source,
+	const Luau::Module* module,
+	const Luau::ModuleName& name,
+	Luau::Position position,
+	const Luau::GlobalTypes& globals);
+std::optional<Luau::ModuleName> find_imported_module(const Luau::Module& module, Luau::Position position, const std::string& prefix);
+bool declares_type(const Luau::SourceModule& source, const std::string& name);
 
 }
 }
@@ -93,6 +117,12 @@ std::vector<std::pair<Luau::ModuleName, Luau::Location>> workspace::find_referen
 	if (source == nullptr || !module)
 	{
 		return references;
+	}
+
+	if (std::optional<renametargetinfo> target = priv::find_target(*source, module.get(), name, position, frontend.globals))
+	{
+		origin = target->origin;
+		return find_named_references(*target);
 	}
 
 	std::optional<symbolinfo> found = symbolfinder::find(*module, *source, position);
@@ -168,6 +198,85 @@ std::vector<std::pair<Luau::ModuleName, Luau::Location>> workspace::find_referen
 	return references;
 }
 
+std::vector<std::pair<Luau::ModuleName, Luau::Location>> workspace::find_named_references(const renametargetinfo& target)
+{
+	std::vector<std::pair<Luau::ModuleName, Luau::Location>> references;
+	index_workspace();
+
+	std::set<Luau::ModuleName> candidates;
+
+	if (target.global)
+	{
+		for (const auto& [module_name, node] : frontend.sourceNodes)
+		{
+			candidates.insert(module_name);
+		}
+	}
+	else
+	{
+		candidates.insert(target.module);
+
+		if (target.exported)
+		{
+			frontend.traverseDependents(
+				target.module,
+				[&candidates, &target](Luau::SourceNode& node)
+				{ return node.name == target.module || candidates.insert(node.name).second; });
+		}
+	}
+
+	for (const Luau::ModuleName& candidate : candidates)
+	{
+		if (is_definition_file(candidate))
+		{
+			continue;
+		}
+
+		const Luau::SourceModule* source = frontend.getSourceModule(candidate);
+
+		if (source == nullptr || source->root == nullptr)
+		{
+			continue;
+		}
+
+		priv::name_collector collected;
+		collected.global = target.global;
+		collected.name = target.name;
+		source->root->visit(&collected);
+
+		if (target.global || candidate == target.module)
+		{
+			for (const Luau::Location& location : collected.plain)
+			{
+				references.emplace_back(candidate, location);
+			}
+		}
+
+		if (target.global || collected.prefixed.empty())
+		{
+			continue;
+		}
+
+		check_module(candidate, false);
+		Luau::ModulePtr module = get_module(candidate, false);
+
+		if (!module)
+		{
+			continue;
+		}
+
+		for (const auto& [prefix, location] : collected.prefixed)
+		{
+			if (priv::find_imported_module(*module, location.begin, prefix) == target.module)
+			{
+				references.emplace_back(candidate, location);
+			}
+		}
+	}
+
+	return references;
+}
+
 json workspace::get_references(const json& params)
 {
 	std::string address = params["textDocument"].value("uri", "");
@@ -225,7 +334,14 @@ json workspace::get_prepare_rename(const json& params)
 		return nullptr;
 	}
 
-	std::optional<symbolinfo> found = symbolfinder::find(*module, *source, document->to_luau_position(params["position"]));
+	Luau::Position position = document->to_luau_position(params["position"]);
+
+	if (std::optional<renametargetinfo> target = priv::find_target(*source, module.get(), name, position, frontend.globals))
+	{
+		return {{"range", document->to_lsp_range(target->origin)}, {"placeholder", target->name}};
+	}
+
+	std::optional<symbolinfo> found = symbolfinder::find(*module, *source, position);
 
 	if (!found || (found->local == nullptr && !priv::is_renamable(*found)))
 	{
@@ -303,6 +419,145 @@ bool is_identifier(const std::string& name)
 bool is_renamable(const symbolinfo& symbol)
 {
 	return symbol.member && !stdx::starts_with(symbol.owner_module, "@");
+}
+
+bool name_collector::visit(Luau::AstType* node)
+{
+	return !global;
+}
+
+bool name_collector::visit(Luau::AstTypePack* node)
+{
+	return !global;
+}
+
+bool name_collector::visit(Luau::AstTypeReference* node)
+{
+	if (global || name != node->name.value)
+	{
+		return true;
+	}
+
+	if (node->prefix)
+	{
+		prefixed.emplace_back(node->prefix->value, node->nameLocation);
+	}
+	else
+	{
+		plain.push_back(node->nameLocation);
+	}
+
+	return true;
+}
+
+bool name_collector::visit(Luau::AstStatTypeAlias* node)
+{
+	if (!global && name == node->name.value)
+	{
+		plain.push_back(node->nameLocation);
+	}
+
+	return true;
+}
+
+bool name_collector::visit(Luau::AstExprGlobal* node)
+{
+	if (global && name == node->name.value)
+	{
+		plain.push_back(node->location);
+	}
+
+	return true;
+}
+
+std::optional<renametargetinfo> find_target(
+	const Luau::SourceModule& source,
+	const Luau::Module* module,
+	const Luau::ModuleName& name,
+	Luau::Position position,
+	const Luau::GlobalTypes& globals)
+{
+	for (Luau::AstNode* node : Luau::findAstAncestryOfPosition(source, position, true))
+	{
+		if (Luau::AstStatTypeAlias* alias = node->as<Luau::AstStatTypeAlias>();
+			alias != nullptr && alias->nameLocation.containsClosed(position))
+		{
+			return renametargetinfo{alias->name.value, alias->nameLocation, name, false, alias->exported};
+		}
+
+		if (Luau::AstTypeReference* reference = node->as<Luau::AstTypeReference>();
+			reference != nullptr && reference->nameLocation.containsClosed(position))
+		{
+			std::string type_name = reference->name.value;
+
+			if (!reference->prefix)
+			{
+				if (!declares_type(source, type_name))
+				{
+					return std::nullopt;
+				}
+
+				return renametargetinfo{type_name, reference->nameLocation, name, false, true};
+			}
+
+			std::optional<Luau::ModuleName> imported =
+				module != nullptr ? find_imported_module(*module, position, reference->prefix->value) : std::nullopt;
+
+			if (!imported)
+			{
+				return std::nullopt;
+			}
+
+			return renametargetinfo{type_name, reference->nameLocation, *imported, false, true};
+		}
+
+		if (Luau::AstExprGlobal* global = node->as<Luau::AstExprGlobal>(); global != nullptr && global->location.containsClosed(position))
+		{
+			Luau::AstName known = globals.globalNames.names->get(global->name.value);
+
+			if (known.value != nullptr && globals.globalScope->bindings.count(Luau::Symbol(known)) != 0)
+			{
+				return std::nullopt;
+			}
+
+			return renametargetinfo{global->name.value, global->location, name, true, true};
+		}
+	}
+
+	return std::nullopt;
+}
+
+std::optional<Luau::ModuleName> find_imported_module(const Luau::Module& module, Luau::Position position, const std::string& prefix)
+{
+	for (Luau::ScopePtr scope = Luau::findScopeAtPosition(module, position); scope != nullptr; scope = scope->parent)
+	{
+		const auto found = scope->importedModules.find(prefix);
+
+		if (found != scope->importedModules.end())
+		{
+			return found->second;
+		}
+	}
+
+	return std::nullopt;
+}
+
+bool declares_type(const Luau::SourceModule& source, const std::string& name)
+{
+	name_collector collected;
+	collected.global = false;
+	collected.name = name;
+	source.root->visit(&collected);
+
+	for (Luau::AstStat* statement : source.root->body)
+	{
+		if (Luau::AstStatTypeAlias* alias = statement->as<Luau::AstStatTypeAlias>(); alias != nullptr && name == alias->name.value)
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 }

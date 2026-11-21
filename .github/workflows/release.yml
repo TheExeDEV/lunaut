@@ -193,8 +193,29 @@ jobs:
           name: lunaut.vsix
           path: editors/vscode/lunaut.vsix
 
+  studio-plugin:
+    needs: [check]
+    if: ${{ needs.check.outputs.release == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.check.outputs.sha }}
+
+      - name: Build the Studio plugin
+        run: |
+          curl -sSL -o rojo.zip https://github.com/rojo-rbx/rojo/releases/download/v7.6.1/rojo-7.6.1-linux-x86_64.zip
+          unzip -q rojo.zip -d rojo
+          chmod +x rojo/rojo
+          rojo/rojo build plugins/studio -o LunautPlugin.rbxm
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LunautPlugin.rbxm
+          path: LunautPlugin.rbxm
+
   publish:
-    needs: [check, build, build-macos, extension]
+    needs: [check, build, build-macos, extension, studio-plugin]
     if: ${{ always() && needs.check.outputs.release == 'true' && needs.build.result == 'success' && needs.extension.result == 'success' }}
     runs-on: ubuntu-latest
     env:

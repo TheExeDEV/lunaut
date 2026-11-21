@@ -380,6 +380,15 @@ struct typedisplayinfo
 	bool truncated = false;
 };
 
+struct renametargetinfo
+{
+	std::string name;
+	Luau::Location origin;
+	Luau::ModuleName module;
+	bool global = false;
+	bool exported = false;
+};
+
 struct fflagstateinfo
 {
 	std::string name;
@@ -505,6 +514,7 @@ class http
 {
 public:
 	static result<std::string> get_text(const std::string& url);
+	static result<nothing> download_file(const std::string& url, const std::filesystem::path& target);
 };
 
 class cache
@@ -838,6 +848,7 @@ public:
 	workspace(client& owner, std::filesystem::path root, settingsinfo settings);
 
 	void initialize();
+	void set_retain_types(bool retain);
 	bool is_ready() const;
 	bool is_roblox() const;
 	bool is_inside(const std::string& address) const;
@@ -853,6 +864,9 @@ public:
 	void save_document(const std::string& address);
 	void apply_watched_changes(const json& changes);
 	void set_settings(settingsinfo next);
+	bool needs_reload(const settingsinfo& next) const;
+	bool is_definition_file(const std::string& path) const;
+	std::vector<textdocument> get_open_documents() const;
 	result<nothing> rebuild_sourcemap(bool regenerate);
 
 	json get_diagnostics(const std::string& address);
@@ -869,6 +883,7 @@ public:
 	json get_document_symbols(const json& params);
 	json get_signature_help(const json& params);
 	json get_references(const json& params);
+	std::vector<std::pair<Luau::ModuleName, Luau::Location>> find_named_references(const renametargetinfo& target);
 	json get_prepare_rename(const json& params);
 	json get_rename(const json& params);
 	json get_inlay_hints(const json& params);
@@ -920,6 +935,7 @@ public:
 	void apply_plugin_tree(const json& tree);
 
 private:
+	bool retain_types = true;
 	void index_workspace();
 	json get_auto_imports(const Luau::ModuleName& name, const textdocument& document, const std::set<std::string>& taken);
 	std::optional<json> make_import_edit(const Luau::ModuleName& name, const textdocument& document, const std::string& symbol);
@@ -981,7 +997,6 @@ private:
 	void apply_disabled_globals(Luau::GlobalTypes& globals);
 	Luau::CheckResult check_module(const Luau::ModuleName& name, bool for_autocomplete);
 	Luau::ModulePtr get_module(const Luau::ModuleName& name, bool for_autocomplete) const;
-	bool is_definition_file(const std::string& path) const;
 	bool is_ignored(const std::string& path) const;
 	std::optional<textdocument> get_text_for(const Luau::ModuleName& name) const;
 	json get_location(const Luau::ModuleName& name, const Luau::Location& location) const;
@@ -1075,6 +1090,8 @@ public:
 	json on_execute_command(const json& params);
 	json invoke_regenerate_sourcemap(const json& arguments);
 	json invoke_show_status(const json& arguments);
+	json invoke_install_studio_plugin(const json& arguments);
+	json invoke_reload_workspace(const json& arguments);
 
 	void on_initialized(const json& params);
 	void on_exit(const json& params);
@@ -1106,6 +1123,7 @@ private:
 	std::vector<std::unique_ptr<workspace>> workspaces;
 	std::unique_ptr<workspace> null_workspace;
 	std::vector<fflagstateinfo> fflags;
+	void reload_workspace(workspace* folder, const std::string& reason);
 	int exit_code = 1;
 	bool extension_client = false;
 	std::deque<json> queue;

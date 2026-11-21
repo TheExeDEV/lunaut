@@ -11,6 +11,8 @@
 #include "Luau/TypePack.h"
 #include "Luau/TypeUtils.h"
 
+#include <algorithm>
+
 namespace lunaut
 {
 namespace
@@ -42,6 +44,12 @@ std::optional<json> get_string_range(const textdocument& document, const std::ve
 std::pair<std::string, std::string> get_call_details(const Luau::AutocompleteEntry& entry, const Luau::FunctionType& function);
 std::optional<Luau::ModuleName> get_type_module(Luau::TypeId type);
 std::optional<Luau::ModuleName> get_property_module(const Luau::Module& module, const std::vector<Luau::AstNode*>& ancestry);
+std::optional<json> get_attribute_items(const textdocument& document, Luau::Position position);
+
+const std::vector<std::pair<std::string_view, std::string_view>> relevant_attributes = {
+	{"native", "Compile this function to native code"},
+	{"deprecated", "Warn about every use of this function"},
+};
 
 }
 }
@@ -61,6 +69,11 @@ json workspace::get_completion(const json& params)
 	{
 		invoke_end_completion(params);
 		return {{"isIncomplete", false}, {"items", items}};
+	}
+
+	if (std::optional<json> attributes = priv::get_attribute_items(*document, document->to_luau_position(params["position"])))
+	{
+		return {{"isIncomplete", false}, {"items", *attributes}};
 	}
 
 	Luau::Position position = document->to_luau_position(params["position"]);
@@ -219,6 +232,74 @@ enumitem_completion_kind get_kind(const Luau::AutocompleteEntry& entry)
 
 	const auto found = relevant_kinds.find(entry.kind);
 	return found == relevant_kinds.end() ? enumitem_completion_kind::Text : found->second;
+}
+
+std::optional<json> get_attribute_items(const textdocument& document, Luau::Position position)
+{
+	std::vector<std::string> lines = stdx::split(document.get_text(), '\n');
+
+	if (position.line >= lines.size())
+	{
+		return std::nullopt;
+	}
+
+	std::string before = lines[position.line].substr(0, std::min<size_t>(position.column, lines[position.line].size()));
+	size_t at = before.rfind('@');
+
+	if (at == std::string::npos || before.find("--") < at)
+	{
+		return std::nullopt;
+	}
+
+	size_t quotes = std::count(before.begin(), before.begin() + static_cast<std::ptrdiff_t>(at), '"') +
+		std::count(before.begin(), before.begin() + static_cast<std::ptrdiff_t>(at), '\'') +
+		std::count(before.begin(), before.begin() + static_cast<std::ptrdiff_t>(at), '`');
+
+	if (quotes % 2 != 0)
+	{
+		return std::nullopt;
+	}
+
+	std::string rest = before.substr(at + 1);
+	bool bracket = !rest.empty() && rest[0] == '[';
+	std::string word = bracket ? rest.substr(rest.find_last_of("[,") + 1) : rest;
+	word = stdx::trim(word);
+
+	if (bracket && rest.find(']') != std::string::npos)
+	{
+		return std::nullopt;
+	}
+
+	if (!std::all_of(word.begin(), word.end(), [](char c) { return std::isalnum(static_cast<unsigned char>(c)) || c == '_'; }))
+	{
+		return std::nullopt;
+	}
+
+	json items = json::array();
+
+	for (const auto& [name, detail] : relevant_attributes)
+	{
+		items.push_back(
+			{{"label", name},
+			 {"kind", static_cast<int>(enumitem_completion_kind::Keyword)},
+			 {"detail", detail},
+			 {"sortText", "0" + std::string(name)}});
+	}
+
+	if (bracket)
+	{
+		items.push_back({
+			{"label", "deprecated { use, reason }"},
+			{"kind", static_cast<int>(enumitem_completion_kind::Snippet)},
+			{"detail", "Warn about every use and say what to use instead"},
+			{"filterText", "deprecated"},
+			{"sortText", "1deprecated"},
+			{"insertText", "deprecated { use = \"$1\", reason = \"$2\" }"},
+			{"insertTextFormat", 2},
+		});
+	}
+
+	return items;
 }
 
 std::string get_sort_text(const std::string& label, const Luau::AutocompleteEntry& entry)

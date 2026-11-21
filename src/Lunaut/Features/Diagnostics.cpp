@@ -21,11 +21,35 @@ json workspace::get_diagnostics(const std::string& address)
 
 	Luau::CheckResult checked = check_module(name, false);
 
+	std::set<std::pair<unsigned int, unsigned int>> reported;
+
 	for (const Luau::TypeError& error : checked.errors)
 	{
 		if (error.moduleName == name)
 		{
 			diagnostics.push_back(protocol::make_type_error(*document, error, &resolver));
+
+			if (Luau::get_if<Luau::UnknownRequire>(&error.data) != nullptr)
+			{
+				reported.insert({error.location.begin.line, error.location.begin.column});
+			}
+		}
+	}
+
+	const auto node = frontend.sourceNodes.find(name);
+
+	if (node != frontend.sourceNodes.end() && node->second)
+	{
+		for (const auto& [required, location] : node->second->requireLocations)
+		{
+			if (sourcemap::is_virtual_path(required) || reported.count({location.begin.line, location.begin.column}) != 0 ||
+				resolver.readSource(required))
+			{
+				continue;
+			}
+
+			Luau::TypeError missing{location, name, Luau::UnknownRequire{resolver.getHumanReadableModuleName(required)}};
+			diagnostics.push_back(protocol::make_type_error(*document, missing, &resolver));
 		}
 	}
 
