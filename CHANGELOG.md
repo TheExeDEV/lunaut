@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-11-21
+
 ### Added
 
 - The Lunaut plugin for Roblox Studio (`LunautPlugin.rbxm` in every release): one **Lunaut** toolbar button opens a window with Start/Stop Sync, Send Once, Clear Editor, the port and Sync on Start, Silent Mode and Open on Start switches; it sends the instance tree of the open place to the editor, so instances that live only in Studio get types and completion. The installer can put it into Studio's plugin folder
