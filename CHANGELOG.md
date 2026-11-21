@@ -17,6 +17,9 @@
 - A `require` of a file that does not exist is reported as `Unknown require` in non-strict files and with the new solver too, not only in `--!strict` files
 - `lunaut analyze` uses less than half the memory (511 MB to 214 MB on a 220-file Roblox project): it no longer keeps the type graphs hover needs, nor the API documentation
 - Zed block comments use `--[[ ]]`
+- The server ignores a Studio plugin tree that has not changed, so Sync no longer keeps it busy re-checking open files
+- VS Code applies on-type edits itself and puts the cursor in place, so `end` and `}` never leave the cursor on the wrong line
+- The menu changes a setting where it is set (workspace or user), so Studio sync and the port toggle even when a project sets them
 
 
 ## [0.1.3] - 2026-11-21

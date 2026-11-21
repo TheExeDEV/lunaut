@@ -55,6 +55,16 @@ if (Object.keys(bundled).length === 0) {
 
 fs.copyFileSync(path.resolve(root, "..", "..", "LICENSE"), path.resolve(root, "LICENSE"));
 
+const studioPlugin = process.env.LUNAUT_STUDIO_PLUGIN || path.resolve(root, "..", "..", "build", "LunautPlugin.rbxm");
+
+if (fs.existsSync(studioPlugin)) {
+	fs.mkdirSync(path.resolve(root, "plugin"), { recursive: true });
+	fs.copyFileSync(studioPlugin, path.resolve(root, "plugin", "LunautPlugin.rbxm"));
+	console.log(`bundled the Studio plugin from ${studioPlugin}`);
+} else {
+	console.warn(`no Studio plugin at ${studioPlugin}, the extension will download it`);
+}
+
 const schemaBinary = process.env.LUNAUT_SCHEMA_BINARY || bundled[host];
 
 if (!schemaBinary || !fs.existsSync(schemaBinary)) {

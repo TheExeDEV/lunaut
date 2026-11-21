@@ -6,6 +6,7 @@ compile_commands.json
 editors/vscode/node_modules/
 editors/vscode/out/
 editors/vscode/bin/
+editors/vscode/plugin/
 editors/vscode/*.vsix
 
 __pycache__/

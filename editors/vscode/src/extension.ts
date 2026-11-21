@@ -110,26 +110,35 @@ async function startClient(context: vscode.ExtensionContext): Promise<void> {
 		middleware: {
 			provideOnTypeFormattingEdits: async (document, position, character, options, token, next) => {
 				const edits = await next(document, position, character, options, token);
+				const editor = vscode.window.activeTextEditor;
 
-				if (edits && edits.length > 0) {
-					const listener = vscode.workspace.onDidChangeTextDocument((event) => {
-						if (event.document !== document) {
-							return;
-						}
-
-						listener.dispose();
-						setTimeout(() => {
-							const editor = vscode.window.activeTextEditor;
-
-							if (editor && editor.document === document && !editor.selection.active.isEqual(position)) {
-								editor.selection = new vscode.Selection(position, position);
-							}
-						}, 0);
-					});
-					setTimeout(() => listener.dispose(), 2000);
+				if (!edits || edits.length === 0 || !editor || editor.document !== document) {
+					return edits;
 				}
 
-				return edits;
+				let cursor = position;
+
+				for (const edit of edits) {
+					if (edit.range.end.isEqual(position) && edit.range.start.line === position.line && !edit.newText.includes("\n")) {
+						cursor = new vscode.Position(position.line, edit.range.start.character + edit.newText.length);
+					}
+				}
+
+				const applied = await editor.edit(
+					(builder) => {
+						for (const edit of edits) {
+							builder.replace(edit.range, edit.newText);
+						}
+					},
+					{ undoStopBefore: false, undoStopAfter: false },
+				);
+
+				if (!applied) {
+					return edits;
+				}
+
+				editor.selection = new vscode.Selection(cursor, cursor);
+				return [];
 			},
 		},
 		documentSelector: [
@@ -197,11 +206,11 @@ async function regenerateSourcemap(): Promise<void> {
 			continue;
 		}
 
-		const choice = await vscode.window.showErrorMessage(`Lunaut: sourcemap of ${folder} was not regenerated: ${result.message}`, "Show Output");
-
-		if (choice === "Show Output") {
-			output?.show();
-		}
+		vscode.window.showErrorMessage(`Lunaut: sourcemap of ${folder} was not regenerated: ${result.message}`, "Show Output").then((choice) => {
+			if (choice === "Show Output") {
+				output?.show();
+			}
+		});
 	}
 }
 
@@ -214,7 +223,60 @@ async function runServerCommand(command: string): Promise<void> {
 	await client.sendRequest("workspace/executeCommand", { command, arguments: [] });
 }
 
-type MenuEntry = vscode.QuickPickItem & { id?: string; run?: () => unknown; modal?: boolean; exit?: boolean };
+function getStudioPluginsFolder(): string | undefined {
+	if (process.platform === "win32") {
+		const local = process.env.LOCALAPPDATA;
+		return local && fs.existsSync(path.join(local, "Roblox")) ? path.join(local, "Roblox", "Plugins") : undefined;
+	}
+
+	if (process.platform === "darwin") {
+		const documents = path.join(os.homedir(), "Documents", "Roblox");
+		return fs.existsSync(documents) ? path.join(documents, "Plugins") : undefined;
+	}
+
+	return undefined;
+}
+
+async function installStudioPlugin(context: vscode.ExtensionContext): Promise<void> {
+	const bundled = context.asAbsolutePath(path.join("plugin", "LunautPlugin.rbxm"));
+
+	if (!fs.existsSync(bundled)) {
+		await runServerCommand("lunaut.server.installStudioPlugin");
+		return;
+	}
+
+	const folder = getStudioPluginsFolder();
+
+	if (!folder) {
+		vscode.window.showErrorMessage("Lunaut: Roblox Studio was not found on this computer");
+		return;
+	}
+
+	fs.mkdirSync(folder, { recursive: true });
+	fs.copyFileSync(bundled, path.join(folder, "LunautPlugin.rbxm"));
+	vscode.window.showInformationMessage(`Lunaut: installed the Roblox Studio plugin into ${folder}. Restart Studio and press Plugins > Lunaut.`);
+}
+
+type MenuEntry = vscode.QuickPickItem & { id?: string; run?: () => unknown; modal?: boolean; exit?: boolean; slow?: string };
+
+async function updateSetting(key: string, value: unknown): Promise<void> {
+	const config = vscode.workspace.getConfiguration("lunaut");
+	const inspected = config.inspect(key);
+	const target =
+		inspected?.workspaceFolderValue !== undefined
+			? vscode.ConfigurationTarget.WorkspaceFolder
+			: inspected?.workspaceValue !== undefined
+				? vscode.ConfigurationTarget.Workspace
+				: vscode.ConfigurationTarget.Global;
+
+	await config.update(key, value, target);
+
+	const legacy = vscode.workspace.getConfiguration("luau-lsp").inspect(key);
+
+	if (legacy?.workspaceFolderValue !== undefined || legacy?.workspaceValue !== undefined || legacy?.globalValue !== undefined) {
+		vscode.window.showWarningMessage(`Lunaut: luau-lsp.${key} is also set; lunaut.${key} wins only where both are set at the same level`);
+	}
+}
 
 async function changePort(): Promise<void> {
 	const config = vscode.workspace.getConfiguration("lunaut");
@@ -230,7 +292,7 @@ async function changePort(): Promise<void> {
 	});
 
 	if (value !== undefined && Number(value) !== current) {
-		await config.update("studioPlugin.port", Number(value), vscode.ConfigurationTarget.Global);
+		await updateSetting("studioPlugin.port", Number(value));
 	}
 }
 
@@ -252,20 +314,21 @@ function getMenuEntries(context: vscode.ExtensionContext): MenuEntry[] {
 			id: "install",
 			label: "$(plug) Install Roblox Studio Plugin",
 			description: "Click to install.",
-			run: () => runServerCommand("lunaut.server.installStudioPlugin"),
+			run: () => installStudioPlugin(context),
+			slow: "installing the Roblox Studio plugin",
 		},
 		{ label: "Studio", kind: vscode.QuickPickItemKind.Separator },
 		{
 			id: "sync",
 			label: studio ? "$(broadcast) Studio sync is on" : "$(circle-slash) Studio sync is off",
 			description: studio ? `Listening on port ${port}. Click to stop.` : `Click to listen for the plugin on port ${port}.`,
-			run: () => config.update("studioPlugin.enabled", !studio, vscode.ConfigurationTarget.Global),
+			run: () => updateSetting("studioPlugin.enabled", !studio),
 		},
 		{ id: "port", label: "$(gear) Change Port", description: `Port ${port}`, run: () => changePort(), modal: true },
 		{ label: "Server", kind: vscode.QuickPickItemKind.Separator },
-		{ id: "restart", label: "$(debug-restart) Restart Server", run: () => vscode.commands.executeCommand("lunaut.restart") },
-		{ id: "reload", label: "$(refresh) Reload Definitions and FFlags", run: () => runServerCommand("lunaut.server.reloadWorkspace") },
-		{ id: "sourcemap", label: "$(sync) Regenerate Rojo Sourcemap", run: () => vscode.commands.executeCommand("lunaut.regenerateSourcemap") },
+		{ id: "restart", label: "$(debug-restart) Restart Server", run: () => vscode.commands.executeCommand("lunaut.restart"), slow: "restarting the server" },
+		{ id: "reload", label: "$(refresh) Reload Definitions and FFlags", run: () => runServerCommand("lunaut.server.reloadWorkspace"), slow: "reloading definitions and FFlags, big projects take a few seconds" },
+		{ id: "sourcemap", label: "$(sync) Regenerate Rojo Sourcemap", run: () => vscode.commands.executeCommand("lunaut.regenerateSourcemap"), slow: "regenerating the Rojo sourcemap" },
 		{ id: "status", label: "$(info) Show Status", run: () => vscode.commands.executeCommand("lunaut.showStatus") },
 		{ id: "fflags", label: "$(symbol-constant) Show FFlags", run: () => vscode.commands.executeCommand("lunaut.showFFlags"), modal: true },
 		{ id: "definitions", label: "$(file-code) Show Loaded Definitions", run: () => vscode.commands.executeCommand("lunaut.showDefinitions") },
@@ -310,7 +373,15 @@ async function openMenu(context: vscode.ExtensionContext, activeId?: string): Pr
 		pick.busy = true;
 
 		try {
-			await entry.run?.();
+			if (entry.slow) {
+				await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `Lunaut: ${entry.slow}` }, async () => {
+					await entry.run?.();
+				});
+			} else {
+				await entry.run?.();
+			}
+		} catch (error) {
+			vscode.window.showErrorMessage(`Lunaut: ${error}`);
 		} finally {
 			pick.busy = false;
 			refresh(entry.id);
@@ -334,7 +405,9 @@ async function showJson(title: string, method: string, params: object = {}): Pro
 	output?.appendLine(`${title} opened`);
 }
 
-export async function activate(context: vscode.ExtensionContext): Promise<{ getClient: () => LanguageClient | undefined }> {
+export async function activate(
+	context: vscode.ExtensionContext,
+): Promise<{ getClient: () => LanguageClient | undefined; getMenuEntries: () => MenuEntry[] }> {
 	output = vscode.window.createOutputChannel("Lunaut");
 	context.subscriptions.push(output);
 
@@ -362,7 +435,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ getC
 		}),
 		vscode.commands.registerCommand("lunaut.regenerateSourcemap", () => regenerateSourcemap()),
 		vscode.commands.registerCommand("lunaut.openMenu", () => openMenu(context)),
-		vscode.commands.registerCommand("lunaut.installStudioPlugin", () => runServerCommand("lunaut.server.installStudioPlugin")),
+		vscode.commands.registerCommand("lunaut.installStudioPlugin", () => installStudioPlugin(context)),
 		vscode.commands.registerCommand("lunaut.showReferences", (uri: string, position: { line: number; character: number }, locations: { uri: string; range: object }[]) => {
 			const converter = client?.protocol2CodeConverter;
 
@@ -414,7 +487,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ getC
 		vscode.window.showErrorMessage(`Lunaut failed to start: ${error}. Set "lunaut.path" to the server executable.`);
 	}
 
-	return { getClient: () => client };
+	return { getClient: () => client, getMenuEntries: () => getMenuEntries(context) };
 }
 
 export async function deactivate(): Promise<void> {

@@ -356,6 +356,61 @@ export async function run(): Promise<void> {
 	);
 
 	await check(
+		"runs every menu entry",
+		async () => {
+			type Entry = { id?: string; label: string; run?: () => unknown; modal?: boolean; exit?: boolean };
+			const api = extension!.exports as { getMenuEntries: () => Entry[] };
+			const skipped = new Set(["docs", "issue", "restart", "install"]);
+			const failures: string[] = [];
+
+			for (const entry of api.getMenuEntries()) {
+				if (!entry.run || entry.modal || entry.exit || (entry.id && skipped.has(entry.id))) {
+					continue;
+				}
+
+				const before = vscode.window.activeTextEditor?.document.uri.toString();
+
+				try {
+					await Promise.race([
+						Promise.resolve(entry.run()),
+						new Promise((_, reject) => setTimeout(() => reject(new Error("timed out")), 20000)),
+					]);
+				} catch (error) {
+					failures.push(`${entry.id}: ${error}`);
+					continue;
+				}
+
+				if (entry.id === "status" || entry.id === "definitions" || entry.id === "version") {
+					const opened = await waitFor(
+						() => {
+							const editor = vscode.window.activeTextEditor;
+							return editor && editor.document.uri.toString() !== before && editor.document.languageId === "json" ? editor : undefined;
+						},
+						10000,
+					).catch(() => undefined);
+
+					if (!opened) {
+						failures.push(`${entry.id}: no JSON document opened`);
+					}
+				}
+			}
+
+			const sync = api.getMenuEntries().find((entry) => entry.id === "sync");
+			const before = vscode.workspace.getConfiguration("lunaut").get<boolean>("studioPlugin.enabled", false);
+			await sync?.run?.();
+			const after = vscode.workspace.getConfiguration("lunaut").get<boolean>("studioPlugin.enabled", false);
+
+			if (after === before) {
+				failures.push("sync: setting did not change");
+			}
+
+			await vscode.workspace.getConfiguration("lunaut").update("studioPlugin.enabled", undefined, vscode.ConfigurationTarget.Global);
+			assert.deepStrictEqual(failures, []);
+		},
+		results,
+	);
+
+	await check(
 		"runs the status command",
 		async () => {
 			await vscode.commands.executeCommand("lunaut.showStatus");
