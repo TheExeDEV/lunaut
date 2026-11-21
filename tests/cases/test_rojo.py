@@ -1,3 +1,6 @@
+import pathlib
+import shutil
+import tempfile
 import unittest
 
 from lsp_client import FIXTURES, LspClient, position_of, run_cli
@@ -73,6 +76,22 @@ class RojoTests(unittest.TestCase):
 		result = run_cli("analyze", *files, "--flag:LuauSolverV2=true", cwd=FIXTURES / "rojo")
 		self.assertIn("2 files, 1 errors", result.stdout, result.stdout + result.stderr)
 		self.assertIn("Invalid class name 'Nope'", result.stdout)
+
+	def test_user_definitions_see_roblox_enums(self):
+		folder = tempfile.mkdtemp()
+		self.addCleanup(shutil.rmtree, folder, True)
+		definition = pathlib.Path(folder, "enums.d.luau")
+		definition.write_text(
+			"declare function pick_material(material: Enum.Material | string): Enum.Material\n",
+			encoding="utf-8",
+		)
+		user = pathlib.Path(folder, "user.luau")
+		user.write_text("--!strict\nlocal result: Enum.Material = pick_material(Enum.Material.Wood)\nreturn result\n", encoding="utf-8")
+
+		for flags in ([], ["--flag:LuauSolverV2=true"]):
+			result = run_cli("analyze", f"--definition=@enums={definition}", *flags, str(user), cwd=FIXTURES / "rojo")
+			self.assertNotIn("Unknown type", result.stdout + result.stderr)
+			self.assertIn("0 errors", result.stdout, result.stdout + result.stderr)
 
 	def test_references_through_sourcemap(self):
 		line, character = position_of(self.text, "Util.double", 6)

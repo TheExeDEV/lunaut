@@ -636,6 +636,7 @@ class robloxmagic
 public:
 	static std::optional<json> get_metadata(const std::string& source);
 	static void apply(Luau::GlobalTypes& globals, const json& metadata);
+	static void apply_enums(Luau::GlobalTypes& globals);
 };
 
 class robloxtypes

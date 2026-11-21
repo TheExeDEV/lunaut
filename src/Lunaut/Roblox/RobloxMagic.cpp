@@ -141,6 +141,11 @@ void robloxmagic::apply(Luau::GlobalTypes& globals, const json& metadata)
 	priv::apply_enums(globals);
 }
 
+void robloxmagic::apply_enums(Luau::GlobalTypes& globals)
+{
+	priv::apply_enums(globals);
+}
+
 namespace
 {
 namespace priv
@@ -511,14 +516,14 @@ void apply_constructors(Luau::GlobalTypes& globals, const json& metadata)
 
 void apply_enums(Luau::GlobalTypes& globals)
 {
-	std::unordered_map<Luau::Name, Luau::TypeFun> enums;
+	std::unordered_map<Luau::Name, Luau::TypeFun>& enums = globals.globalScope->importedTypeBindings["Enum"];
 	std::unordered_map<Luau::Name, Luau::TypeFun>& exported = globals.globalScope->exportedTypeBindings;
 
 	for (auto it = exported.begin(); it != exported.end();)
 	{
 		Luau::ExternType* extern_class = Luau::getMutable<Luau::ExternType>(it->second.type);
 
-		if (extern_class == nullptr || !stdx::starts_with(extern_class->name, "Enum"))
+		if (extern_class == nullptr || !stdx::starts_with(extern_class->name, "Enum") || stdx::starts_with(extern_class->name, "Enum."))
 		{
 			++it;
 			continue;
@@ -546,8 +551,6 @@ void apply_enums(Luau::GlobalTypes& globals)
 		extern_class->name = "Enum." + name;
 		it = exported.erase(it);
 	}
-
-	globals.globalScope->importedTypeBindings["Enum"] = enums;
 }
 
 void apply_library_documentation(Luau::GlobalTypes& globals, const std::string& library)

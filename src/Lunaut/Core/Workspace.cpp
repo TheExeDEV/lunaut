@@ -683,6 +683,16 @@ void workspace::load_definitions()
 			owner.send_window_message(enumitem_message_type::Error, "Failed to load definitions file " + info.path + ": " + loaded.message);
 		}
 
+		if (roblox && result.success && (loaded.source == enumitem_definition_source::Roblox || loaded.name == "@roblox"))
+		{
+			robloxmagic::apply_enums(frontend.globals);
+
+			if (!FFlag::LuauSolverV2)
+			{
+				robloxmagic::apply_enums(frontend.globalsForAutocomplete);
+			}
+		}
+
 		definition_module_paths[loaded.name] = info.path;
 		definition_sources.emplace(loaded.name, std::move(result.sourceModule));
 

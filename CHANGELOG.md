@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Your own `.d.luau` files can use every Roblox enum type, such as `Enum.KeyCode`, `Enum.UserInputState` or `Enum.ContextActionResult`; before, a definition file loaded after the Roblox types failed with `Unknown type 'Enum.KeyCode'`
+
+### Changed
+
+- The daily Luau update commits the new Luau version straight to `main` once the build and tests pass, instead of leaving an `auto/update-luau` branch for a pull request
+
 ## [0.1.5] - 2026-11-21
 
 ### Fixed
