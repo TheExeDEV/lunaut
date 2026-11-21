@@ -12,6 +12,8 @@
 #include "Luau/TypeUtils.h"
 
 #include <algorithm>
+#include <cctype>
+#include <set>
 
 namespace lunaut
 {
@@ -44,12 +46,9 @@ std::optional<json> get_string_range(const textdocument& document, const std::ve
 std::pair<std::string, std::string> get_call_details(const Luau::AutocompleteEntry& entry, const Luau::FunctionType& function);
 std::optional<Luau::ModuleName> get_type_module(Luau::TypeId type);
 std::optional<Luau::ModuleName> get_property_module(const Luau::Module& module, const std::vector<Luau::AstNode*>& ancestry);
-std::optional<json> get_attribute_items(const textdocument& document, Luau::Position position);
-
-const std::vector<std::pair<std::string_view, std::string_view>> relevant_attributes = {
-	{"native", "Compile this function to native code"},
-	{"deprecated", "Warn about every use of this function"},
-};
+std::optional<json> get_member_range(const textdocument& document, Luau::Position position);
+bool is_plain_name(const std::string& name);
+std::string quote_name(const std::string& name);
 
 }
 }
@@ -69,11 +68,6 @@ json workspace::get_completion(const json& params)
 	{
 		invoke_end_completion(params);
 		return {{"isIncomplete", false}, {"items", items}};
-	}
-
-	if (std::optional<json> attributes = priv::get_attribute_items(*document, document->to_luau_position(params["position"])))
-	{
-		return {{"isIncomplete", false}, {"items", *attributes}};
 	}
 
 	Luau::Position position = document->to_luau_position(params["position"]);
@@ -110,6 +104,9 @@ json workspace::get_completion(const json& params)
 			property_module = priv::get_property_module(*module, completion.ancestry);
 		}
 	}
+
+	std::optional<json> member_range =
+		completion.context == Luau::AutocompleteContext::Property ? priv::get_member_range(*document, position) : std::nullopt;
 
 	for (const auto& [label, entry] : completion.entryMap)
 	{
@@ -176,7 +173,13 @@ json workspace::get_completion(const json& params)
 			}
 		}
 
-		if (entry.kind == Luau::AutocompleteEntryKind::RequirePath && string_range)
+		if (member_range && entry.kind == Luau::AutocompleteEntryKind::Property && !priv::is_plain_name(label))
+		{
+			item["textEdit"] = {{"range", *member_range}, {"newText", "[" + priv::quote_name(label) + "]"}};
+			item["filterText"] = "." + label;
+			item.erase("insertText");
+		}
+		else if (entry.kind == Luau::AutocompleteEntryKind::RequirePath && string_range)
 		{
 			item["textEdit"] = {{"range", *string_range}, {"newText", entry.insertText.value_or(label)}};
 			item["filterText"] = entry.insertText.value_or(label);
@@ -234,7 +237,7 @@ enumitem_completion_kind get_kind(const Luau::AutocompleteEntry& entry)
 	return found == relevant_kinds.end() ? enumitem_completion_kind::Text : found->second;
 }
 
-std::optional<json> get_attribute_items(const textdocument& document, Luau::Position position)
+std::optional<json> get_member_range(const textdocument& document, Luau::Position position)
 {
 	std::vector<std::string> lines = stdx::split(document.get_text(), '\n');
 
@@ -243,63 +246,73 @@ std::optional<json> get_attribute_items(const textdocument& document, Luau::Posi
 		return std::nullopt;
 	}
 
-	std::string before = lines[position.line].substr(0, std::min<size_t>(position.column, lines[position.line].size()));
-	size_t at = before.rfind('@');
+	const std::string& line = lines[position.line];
+	size_t end = std::min<size_t>(position.column, line.size());
+	size_t start = end;
 
-	if (at == std::string::npos || before.find("--") < at)
+	while (start > 0 && (std::isalnum(static_cast<unsigned char>(line[start - 1])) || line[start - 1] == '_'))
+	{
+		--start;
+	}
+
+	if (start == 0 || line[start - 1] != '.')
 	{
 		return std::nullopt;
 	}
 
-	size_t quotes = std::count(before.begin(), before.begin() + static_cast<std::ptrdiff_t>(at), '"') +
-		std::count(before.begin(), before.begin() + static_cast<std::ptrdiff_t>(at), '\'') +
-		std::count(before.begin(), before.begin() + static_cast<std::ptrdiff_t>(at), '`');
+	Luau::Position from{position.line, static_cast<unsigned int>(start - 1)};
+	Luau::Position to{position.line, static_cast<unsigned int>(end)};
+	return json{{"start", document.to_lsp_position(from)}, {"end", document.to_lsp_position(to)}};
+}
 
-	if (quotes % 2 != 0)
+bool is_plain_name(const std::string& name)
+{
+	static const std::set<std::string_view> keywords = {
+		"and",
+		"break",
+		"do",
+		"else",
+		"elseif",
+		"end",
+		"false",
+		"for",
+		"function",
+		"if",
+		"in",
+		"local",
+		"nil",
+		"not",
+		"or",
+		"repeat",
+		"return",
+		"then",
+		"true",
+		"until",
+		"while"};
+
+	if (name.empty() || std::isdigit(static_cast<unsigned char>(name[0])) || keywords.count(name) != 0)
 	{
-		return std::nullopt;
+		return false;
 	}
 
-	std::string rest = before.substr(at + 1);
-	bool bracket = !rest.empty() && rest[0] == '[';
-	std::string word = bracket ? rest.substr(rest.find_last_of("[,") + 1) : rest;
-	word = stdx::trim(word);
+	return std::all_of(name.begin(), name.end(), [](char c) { return std::isalnum(static_cast<unsigned char>(c)) || c == '_'; });
+}
 
-	if (bracket && rest.find(']') != std::string::npos)
+std::string quote_name(const std::string& name)
+{
+	std::string quoted = "\"";
+
+	for (char c : name)
 	{
-		return std::nullopt;
+		if (c == '"' || c == '\\')
+		{
+			quoted += '\\';
+		}
+
+		quoted += c;
 	}
 
-	if (!std::all_of(word.begin(), word.end(), [](char c) { return std::isalnum(static_cast<unsigned char>(c)) || c == '_'; }))
-	{
-		return std::nullopt;
-	}
-
-	json items = json::array();
-
-	for (const auto& [name, detail] : relevant_attributes)
-	{
-		items.push_back(
-			{{"label", name},
-			 {"kind", static_cast<int>(enumitem_completion_kind::Keyword)},
-			 {"detail", detail},
-			 {"sortText", "0" + std::string(name)}});
-	}
-
-	if (bracket)
-	{
-		items.push_back({
-			{"label", "deprecated { use, reason }"},
-			{"kind", static_cast<int>(enumitem_completion_kind::Snippet)},
-			{"detail", "Warn about every use and say what to use instead"},
-			{"filterText", "deprecated"},
-			{"sortText", "1deprecated"},
-			{"insertText", "deprecated { use = \"$1\", reason = \"$2\" }"},
-			{"insertTextFormat", 2},
-		});
-	}
-
-	return items;
+	return quoted + "\"";
 }
 
 std::string get_sort_text(const std::string& label, const Luau::AutocompleteEntry& entry)

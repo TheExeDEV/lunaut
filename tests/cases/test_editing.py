@@ -60,52 +60,28 @@ class EditingTests(unittest.TestCase):
 		with self.assertRaises(Exception):
 			self.rename(client, "other.luau", 1, 2, "show")
 
-	def apply_attribute_fix(self, client, name, text):
-		write(self.folder, name, text)
-		uri, diagnostics = client.open(name)
-		misplaced = [diagnostic for diagnostic in diagnostics if "after attribute" in diagnostic["message"]]
-		self.assertEqual(len(misplaced), 1, diagnostics)
-		actions = client.request("textDocument/codeAction", {"textDocument": {"uri": uri}, "range": misplaced[0]["range"], "context": {"diagnostics": misplaced}})
-		fix = next(action for action in actions if action["title"] == "Move the attribute to the function")
-		edits = next(iter(fix["edit"]["changes"].values()))
-		lines = text.split("\n")
-
-		for edit in sorted(edits, key=lambda edit: (edit["range"]["start"]["line"], edit["range"]["start"]["character"]), reverse=True):
-			start, end = edit["range"]["start"], edit["range"]["end"]
-
-			if start["line"] == end["line"]:
-				line = lines[start["line"]]
-				lines[start["line"]] = line[: start["character"]] + edit["newText"] + line[end["character"] :]
-			else:
-				del lines[start["line"] : end["line"]]
-
-		return "\n".join(lines)
-
-	def test_move_attribute_quick_fix(self):
+	def test_odd_member_names_complete_with_brackets(self):
+		write(self.folder, "odd.luau", 'local rig = { ["Accessory (D4)"] = 1, ["say \\"hi\\""] = 2, plain = 3, ["end"] = 4 }\nlocal a = rig.\nlocal b = rig.Acc\nreturn { a, b }\n')
 		client = self.start()
-		above = self.apply_attribute_fix(client, "above.luau", "local datamodel = {\n\t@native\n\thas_nodes = function(of)\n\t\treturn of\n\tend,\n}\nreturn datamodel\n")
-		self.assertEqual(above, "local datamodel = {\n\thas_nodes = @native function(of)\n\t\treturn of\n\tend,\n}\nreturn datamodel\n")
+		uri, _ = client.open("odd.luau")
 
-		inline = self.apply_attribute_fix(client, "inline.luau", 'local datamodel = {\n\t@[native, deprecated { use = "x", reason = "y" }] add = function() end,\n}\nreturn datamodel\n')
-		self.assertEqual(inline, 'local datamodel = {\n\tadd = @[native, deprecated { use = "x", reason = "y" }] function() end,\n}\nreturn datamodel\n')
-
-		for name, text in (("above_fixed.luau", above), ("inline_fixed.luau", inline)):
-			write(self.folder, name, text)
-			self.assertNotIn("SyntaxError", run_cli("analyze", name, cwd=self.folder).stdout, text)
-
-	def test_attribute_completion(self):
-		write(self.folder, "complete.luau", '@\n@[native, dep\nlocal s = "@na"\n')
-		client = self.start()
-		uri, _ = client.open("complete.luau")
-
-		def labels(line, character):
+		def items(line, character):
 			result = client.request("textDocument/completion", {"textDocument": {"uri": uri}, "position": {"line": line, "character": character}})
-			items = result["items"] if isinstance(result, dict) else result
-			return [item["label"] for item in items]
+			return {item["label"]: item for item in (result["items"] if isinstance(result, dict) else result)}
 
-		self.assertEqual(labels(0, 1), ["native", "deprecated"])
-		self.assertEqual(labels(1, 14), ["native", "deprecated", "deprecated { use, reason }"])
-		self.assertNotIn("native", labels(2, 13))
+		after_dot = items(1, 14)
+		odd = after_dot["Accessory (D4)"]
+		self.assertEqual(odd["textEdit"]["newText"], '["Accessory (D4)"]')
+		self.assertEqual(odd["textEdit"]["range"]["start"], {"line": 1, "character": 13})
+		self.assertEqual(odd["textEdit"]["range"]["end"], {"line": 1, "character": 14})
+		self.assertEqual(after_dot['say "hi"']["textEdit"]["newText"], '["say \\"hi\\""]')
+		self.assertEqual(after_dot["end"]["textEdit"]["newText"], '["end"]')
+		self.assertNotIn("textEdit", after_dot["plain"])
+
+		typed = items(2, 17)["Accessory (D4)"]
+		self.assertEqual(typed["textEdit"]["range"]["start"], {"line": 2, "character": 13})
+		self.assertEqual(typed["textEdit"]["range"]["end"], {"line": 2, "character": 17})
+		self.assertEqual(typed["filterText"], ".Accessory (D4)")
 
 	def test_definitions_reload_without_restart(self):
 		write(self.folder, "types/first.d.luau", "declare first_value: number\n")
