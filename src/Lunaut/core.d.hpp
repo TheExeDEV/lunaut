@@ -282,6 +282,7 @@ struct featuresinfo
 	bool colors = true;
 	bool autocomplete_end = true;
 	bool convert_quotes = true;
+	bool close_interpolation = true;
 	bool formatting = true;
 	bool code_lens = true;
 	std::string stylua = "stylua";

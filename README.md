@@ -286,6 +286,7 @@ All settings live in VS Code settings under `lunaut.*` (luau-lsp settings work t
 | `lunaut.codeLens.references` | `true` | `N references` above every function |
 | `lunaut.completion.autocompleteEnd` | `true` | insert `end` or `until` after Enter on a block opener, adding a missing `then` or `do` |
 | `lunaut.format.convertQuotes` | `true` | typing `{` in a `"string"` turns it into an interpolated string |
+| `lunaut.format.closeInterpolation` | `true` | with `convertQuotes`, also add the closing `}` and keep the cursor inside `{}` |
 | `lunaut.format.enabled` | `true` | format documents and selections with StyLua |
 | `lunaut.format.styluaPath` | `stylua` | StyLua executable |
 | `lunaut.diagnostics.workspace` | `false` | diagnostics for every file in the workspace, not only open ones |
@@ -541,7 +542,7 @@ Without a diagnostic:
 
 ### Typing
 
-Pressing Enter after `function ...`, `if ... then`, `for ... do`, `while ... do`, `do` or `repeat` adds the closing `end` or `until` when the block is still open, and adds a missing `then` or `do` (`lunaut.completion.autocompleteEnd`). The same happens on Enter after the last line of a block that has no `end` yet. Text after the cursor moves behind the `end`, so `foo(function()` + Enter gives `end)`, and every block left open gets its own `end`. It works through on-type formatting, in VS Code, Zed and every other editor that supports it. Typing `{` inside a `"string"` or `'string'` turns it into `` `string {` `` (`lunaut.format.convertQuotes`); the extension turns on `editor.formatOnType` for Luau so this works out of the box.
+Pressing Enter after `function ...`, `if ... then`, `for ... do`, `while ... do`, `do` or `repeat` adds the closing `end` or `until` when the block is still open, and adds a missing `then` or `do` (`lunaut.completion.autocompleteEnd`). The same happens on Enter after the last line of a block that has no `end` yet. Text after the cursor moves behind the `end`, so `foo(function()` + Enter gives `end)`, and every block left open gets its own `end`. It works through on-type formatting, in VS Code, Zed and every other editor that supports it. Typing `{` inside a `"string"` or `'string'` turns it into `` `string {}` `` with the cursor between the braces (`lunaut.format.convertQuotes`, and `lunaut.format.closeInterpolation` for the `}`); the extension turns on `editor.formatOnType` for Luau so this works out of the box.
 
 ### Formatting
 

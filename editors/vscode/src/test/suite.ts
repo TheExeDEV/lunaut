@@ -313,6 +313,26 @@ export async function run(): Promise<void> {
 	);
 
 	await check(
+		"turns a string into an interpolated one with the cursor inside the braces",
+		async () => {
+			const document = await vscode.workspace.openTextDocument({ language: "luau", content: 'local s = "hello "' });
+			const editor = await vscode.window.showTextDocument(document);
+			const inside = new vscode.Position(0, 'local s = "hello '.length);
+			editor.selection = new vscode.Selection(inside, inside);
+			await waitFor(async () => {
+				const symbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>("vscode.executeDocumentSymbolProvider", document.uri);
+				return symbols && symbols.length > 0 ? symbols : undefined;
+			});
+			await vscode.commands.executeCommand("type", { text: "{" });
+			await waitFor(() => (document.getText().includes("`") ? true : undefined), 20000).catch(() => assert.fail(JSON.stringify(document.getText())));
+			await new Promise((resolve) => setTimeout(resolve, 300));
+			assert.strictEqual(document.getText(), "local s = `hello {}`");
+			assert.strictEqual(editor.selection.active.character, "local s = `hello {".length);
+		},
+		results,
+	);
+
+	await check(
 		"lists symbols of a half-typed file",
 		async () => {
 			const document = await vscode.workspace.openTextDocument({ language: "luau", content: "local first = 1\nconst" });

@@ -60,6 +60,7 @@ const std::unordered_map<std::string_view, std::string_view> relevant_vscode_key
 	{"lunaut.colors.enabled", "/features/colors"},
 	{"lunaut.completion.autocompleteEnd", "/features/autocomplete_end"},
 	{"lunaut.format.convertQuotes", "/features/convert_quotes"},
+	{"lunaut.format.closeInterpolation", "/features/close_interpolation"},
 	{"lunaut.format.enabled", "/features/formatting"},
 	{"lunaut.format.styluaPath", "/features/stylua"},
 	{"lunaut.codeLens.references", "/features/code_lens"},
@@ -230,6 +231,7 @@ settingsinfo settingsinfo::from_json(const json& data, const settingsinfo& base)
 		priv::read(features, "colors", info.features.colors);
 		priv::read(features, "autocomplete_end", info.features.autocomplete_end);
 		priv::read(features, "convert_quotes", info.features.convert_quotes);
+		priv::read(features, "close_interpolation", info.features.close_interpolation);
 		priv::read(features, "formatting", info.features.formatting);
 		priv::read(features, "code_lens", info.features.code_lens);
 		priv::read(features, "stylua", info.features.stylua);
@@ -447,6 +449,7 @@ json settingsinfo::to_json() const
 			 {"colors", features.colors},
 			 {"autocomplete_end", features.autocomplete_end},
 			 {"convert_quotes", features.convert_quotes},
+			 {"close_interpolation", features.close_interpolation},
 			 {"formatting", features.formatting},
 			 {"code_lens", features.code_lens},
 			 {"stylua", features.stylua},

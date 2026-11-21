@@ -111,7 +111,7 @@ async function startClient(context: vscode.ExtensionContext): Promise<void> {
 			provideOnTypeFormattingEdits: async (document, position, character, options, token, next) => {
 				const edits = await next(document, position, character, options, token);
 
-				if (character === "\n" && edits && edits.length > 0) {
+				if (edits && edits.length > 0) {
 					const listener = vscode.workspace.onDidChangeTextDocument((event) => {
 						if (event.document !== document) {
 							return;

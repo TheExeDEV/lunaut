@@ -1649,6 +1649,11 @@
           "default": true,
           "markdownDescription": "Typing `{` inside a `\"string\"` turns it into an interpolated `` `string` ``. Needs `editor.formatOnType`, which the extension turns on for Luau."
         },
+        "lunaut.format.closeInterpolation": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "When `lunaut.format.convertQuotes` turns a string into `` `string {` ``, also add the closing `}` and keep the cursor between the braces: `` `string {|}` ``."
+        },
         "lunaut.format.enabled": {
           "type": "boolean",
           "default": true,
