@@ -214,44 +214,112 @@ async function runServerCommand(command: string): Promise<void> {
 	await client.sendRequest("workspace/executeCommand", { command, arguments: [] });
 }
 
-type MenuEntry = vscode.QuickPickItem & { run?: () => unknown };
+type MenuEntry = vscode.QuickPickItem & { id?: string; run?: () => unknown; modal?: boolean; exit?: boolean };
 
-async function openMenu(context: vscode.ExtensionContext): Promise<void> {
+async function changePort(): Promise<void> {
+	const config = vscode.workspace.getConfiguration("lunaut");
+	const current = config.get<number>("studioPlugin.port", 3667);
+	const value = await vscode.window.showInputBox({
+		title: "Lunaut: Studio plugin port",
+		prompt: "The port the Studio plugin sends to. Use the same number in Plugins > Lunaut > Port.",
+		value: String(current),
+		validateInput: (text) => {
+			const port = Number(text);
+			return Number.isInteger(port) && port >= 1 && port <= 65535 ? undefined : "A whole number from 1 to 65535";
+		},
+	});
+
+	if (value !== undefined && Number(value) !== current) {
+		await config.update("studioPlugin.port", Number(value), vscode.ConfigurationTarget.Global);
+	}
+}
+
+function getMenuEntries(context: vscode.ExtensionContext): MenuEntry[] {
 	const version = client?.initializeResult?.serverInfo?.version ?? context.extension.packageJSON.version;
-	const studio = vscode.workspace.getConfiguration("lunaut").get<boolean>("studioPlugin.enabled", false);
-	const port = vscode.workspace.getConfiguration("lunaut").get<number>("studioPlugin.port", 3667);
+	const config = vscode.workspace.getConfiguration("lunaut");
+	const studio = config.get<boolean>("studioPlugin.enabled", false);
+	const port = config.get<number>("studioPlugin.port", 3667);
 	const repository = "https://github.com/TheExeDEV/lunaut";
 
-	const entries: MenuEntry[] = [
+	return [
 		{
+			id: "version",
 			label: `$(zap) Lunaut v${version}`,
 			detail: client ? "The server is running. Click for its status." : "The server is not running. Click to start it.",
 			run: () => vscode.commands.executeCommand(client ? "lunaut.showStatus" : "lunaut.restart"),
 		},
 		{
+			id: "install",
 			label: "$(plug) Install Roblox Studio Plugin",
 			description: "Click to install.",
 			run: () => runServerCommand("lunaut.server.installStudioPlugin"),
 		},
+		{ label: "Studio", kind: vscode.QuickPickItemKind.Separator },
 		{
+			id: "sync",
 			label: studio ? "$(broadcast) Studio sync is on" : "$(circle-slash) Studio sync is off",
 			description: studio ? `Listening on port ${port}. Click to stop.` : `Click to listen for the plugin on port ${port}.`,
-			run: () => vscode.workspace.getConfiguration("lunaut").update("studioPlugin.enabled", !studio, vscode.ConfigurationTarget.Global),
+			run: () => config.update("studioPlugin.enabled", !studio, vscode.ConfigurationTarget.Global),
 		},
+		{ id: "port", label: "$(gear) Change Port", description: `Port ${port}`, run: () => changePort(), modal: true },
 		{ label: "Server", kind: vscode.QuickPickItemKind.Separator },
-		{ label: "$(debug-restart) Restart Server", run: () => vscode.commands.executeCommand("lunaut.restart") },
-		{ label: "$(refresh) Reload Definitions and FFlags", run: () => runServerCommand("lunaut.server.reloadWorkspace") },
-		{ label: "$(sync) Regenerate Rojo Sourcemap", run: () => vscode.commands.executeCommand("lunaut.regenerateSourcemap") },
-		{ label: "$(info) Show Status", run: () => vscode.commands.executeCommand("lunaut.showStatus") },
-		{ label: "$(symbol-constant) Show FFlags", run: () => vscode.commands.executeCommand("lunaut.showFFlags") },
-		{ label: "$(file-code) Show Loaded Definitions", run: () => vscode.commands.executeCommand("lunaut.showDefinitions") },
+		{ id: "restart", label: "$(debug-restart) Restart Server", run: () => vscode.commands.executeCommand("lunaut.restart") },
+		{ id: "reload", label: "$(refresh) Reload Definitions and FFlags", run: () => runServerCommand("lunaut.server.reloadWorkspace") },
+		{ id: "sourcemap", label: "$(sync) Regenerate Rojo Sourcemap", run: () => vscode.commands.executeCommand("lunaut.regenerateSourcemap") },
+		{ id: "status", label: "$(info) Show Status", run: () => vscode.commands.executeCommand("lunaut.showStatus") },
+		{ id: "fflags", label: "$(symbol-constant) Show FFlags", run: () => vscode.commands.executeCommand("lunaut.showFFlags"), modal: true },
+		{ id: "definitions", label: "$(file-code) Show Loaded Definitions", run: () => vscode.commands.executeCommand("lunaut.showDefinitions") },
 		{ label: "Help", kind: vscode.QuickPickItemKind.Separator },
-		{ label: "$(book) Open Lunaut Docs", run: () => vscode.env.openExternal(vscode.Uri.parse(`${repository}#readme`)) },
-		{ label: "$(github) Report an Issue", description: "Click to open a new issue on GitHub", run: () => vscode.env.openExternal(vscode.Uri.parse(`${repository}/issues/new`)) },
+		{ id: "docs", label: "$(book) Open Lunaut Docs", run: () => vscode.env.openExternal(vscode.Uri.parse(`${repository}#readme`)) },
+		{ id: "issue", label: "$(github) Report an Issue", description: "Click to open a new issue on GitHub", run: () => vscode.env.openExternal(vscode.Uri.parse(`${repository}/issues/new`)) },
+		{ label: "", kind: vscode.QuickPickItemKind.Separator },
+		{ id: "exit", label: "$(close) Exit", description: "Or press Esc", exit: true },
 	];
+}
 
-	const picked = await vscode.window.showQuickPick(entries, { title: "Lunaut", matchOnDescription: true });
-	await picked?.run?.();
+async function openMenu(context: vscode.ExtensionContext, activeId?: string): Promise<void> {
+	const pick = vscode.window.createQuickPick<MenuEntry>();
+	pick.title = "Lunaut";
+	pick.ignoreFocusOut = true;
+	pick.matchOnDescription = true;
+
+	const refresh = (id?: string) => {
+		pick.items = getMenuEntries(context);
+		const active = pick.items.find((item) => item.id === id);
+
+		if (active) {
+			pick.activeItems = [active];
+		}
+	};
+
+	pick.onDidAccept(async () => {
+		const entry = pick.activeItems[0];
+
+		if (!entry || entry.exit) {
+			pick.hide();
+			return;
+		}
+
+		if (entry.modal) {
+			pick.hide();
+			await entry.run?.();
+			await openMenu(context, entry.id);
+			return;
+		}
+
+		pick.busy = true;
+
+		try {
+			await entry.run?.();
+		} finally {
+			pick.busy = false;
+			refresh(entry.id);
+		}
+	});
+
+	pick.onDidHide(() => pick.dispose());
+	refresh(activeId);
+	pick.show();
 }
 
 async function showJson(title: string, method: string, params: object = {}): Promise<void> {

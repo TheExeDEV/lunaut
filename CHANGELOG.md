@@ -4,11 +4,11 @@
 
 ### Added
 
-- The Lunaut plugin for Roblox Studio (`LunautPlugin.rbxm` in every release): Sync, Send, Clear and Port buttons send the instance tree of the open place to the editor, so instances that live only in Studio get types and completion. The installer can put it into Studio's plugin folder
+- The Lunaut plugin for Roblox Studio (`LunautPlugin.rbxm` in every release): one **Lunaut** toolbar button opens a window with Start/Stop Sync, Send Once, Clear Editor, the port and Sync on Start, Silent Mode and Open on Start switches; it sends the instance tree of the open place to the editor, so instances that live only in Studio get types and completion. The installer can put it into Studio's plugin folder
 - Rename and find references for type aliases, across modules through `require` (`types.Point`), and for globals across the workspace; built-in globals such as `print` are left alone
 - A quick fix moves a misplaced attribute to its function: `@native` above `has_nodes = function()` becomes `has_nodes = @native function()`
 - Completion for attributes after `@` and inside `@[ ... ]`: `native`, `deprecated` and a `deprecated { use, reason }` snippet
-- A **Lunaut** button in the VS Code status bar opens a menu like Rojo's: server version, Install Roblox Studio Plugin, Studio sync on or off, restart, reload, regenerate sourcemap, status, FFlags, definitions, docs and issues
+- A **Lunaut** button in the VS Code status bar opens a menu like Rojo's: server version, Install Roblox Studio Plugin, Studio sync on or off, Change Port, restart, reload, regenerate sourcemap, status, FFlags, definitions, docs and issues. It stays open while you use it and closes with Exit or Esc
 - Zed and other editors get **Lunaut: Reload Workspace** and **Lunaut: Install Roblox Studio Plugin** in the code actions menu (`Ctrl+.`); the server downloads the plugin of its own version into Studio's plugin folder
 - Definition files and FFlags reload without a restart: changing `lunaut.definitions`, FFlags or the Roblox security level, or saving a `.d.luau` file, rebuilds the workspace and keeps the open files
 
