@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-11-21
+
 ### Fixed
 
 - Your own `.d.luau` files can use every Roblox enum type, such as `Enum.KeyCode`, `Enum.UserInputState` or `Enum.ContextActionResult`; before, a definition file loaded after the Roblox types failed with `Unknown type 'Enum.KeyCode'`
