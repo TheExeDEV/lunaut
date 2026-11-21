@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-11-21
+
 ### Added
 
 - Typing `{` in a `"string"` now also adds the closing `}` and leaves the cursor between the braces: `` `hello {|}` `` (#7). `lunaut.format.closeInterpolation` turns the `}` off
