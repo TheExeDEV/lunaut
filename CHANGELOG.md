@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-11-21
+
 ### Fixed
 
 - Completing a child whose name is not a plain identifier, such as `Accessory (D4)`, inserts `rig["Accessory (D4)"]` instead of the broken `rig.Accessory (D4)`; quotes in the name are escaped and keywords such as `end` get brackets too
