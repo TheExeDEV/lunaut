@@ -23,7 +23,7 @@ namespace
 namespace priv
 {
 
-Luau::FrontendOptions make_options(bool for_autocomplete, bool lint);
+Luau::FrontendOptions make_options(bool for_autocomplete, bool lint, bool retain = true);
 std::filesystem::path get_base_luaurc(const std::filesystem::path& root, const settingsinfo& settings);
 json make_definition_diagnostics(const textdocument& document, const Luau::LoadDefinitionFileResult& loaded, Luau::FileResolver* resolver);
 void collect_declarations(
@@ -45,6 +45,11 @@ workspace::workspace(client& owner, std::filesystem::path root, settingsinfo set
 {
 	frontend.setLuauSolverMode(FFlag::LuauSolverV2 ? Luau::SolverMode::New : Luau::SolverMode::Old);
 	resolver.set_base_config(priv::get_base_luaurc(this->root, this->settings));
+}
+
+void workspace::set_retain_types(bool retain)
+{
+	retain_types = retain;
 }
 
 void workspace::initialize()
@@ -226,7 +231,7 @@ void workspace::flush_diagnostics()
 		try
 		{
 			frontend.queueModuleCheck(modules);
-			frontend.checkQueuedModules(priv::make_options(false, settings.diagnostics.lint), priv::run_parallel_tasks);
+			frontend.checkQueuedModules(priv::make_options(false, settings.diagnostics.lint, retain_types), priv::run_parallel_tasks);
 		}
 		catch (const std::exception& error)
 		{
@@ -404,6 +409,34 @@ void workspace::apply_watched_changes(const json& changes)
 	publish_workspace_diagnostics();
 }
 
+bool workspace::needs_reload(const settingsinfo& next) const
+{
+	json before = settings.to_json();
+	json after = next.to_json();
+
+	for (std::string_view key : {"definitions", "fflags", "roblox", "platform", "discover_definitions"})
+	{
+		if (before[std::string(key)] != after[std::string(key)])
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+std::vector<textdocument> workspace::get_open_documents() const
+{
+	std::vector<textdocument> open;
+
+	for (const auto& [address, document] : resolver.get_documents())
+	{
+		open.push_back(document);
+	}
+
+	return open;
+}
+
 void workspace::set_settings(settingsinfo next)
 {
 	bool definitions_changed = json(next.to_json()["definitions"]) != json(settings.to_json()["definitions"]) ||
@@ -422,11 +455,6 @@ void workspace::set_settings(settingsinfo next)
 		{
 			frontend.markDirty(module_name);
 		}
-	}
-
-	if (definitions_changed && ready)
-	{
-		owner.send_window_message(enumitem_message_type::Info, "Definitions settings changed, restart lunaut to apply them");
 	}
 
 	if (analyzer_changed && ready)
@@ -762,7 +790,7 @@ Luau::CheckResult workspace::check_module(const Luau::ModuleName& name, bool for
 
 	try
 	{
-		return frontend.check(name, priv::make_options(for_autocomplete, settings.diagnostics.lint));
+		return frontend.check(name, priv::make_options(for_autocomplete, settings.diagnostics.lint, retain_types));
 	}
 	catch (const std::exception& error)
 	{
@@ -893,10 +921,10 @@ namespace
 namespace priv
 {
 
-Luau::FrontendOptions make_options(bool for_autocomplete, bool lint)
+Luau::FrontendOptions make_options(bool for_autocomplete, bool lint, bool retain)
 {
 	Luau::FrontendOptions options;
-	options.retainFullTypeGraphs = true;
+	options.retainFullTypeGraphs = retain;
 	options.forAutocomplete = for_autocomplete;
 	options.runLintChecks = lint;
 	return options;

@@ -110,6 +110,10 @@ if found="$(find_command hx helix)"; then
 	add_target helix helix "Helix" "$found"
 fi
 
+if [ "$system" = "osx" ] && [ -d "$HOME/Documents/Roblox" ]; then
+	add_target studio studio "Roblox Studio (the Lunaut plugin)" ""
+fi
+
 add_target path path "Terminal (the lunaut command on PATH)" ""
 
 can_ask() {
@@ -281,6 +285,14 @@ if has_kind helix; then
 	fi
 fi
 
+if has_kind studio; then
+	mkdir -p "$HOME/Documents/Roblox/Plugins"
+	download "$base_url/LunautPlugin.rbxm" "$HOME/Documents/Roblox/Plugins/LunautPlugin.rbxm"
+	echo "Installed the Lunaut plugin for Roblox Studio"
+	notes="${notes}Roblox Studio: restart Studio, then use Plugins > Lunaut > Sync; turn on lunaut.studioPlugin.enabled in the editor
+"
+fi
+
 if has_kind zed; then
 	notes="${notes}Zed: open Extensions (zed: extensions), search for Lunaut and install it; it downloads the server itself
 "
@@ -433,6 +445,10 @@ exit 0
 		[void]$targets.Add(@{ Key = "helix"; Kind = "helix"; Name = "Helix"; Command = $helix })
 	}
 
+	if (Test-Path -LiteralPath (Join-Path $env:LOCALAPPDATA "Roblox")) {
+		[void]$targets.Add(@{ Key = "studio"; Kind = "studio"; Name = "Roblox Studio (the Lunaut plugin)"; Command = $null })
+	}
+
 	[void]$targets.Add(@{ Key = "path"; Kind = "path"; Name = "Terminal (the lunaut command on PATH)"; Command = $null })
 
 	$selected = @()
@@ -529,6 +545,14 @@ exit 0
 			Get-File "$sourceUrl/editors/helix/languages.toml" $helixConfig
 			Write-Host "Installed the Helix config in $helixConfig"
 		}
+	}
+
+	if ($kinds -contains "studio") {
+		$pluginDir = Join-Path $env:LOCALAPPDATA "Roblox\Plugins"
+		New-Item -ItemType Directory -Force -Path $pluginDir | Out-Null
+		Get-File "$baseUrl/LunautPlugin.rbxm" (Join-Path $pluginDir "LunautPlugin.rbxm")
+		Write-Host "Installed the Lunaut plugin for Roblox Studio"
+		[void]$notes.Add("Roblox Studio: restart Studio, then use Plugins > Lunaut > Sync; turn on lunaut.studioPlugin.enabled in the editor")
 	}
 
 	if ($kinds -contains "zed") {

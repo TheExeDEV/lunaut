@@ -114,6 +114,7 @@ Type numbers separated by spaces, or press Enter for all:
 | Zed | reminds you to install the **Lunaut** extension from Zed's Extensions panel; the extension downloads the newest server itself |
 | Neovim | puts the server on `PATH` and copies [`lunaut.lua`](editors/neovim/lunaut.lua) into `nvim/plugin` |
 | Helix | puts the server on `PATH` and writes [`languages.toml`](editors/helix/languages.toml) when you have none yet |
+| Roblox Studio | downloads [`LunautPlugin.rbxm`](#lunaut-plugin-for-roblox-studio) into Studio's plugin folder (Windows and macOS) |
 | Terminal | puts the server into `%LOCALAPPDATA%\lunaut\bin` (Windows) or `~/.lunaut/bin` and adds that folder to `PATH` |
 
 Without a terminal to ask in (CI, scripts), it installs into everything it found. Open a new terminal and run `lunaut --version`.
@@ -190,7 +191,9 @@ Commands (`Ctrl+Shift+P`):
 
 | Command | What it does |
 | --- | --- |
-| `Lunaut: Restart Server` | restarts the server, needed after FFlag changes |
+| `Lunaut: Open Menu` | the menu behind the **Lunaut** button in the status bar: server version, Install Roblox Studio Plugin, Studio sync on or off, restart, reload, sourcemap, status, FFlags, definitions, docs, issues |
+| `Lunaut: Install Roblox Studio Plugin` | downloads `LunautPlugin.rbxm` of this version into Studio's plugin folder |
+| `Lunaut: Restart Server` | restarts the server process |
 | `Lunaut: Show Status` | version, solver, workspaces, sourcemap, loaded definitions |
 | `Lunaut: Show FFlags` | every Luau FFlag with its value and source, with a filter |
 | `Lunaut: Show Loaded Definitions` | definition files in load order with priorities and errors |
@@ -451,9 +454,24 @@ on start, when a `.luau` file is created or deleted and when a `*.project.json` 
 
 In VS Code the extension keeps `rojo sourcemap --watch` running for every workspace folder with a project file (`lunaut.rojo.watch`), and the server only reloads what Rojo writes. If Rojo exits, the server goes back to regenerating on its own.
 
-### Studio companion plugin
+### Lunaut plugin for Roblox Studio
 
-With `lunaut.studioPlugin.enabled` the VS Code extension listens on `127.0.0.1:3667` for the [luau-lsp Studio Companion plugin](https://create.roblox.com/store/asset/10913122509). The plugin sends the live DataModel from Studio, and instances that exist only in the place, not in the Rojo project, get types and completion too. *Clear* in the plugin drops them again. Run luau-lsp or lunaut, not both: they use the same port.
+The Lunaut plugin sends the instance tree of the open place from Studio to the editor, so instances that exist only in the place, not in your files or Rojo project, get types and completion: `workspace.Map.Door`, `ReplicatedStorage.Remotes.Fire` and so on.
+
+1. Install it: pick *Roblox Studio* in the [installer](#installation), or download `LunautPlugin.rbxm` from the latest release into `%LOCALAPPDATA%\Roblox\Plugins` (Windows) or `~/Documents/Roblox/Plugins` (macOS) and restart Studio.
+2. Turn on `lunaut.studioPlugin.enabled` in VS Code. The extension listens on `127.0.0.1:3667` (`lunaut.studioPlugin.port`).
+3. In Studio open *Plugins > Lunaut*:
+
+| Button | What it does |
+| --- | --- |
+| **Sync** | sends the tree now and again half a second after instances are added or removed; stays on between sessions |
+| **Send** | sends the tree once |
+| **Clear** | removes the instances the plugin sent from the editor |
+| **Port** | changes the port, the same number as `lunaut.studioPlugin.port` |
+
+The first time it sends, Studio asks whether the plugin may make HTTP requests to `localhost`; allow it. The plugin sends the services that hold game content (Workspace, ReplicatedStorage, ServerScriptService, StarterPlayer, Lighting and the like), up to 200 000 instances, and only names and classes, never scripts or properties. It runs in edit mode only, not during play tests.
+
+The [luau-lsp Studio Companion plugin](https://create.roblox.com/store/asset/10913122509) speaks the same protocol and works too. Run luau-lsp or lunaut, not both: they use the same port.
 
 `.server.luau` and `.client.luau` files are checked as scripts, everything else as modules.
 
@@ -902,11 +920,10 @@ tests/                test runner, suites and fixtures
 
 ## Limitations
 
-- Definition file and FFlag changes need a server restart
-- Rename and references cover locals and table members; globals and type names are not renamed
+- Rename covers locals, table members, globals and type aliases; generic parameters and table type fields are not renamed
 - Go to definition does not reach Luau built-ins (`print`, `table.insert`), they have no source file
 - Type hierarchy covers `declare extern type` classes; plain tables and metatables have no inheritance to show
-- Outside VS Code Rojo autogeneration runs `rojo sourcemap` once per change, it does not keep `--watch` running, and the Studio plugin is not available
+- Outside VS Code Rojo autogeneration runs `rojo sourcemap` once per change, it does not keep `--watch` running, and the Studio plugin needs the VS Code extension to receive the tree
 - Downloads (FFlags, Roblox definitions) use `curl`, which ships with Windows 10+, macOS and most Linux systems
 
 ---

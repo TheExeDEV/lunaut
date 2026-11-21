@@ -93,6 +93,10 @@ if [ -f "$config_home/nvim/plugin/lunaut.lua" ]; then
 	add_target nvim nvim "Neovim (nvim/plugin/lunaut.lua)" ""
 fi
 
+if [ -f "$HOME/Documents/Roblox/Plugins/LunautPlugin.rbxm" ]; then
+	add_target studio studio "Roblox Studio (the Lunaut plugin)" ""
+fi
+
 if [ -e "$install_dir/lunaut" ] || [ -e "$install_dir/lunaut.download" ]; then
 	add_target path path "Terminal (the lunaut command in $install_dir and its PATH entries)" ""
 fi
@@ -227,6 +231,11 @@ if has_kind zed; then
 	echo "Removed the Lunaut extension from Zed, restart Zed to finish"
 fi
 
+if has_kind studio; then
+	rm -f "$HOME/Documents/Roblox/Plugins/LunautPlugin.rbxm"
+	echo "Removed the Lunaut plugin from Roblox Studio"
+fi
+
 if has_kind nvim; then
 	rm -f "$config_home/nvim/plugin/lunaut.lua"
 	echo "Removed $config_home/nvim/plugin/lunaut.lua"
@@ -300,6 +309,7 @@ exit 0
 	$cacheDir = Join-Path $root "cache"
 	$zedExtensions = Join-Path $env:LOCALAPPDATA "Zed\extensions"
 	$nvimPlugin = Join-Path $env:LOCALAPPDATA "nvim\plugin\lunaut.lua"
+	$studioPlugin = Join-Path $env:LOCALAPPDATA "Roblox\Plugins\LunautPlugin.rbxm"
 	$purge = [bool]$env:LUNAUT_PURGE
 	$extensionIds = @("theexe.lunaut-luau", "theexe.lunaut", "exitedb.lunaut", "lunaut.lunaut")
 	$programs = Join-Path $env:LOCALAPPDATA "Programs"
@@ -362,6 +372,10 @@ exit 0
 
 	if ((Test-Path -LiteralPath (Join-Path $zedExtensions "installed\lunaut")) -or (Test-Path -LiteralPath (Join-Path $zedExtensions "work\lunaut"))) {
 		[void]$targets.Add(@{ Kind = "zed"; Name = "Zed (the Lunaut extension and the servers it downloaded)" })
+	}
+
+	if (Test-Path -LiteralPath $studioPlugin) {
+		[void]$targets.Add(@{ Kind = "studio"; Name = "Roblox Studio (the Lunaut plugin)" })
 	}
 
 	if (Test-Path -LiteralPath $nvimPlugin) {
@@ -432,6 +446,11 @@ exit 0
 		Remove-Folder (Join-Path $zedExtensions "installed\lunaut")
 		Remove-Folder (Join-Path $zedExtensions "work\lunaut")
 		Write-Host "Removed the Lunaut extension from Zed, restart Zed to finish"
+	}
+
+	if ($kinds -contains "studio") {
+		Remove-Item -LiteralPath $studioPlugin -Force
+		Write-Host "Removed the Lunaut plugin from Roblox Studio"
 	}
 
 	if ($kinds -contains "nvim") {

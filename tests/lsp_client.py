@@ -56,11 +56,12 @@ class LspError(Exception):
 
 
 class LspClient:
-	def __init__(self, root, options=None, args=()):
+	def __init__(self, root, options=None, args=(), env=None):
 		self.root = pathlib.Path(root).resolve()
 		self.process = subprocess.Popen(
 			[str(find_binary()), "lsp", *args],
 			cwd=self.root,
+			env=dict(os.environ, **(env or {})),
 			stdin=subprocess.PIPE,
 			stdout=subprocess.PIPE,
 			stderr=subprocess.PIPE,

@@ -11,6 +11,7 @@
 #include "Luau/ToString.h"
 
 #include <algorithm>
+#include <regex>
 
 namespace lunaut
 {
@@ -22,6 +23,7 @@ namespace priv
 const std::set<std::string_view> relevant_unused = {"LocalUnused", "FunctionUnused", "ImportUnused"};
 const std::set<std::string_view> relevant_errors = {"TypeError", "SyntaxError"};
 constexpr std::string_view unknown_global = "Unknown global '";
+constexpr std::string_view misplaced_attribute = "Expected 'function' declaration after attribute";
 
 std::string get_range_text(const textdocument& document, const json& range);
 json make_action(const std::string& title, const json& diagnostic, const std::string& address, const json& edits, bool preferred);
@@ -31,6 +33,7 @@ std::optional<json> make_sorted_imports(const textdocument& document, const Luau
 std::optional<json> make_annotation(
 	const Luau::Module& module, const Luau::SourceModule& source, const textdocument& document, Luau::Position cursor);
 std::string get_relative_require(const std::string& from, const std::string& target);
+std::optional<json> make_attribute_move(const textdocument& document, unsigned int line);
 
 }
 }
@@ -83,6 +86,14 @@ json workspace::get_code_actions(const json& params)
 					address,
 					json::array({{{"range", {{"start", start}, {"end", start}}}, {"newText", "--!nolint " + code + "\n"}}}),
 					false));
+		}
+
+		if (code == "SyntaxError" && stdx::starts_with(message, priv::misplaced_attribute))
+		{
+			if (std::optional<json> edits = priv::make_attribute_move(*document, range["start"].value("line", 0u)))
+			{
+				actions.push_back(priv::make_action("Move the attribute to the function", diagnostic, address, *edits, true));
+			}
 		}
 
 		if (code == "TypeError" && stdx::starts_with(message, priv::unknown_global))
@@ -384,6 +395,92 @@ std::string get_relative_require(const std::string& from, const std::string& tar
 	}
 
 	return path;
+}
+
+std::optional<json> make_attribute_move(const textdocument& document, unsigned int line)
+{
+	static const std::regex field(R"(([A-Za-z_][A-Za-z0-9_]*\s*=\s*)function\b)");
+	std::vector<std::string> lines = stdx::split(document.get_text(), '\n');
+
+	for (std::string& text : lines)
+	{
+		if (!text.empty() && text.back() == '\r')
+		{
+			text.pop_back();
+		}
+	}
+
+	for (unsigned int target = line; target < lines.size() && target <= line + 1; ++target)
+	{
+		std::smatch match;
+
+		if (!std::regex_search(lines[target], match, field))
+		{
+			continue;
+		}
+
+		size_t field_start = static_cast<size_t>(match.position(0));
+		size_t function_start = field_start + static_cast<size_t>(match.length(1));
+		std::string inline_attributes = stdx::trim(lines[target].substr(0, field_start));
+		std::vector<std::string> attributes;
+		unsigned int first = target;
+
+		while (first > 0 && stdx::starts_with(stdx::trim(lines[first - 1]), "@"))
+		{
+			--first;
+		}
+
+		for (unsigned int index = first; index < target; ++index)
+		{
+			attributes.push_back(stdx::trim(lines[index]));
+		}
+
+		if (!inline_attributes.empty() && inline_attributes[0] == '@')
+		{
+			attributes.push_back(inline_attributes);
+		}
+		else if (!inline_attributes.empty())
+		{
+			continue;
+		}
+
+		if (attributes.empty())
+		{
+			continue;
+		}
+
+		std::string joined;
+
+		for (const std::string& attribute : attributes)
+		{
+			joined += attribute + " ";
+		}
+
+		size_t indent = lines[target].find_first_not_of(" \t");
+		json edits = json::array();
+		edits.push_back(
+			{{"range",
+			  {{"start", {{"line", target}, {"character", function_start}}}, {"end", {{"line", target}, {"character", function_start}}}}},
+			 {"newText", joined}});
+
+		if (!inline_attributes.empty())
+		{
+			edits.push_back(
+				{{"range", {{"start", {{"line", target}, {"character", indent}}}, {"end", {{"line", target}, {"character", field_start}}}}},
+				 {"newText", ""}});
+		}
+
+		if (first < target)
+		{
+			edits.push_back(
+				{{"range", {{"start", {{"line", first}, {"character", 0}}}, {"end", {{"line", target}, {"character", 0}}}}},
+				 {"newText", ""}});
+		}
+
+		return edits;
+	}
+
+	return std::nullopt;
 }
 
 json make_action(const std::string& title, const json& diagnostic, const std::string& address, const json& edits, bool preferred)
