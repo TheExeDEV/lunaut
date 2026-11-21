@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Added
+
+- Typing `{` in a `"string"` now also adds the closing `}` and leaves the cursor between the braces: `` `hello {|}` `` (#7). `lunaut.format.closeInterpolation` turns the `}` off
+
+### Fixed
+
+- When `end` is inserted, the line with the cursor gets the indentation of the block body too, so editors that cannot indent an unfinished block (Zed) no longer leave the cursor at the start of the line
+- VS Code keeps the cursor in place after any on-type edit, not only after `end`
+
 ## [0.1.2] - 2026-11-20
 
 ### Fixed

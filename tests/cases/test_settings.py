@@ -199,6 +199,20 @@ class SettingsTests(unittest.TestCase):
 			self.assertEqual(bool(edits), enabled)
 			client.close()
 
+	def test_close_interpolation_setting(self):
+		folder = self.folder
+		write(folder, "quotes.luau", 'local s = "hello {"\n')
+
+		for enabled, expected in ((True, ["`", "}`"]), (False, ["`", "`"])):
+			client = self.start(folder, {"lunaut.format.closeInterpolation": enabled})
+			uri, _ = client.open("quotes.luau")
+			edits = client.request(
+				"textDocument/onTypeFormatting",
+				{"textDocument": {"uri": uri}, "position": {"line": 0, "character": 17}, "ch": "{", "options": {"tabSize": 4, "insertSpaces": False}},
+			)
+			self.assertEqual(sorted(edit["newText"] for edit in edits), sorted(expected), enabled)
+			client.close()
+
 	def test_autocomplete_end_setting(self):
 		folder = self.folder
 		write(folder, "ending.luau", "local function test()\n\t\n")

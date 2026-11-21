@@ -108,11 +108,11 @@ class NavigationTests(unittest.TestCase):
 		changes = next(iter(edit["changes"].values()))
 		self.assertEqual(changes[0]["newText"], "end\n")
 
-	def apply_on_type_end(self, name, text, line, character):
+	def apply_on_type_end(self, name, text, line, character, spaces=False):
 		uri, _ = self.client.open(name, text)
 		edits = self.client.request(
 			"textDocument/onTypeFormatting",
-			{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}, "ch": "\n", "options": {"tabSize": 4, "insertSpaces": False}},
+			{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}, "ch": "\n", "options": {"tabSize": 4, "insertSpaces": spaces}},
 		)
 		lines = text.split("\n")
 
@@ -164,7 +164,6 @@ class NavigationTests(unittest.TestCase):
 	def test_autocomplete_end_takes_the_indent_of_its_block(self):
 		cases = [
 			("local function f()\n\tfor i = 1, 3 do\n\t\t\nend\n", 2, 2, "local function f()\n\tfor i = 1, 3 do\n\t\t\n\tend\nend\n"),
-			("local function f()\n    for i = 1, 3 do\n        \nend\n", 2, 8, "local function f()\n    for i = 1, 3 do\n        \n    end\nend\n"),
 			(
 				"local function f()\n\tif ready then\n\t\twhile true do\n\t\t\t\n\tend\nend\n",
 				3,
@@ -179,6 +178,40 @@ class NavigationTests(unittest.TestCase):
 
 		for index, (text, line, character, expected) in enumerate(cases):
 			self.assertEqual(self.apply_on_type_end(f"indent_end_{index}.luau", text, line, character), expected, text)
+
+	def test_autocomplete_end_fixes_the_cursor_line_indent(self):
+		cases = [
+			("for i = 1, 3 do\n\n", 1, 0, False, "for i = 1, 3 do\n\t\nend\n"),
+			("local function f()\n\tfor i = 1, 3 do\n\t\nend\n", 2, 1, False, "local function f()\n\tfor i = 1, 3 do\n\t\t\n\tend\nend\n"),
+			("if ready then\n\n", 1, 0, True, "if ready then\n    \nend\n"),
+			("local function f()\n    while true do\n    \nend\n", 2, 4, True, "local function f()\n    while true do\n        \n    end\nend\n"),
+			("local function f()\n\tfor i = 1, 3 do\n\t\t\nend\n", 2, 2, True, "local function f()\n\tfor i = 1, 3 do\n\t\t\n\tend\nend\n"),
+		]
+
+		for index, (text, line, character, spaces, expected) in enumerate(cases):
+			self.assertEqual(self.apply_on_type_end(f"cursor_indent_{index}.luau", text, line, character, spaces), expected, text)
+
+	def test_convert_quotes_closes_the_brace(self):
+		cases = [
+			('local s = "hello {"\n', 17, ["`", "}`"], "local s = `hello {}`\n"),
+			('local s = "hello {\n', 17, ["`", "}"], "local s = `hello {}\n"),
+			('local s = "hello {}"\n', 17, ["`", "`"], "local s = `hello {}`\n"),
+			('local s = "a {b"\n', 13, ["`", "}", "`"], "local s = `a {}b`\n"),
+		]
+
+		for index, (text, character, new_texts, expected) in enumerate(cases):
+			uri, _ = self.client.open(f"brace_{index}.luau", text)
+			edits = self.client.request(
+				"textDocument/onTypeFormatting",
+				{"textDocument": {"uri": uri}, "position": {"line": 0, "character": character}, "ch": "{", "options": {"tabSize": 4, "insertSpaces": False}},
+			)
+			self.assertEqual(sorted(edit["newText"] for edit in edits), sorted(new_texts), text)
+			result = text
+
+			for edit in sorted(edits, key=lambda edit: edit["range"]["start"]["character"], reverse=True):
+				result = result[: edit["range"]["start"]["character"]] + edit["newText"] + result[edit["range"]["end"]["character"] :]
+
+			self.assertEqual(result, expected, text)
 
 	def test_autocomplete_end_on_type(self):
 		self.assertEqual(self.client.capabilities["documentOnTypeFormattingProvider"]["moreTriggerCharacter"], ["\n"])
@@ -220,8 +253,7 @@ class NavigationTests(unittest.TestCase):
 			"textDocument/onTypeFormatting",
 			{"textDocument": {"uri": uri}, "position": {"line": 0, "character": 17}, "ch": "{", "options": {"tabSize": 4, "insertSpaces": False}},
 		)
-		self.assertEqual([edit["range"]["start"]["character"] for edit in edits], [10, 18])
-		self.assertTrue(all(edit["newText"] == "`" for edit in edits))
+		self.assertEqual([(edit["range"]["start"]["character"], edit["newText"]) for edit in edits], [(10, "`"), (18, "}`")])
 
 	def test_formatting_with_stylua(self):
 		uri, _ = self.client.open("format.luau", "local x=1\nprint(x)\n")

@@ -135,6 +135,16 @@ json workspace::get_end_edits(const json& params)
 			indent = priv::get_indent(lines[position.line - 1]);
 		}
 
+		std::string before = line_text.substr(0, column);
+		bool tabs = indent.empty() ? !params.value("/options/insertSpaces"_json_pointer, false) : indent.front() == '\t';
+		size_t tab_size = std::max<size_t>(1, params.value("/options/tabSize"_json_pointer, 4));
+		std::string body = indent + (tabs ? std::string("\t") : std::string(tab_size, ' '));
+
+		if (params.contains("options") && stdx::trim(before).empty() && before != body)
+		{
+			edits.push_back(priv::make_edit(*document, Luau::Position{position.line, 0}, cursor, body));
+		}
+
 		if (after.empty() && last_line)
 		{
 			edits.push_back(priv::make_edit(*document, line_end, line_end, "\n" + indent + keyword));
@@ -204,6 +214,11 @@ json workspace::get_on_type_edits(const json& params)
 
 	const std::string& line = lines[position.line];
 	size_t column = std::min<size_t>(position.column, line.size());
+
+	if (column < line.size() && line[column] == '{' && (column == 0 || line[column - 1] != '{'))
+	{
+		++column;
+	}
 	std::optional<size_t> double_quote = priv::find_unclosed(line, column, '"');
 	std::optional<size_t> single_quote = priv::find_unclosed(line, column, '\'');
 
@@ -237,6 +252,20 @@ json workspace::get_on_type_edits(const json& params)
 	json edits = json::array();
 	unsigned int at = static_cast<unsigned int>(quote);
 	edits.push_back(priv::make_edit(*document, Luau::Position{position.line, at}, Luau::Position{position.line, at + 1}, "`"));
+
+	unsigned int cursor = static_cast<unsigned int>(column);
+	bool brace = settings.features.close_interpolation && (column >= line.size() || line[column] != '}');
+
+	if (closing != std::string::npos && brace && closing == column)
+	{
+		edits.push_back(priv::make_edit(*document, Luau::Position{position.line, cursor}, Luau::Position{position.line, cursor + 1}, "}`"));
+		return edits;
+	}
+
+	if (brace)
+	{
+		edits.push_back(priv::make_edit(*document, Luau::Position{position.line, cursor}, Luau::Position{position.line, cursor}, "}"));
+	}
 
 	if (closing != std::string::npos)
 	{
