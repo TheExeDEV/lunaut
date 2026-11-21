@@ -159,7 +159,7 @@ jobs:
           path: ${{ matrix.asset }}
 
   extension:
-    needs: [check, build, build-macos]
+    needs: [check, build, build-macos, studio-plugin]
     if: ${{ always() && needs.check.outputs.release == 'true' && needs.build.result == 'success' }}
     runs-on: windows-latest
     steps:
@@ -173,6 +173,12 @@ jobs:
           path: server
           merge-multiple: true
 
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: LunautPlugin.rbxm
+          path: studio
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -183,6 +189,7 @@ jobs:
         env:
           LUNAUT_BINARIES: ${{ github.workspace }}/server
           LUNAUT_SCHEMA_BINARY: ${{ github.workspace }}/server/lunaut-win-x64.exe
+          LUNAUT_STUDIO_PLUGIN: ${{ github.workspace }}/studio/LunautPlugin.rbxm
         run: |
           npm ci
           npm version ${{ needs.check.outputs.version }} --no-git-tag-version --allow-same-version

@@ -23,17 +23,15 @@ local accent = Color3.fromRGB(11, 132, 255)
 local danger = Color3.fromRGB(214, 69, 69)
 
 function Ui.getTheme(): Theme
-	local studio = settings().Studio.Theme :: StudioTheme
-
 	return {
-		background = studio:GetColor(Enum.StudioStyleGuideColor.MainBackground),
-		panel = studio:GetColor(Enum.StudioStyleGuideColor.Titlebar),
-		border = studio:GetColor(Enum.StudioStyleGuideColor.Border),
-		text = studio:GetColor(Enum.StudioStyleGuideColor.MainText),
-		dimmed = studio:GetColor(Enum.StudioStyleGuideColor.DimmedText),
+		background = Color3.fromRGB(24, 24, 27),
+		panel = Color3.fromRGB(44, 44, 50),
+		border = Color3.fromRGB(70, 70, 78),
+		text = Color3.fromRGB(235, 235, 240),
+		dimmed = Color3.fromRGB(160, 160, 170),
 		accent = accent,
 		danger = danger,
-		field = studio:GetColor(Enum.StudioStyleGuideColor.InputFieldBackground),
+		field = Color3.fromRGB(36, 36, 41),
 	}
 end
 
@@ -138,7 +136,10 @@ function Ui.checkbox(parent: Instance, title: string, description: string, order
 end
 
 function Ui.paint(root: Instance, theme: Theme)
-	for _, item in root:GetDescendants() do
+	local items = root:GetDescendants()
+	table.insert(items, root)
+
+	for _, item in items do
 		local role = item:GetAttribute("Role")
 
 		if item:IsA("TextLabel") or item:IsA("TextButton") or item:IsA("TextBox") then

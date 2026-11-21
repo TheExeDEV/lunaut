@@ -263,11 +263,8 @@ widget:GetPropertyChangedSignal("Enabled"):Connect(function()
 	openButton:SetActive(widget.Enabled)
 end)
 
-local themeConnection = settings().Studio.ThemeChanged:Connect(repaint)
 
 plugin.Unloading:Connect(function()
-	themeConnection:Disconnect()
-
 	for _, connection in connections do
 		connection:Disconnect()
 	end

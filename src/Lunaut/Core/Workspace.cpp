@@ -277,7 +277,7 @@ bool workspace::has_pending_diagnostics() const
 
 void workspace::apply_plugin_tree(const json& tree)
 {
-	if (!roblox || !settings.rojo.enabled)
+	if (!roblox || !settings.rojo.enabled || tree == plugin_tree)
 	{
 		return;
 	}
