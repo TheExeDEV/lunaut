@@ -606,6 +606,8 @@ class rojo
 public:
 	static bool is_project(const std::filesystem::path& root, const rojoinfo& info);
 	static std::optional<std::string> find_project(const std::filesystem::path& root, const rojoinfo& info);
+	static std::vector<std::string> find_projects(const std::filesystem::path& root);
+	static bool has_existing_paths(const std::filesystem::path& project);
 	static result<nothing> generate_sourcemap(const std::filesystem::path& root, const rojoinfo& info);
 };
 
@@ -1091,6 +1093,7 @@ public:
 	json on_lunaut_fflags(const json& params);
 	json on_lunaut_definitions(const json& params);
 	json on_lunaut_sourcemap(const json& params);
+	json on_lunaut_rojo_projects(const json& params);
 	json on_execute_command(const json& params);
 	json invoke_regenerate_sourcemap(const json& arguments);
 	json invoke_show_status(const json& arguments);

@@ -1,5 +1,7 @@
+import json
 import os
 import pathlib
+import shutil
 import sys
 import tempfile
 import unittest
@@ -29,6 +31,27 @@ def make_fake_rojo(directory, log):
 	return str(wrapper)
 
 
+def find_rojo():
+	candidates = [os.environ.get("LUNAUT_TEST_ROJO", "")]
+	candidates += [str(path) for path in sorted(pathlib.Path.home().glob(".rokit/tool-storage/rojo-rbx/rojo/*/rojo*"))]
+	candidates += [shutil.which("rojo") or ""]
+	return next((candidate for candidate in candidates if candidate and pathlib.Path(candidate).is_file()), None)
+
+
+def write(root, path, data):
+	file = pathlib.Path(root) / path
+	file.parent.mkdir(parents=True, exist_ok=True)
+	file.write_text(data if isinstance(data, str) else json.dumps(data), encoding="utf-8")
+
+
+def make_projects(root):
+	write(root, "test.project.json", {"name": "tests", "tree": {"$className": "DataModel", "ReplicatedStorage": {"core": {"$path": "src/core"}}}})
+	write(root, "src/default.project.json", {"name": "template", "tree": {"$className": "DataModel", "$path": "src"}})
+	write(root, "bin/build.project.json", {"name": "build", "tree": {"$className": "DataModel", "ReplicatedStorage": {"core": {"$path": "core"}}}})
+	write(root, "src/core/init.luau", "return {}\n")
+	write(root, "bin/core/init.luau", "return {}\n")
+
+
 class NestedRojoTests(unittest.TestCase):
 	def test_nested_project_enables_roblox(self):
 		client = LspClient(FIXTURES / "rojo-nested")
@@ -54,6 +77,50 @@ class NestedRojoTests(unittest.TestCase):
 			finally:
 				client.close()
 				sourcemap.unlink(missing_ok=True)
+
+
+	def test_root_project_wins_and_broken_projects_are_marked(self):
+		with tempfile.TemporaryDirectory() as root:
+			make_projects(root)
+			client = LspClient(root, {"vscode": {"lunaut.rojo.autogenerate": False, "lunaut.fflags.sync": False}})
+
+			try:
+				folder = client.request("lunaut/rojoProjects", {})[0]
+				usable = {project["path"]: project["usable"] for project in folder["projects"]}
+				self.assertEqual(folder["selected"], "test.project.json")
+				self.assertEqual(usable, {"bin/build.project.json": True, "src/default.project.json": False, "test.project.json": True})
+			finally:
+				client.close()
+
+	def test_broken_project_explains_the_path(self):
+		with tempfile.TemporaryDirectory() as root:
+			make_projects(root)
+			settings = {"lunaut.rojo.autogenerate": False, "lunaut.fflags.sync": False, "lunaut.rojo.projectFile": "src/default.project.json"}
+			client = LspClient(root, {"vscode": settings})
+
+			try:
+				result = client.request("lunaut/sourcemap", {"regenerate": True})[0]
+				self.assertFalse(result["success"])
+				self.assertIn("src/src", result["message"])
+			finally:
+				client.close()
+
+	@unittest.skipIf(find_rojo() is None, "rojo is not installed")
+	def test_nested_project_paths_start_at_the_root(self):
+		with tempfile.TemporaryDirectory() as root:
+			make_projects(root)
+			settings = {"lunaut.rojo.autogenerate": True, "lunaut.fflags.sync": False, "lunaut.rojo.projectFile": "bin/build.project.json", "lunaut.rojo.executable": find_rojo()}
+			client = LspClient(root, {"vscode": settings})
+
+			try:
+				result = client.request("lunaut/sourcemap", {"regenerate": True})[0]
+				self.assertTrue(result["success"], result)
+				sourcemap = json.loads((pathlib.Path(root) / "sourcemap.json").read_text(encoding="utf-8"))
+				self.assertEqual(sourcemap["filePaths"], ["bin/build.project.json"])
+				core = sourcemap["children"][0]["children"][0]
+				self.assertEqual(core["filePaths"], ["bin/core/init.luau"])
+			finally:
+				client.close()
 
 
 if __name__ == "__main__":

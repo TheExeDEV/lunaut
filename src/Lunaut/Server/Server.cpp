@@ -64,6 +64,7 @@ const std::unordered_map<std::string_view, request_handler> relevant_requests = 
 	{"lunaut/fflags", &server::on_lunaut_fflags},
 	{"lunaut/definitions", &server::on_lunaut_definitions},
 	{"lunaut/sourcemap", &server::on_lunaut_sourcemap},
+	{"lunaut/rojoProjects", &server::on_lunaut_rojo_projects},
 	{"workspace/executeCommand", &server::on_execute_command},
 };
 
@@ -814,6 +815,33 @@ json server::on_lunaut_sourcemap(const json& params)
 	}
 
 	return rebuilt;
+}
+
+json server::on_lunaut_rojo_projects(const json& params)
+{
+	json folders = json::array();
+
+	for (const std::unique_ptr<workspace>& folder : workspaces)
+	{
+		const std::filesystem::path& root = folder->get_root();
+		const rojoinfo& info = folder->get_settings().rojo;
+		json projects = json::array();
+
+		for (const std::string& project : rojo::find_projects(root))
+		{
+			projects.push_back({{"path", project}, {"usable", rojo::has_existing_paths(root / project)}});
+		}
+
+		std::optional<std::string> selected = rojo::find_project(root, info);
+		folders.push_back({
+			{"root", root.generic_string()},
+			{"projects", projects},
+			{"selected", selected ? json(*selected) : json(nullptr)},
+			{"setting", info.project_file},
+		});
+	}
+
+	return folders;
 }
 
 void server::on_initialized(const json& params)
