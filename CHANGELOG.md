@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-11-22
+
 ### Added
 
 - **Select Rojo Project** in the Lunaut menu and `Lunaut: Select Rojo Project`: lists every `*.project.json` in the workspace, marks the ones whose `$path` folders are missing and saves the choice in `lunaut.rojo.projectFile`
