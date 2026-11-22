@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-11-22
+
 ### Added
 
 - `lunaut.restartOnDefinitionChanges` (default `true`): turn it off and saving a `.d.luau` file no longer rebuilds the workspace, so you reload yourself with **Reload Definitions and FFlags** when the definitions are ready
