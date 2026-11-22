@@ -53,9 +53,9 @@ function findProject(root: string, projectFile: string): string | undefined {
 	const ranked = candidates
 		.map((candidate) => path.relative(root, candidate).split(path.sep).join("/"))
 		.sort((left, right) => {
-			const named = Number(path.posix.basename(right) === preferred) - Number(path.posix.basename(left) === preferred);
 			const depth = left.split("/").length - right.split("/").length;
-			return named || depth || left.localeCompare(right);
+			const named = Number(path.posix.basename(right) === preferred) - Number(path.posix.basename(left) === preferred);
+			return depth || named || left.localeCompare(right);
 		});
 
 	return ranked[0];
@@ -86,6 +86,11 @@ export function startWatchers(output: vscode.OutputChannel): void {
 		const project = findProject(root, projectFile);
 
 		if (!project) {
+			continue;
+		}
+
+		if (project.split(/[\\/]/).length > 1) {
+			output.appendLine(`[rojo] ${project} is in a subfolder, so rojo --watch would write paths relative to it; the server regenerates the sourcemap instead`);
 			continue;
 		}
 

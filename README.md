@@ -478,7 +478,11 @@ rojo sourcemap default.project.json --output sourcemap.json --include-non-script
 
 on start, when a `.luau` file is created or deleted and when a `*.project.json` changes. Without Rojo on `PATH` it uses the `sourcemap.json` that is already there, and reloads it whenever it changes, for example when you run `rojo sourcemap --watch` yourself.
 
-In VS Code the extension keeps `rojo sourcemap --watch` running for every workspace folder with a project file (`lunaut.rojo.watch`), and the server only reloads what Rojo writes. If Rojo exits, the server goes back to regenerating on its own.
+In VS Code the extension keeps `rojo sourcemap --watch` running for every workspace folder with a project file in its root (`lunaut.rojo.watch`), and the server only reloads what Rojo writes. If Rojo exits, the server goes back to regenerating on its own.
+
+**Which project.** `lunaut.rojo.projectFile` is used when it exists. Otherwise lunaut looks for `*.project.json` up to four folders deep and takes, in this order: a project whose `$path` folders exist, the one closest to the root, the one named like `lunaut.rojo.projectFile`. Pick one by hand with **Select Rojo Project** in the Lunaut menu (or `Lunaut: Select Rojo Project`); it lists every project found and marks the ones whose `$path` folders are missing.
+
+A project in a subfolder, such as `bin/build.project.json`, works too: Rojo writes its paths relative to that folder, so lunaut rewrites them to start at the workspace root (`bin/core/init.luau`). Rojo resolves `$path` from the folder of the project file, so `"$path": "src"` in `src/default.project.json` means `src/src`; when no `$path` of a project exists, lunaut says so instead of writing an empty sourcemap.
 
 ### Lunaut plugin for Roblox Studio
 

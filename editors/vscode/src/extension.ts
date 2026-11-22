@@ -296,6 +296,37 @@ async function changePort(): Promise<void> {
 	}
 }
 
+type RojoFolder = { root: string; projects: { path: string; usable: boolean }[]; selected: string | null; setting: string };
+
+async function selectRojoProject(): Promise<void> {
+	if (!client) {
+		vscode.window.showWarningMessage("Lunaut: the server is not running");
+		return;
+	}
+
+	const folders = await client.sendRequest<RojoFolder[]>("lunaut/rojoProjects", {});
+	const folder = folders.find((item) => item.projects.length > 0);
+
+	if (!folder) {
+		vscode.window.showInformationMessage("Lunaut: no *.project.json found in the workspace");
+		return;
+	}
+
+	const items = folder.projects.map((project) => ({
+		label: project.path,
+		description: [project.path === folder.selected ? "in use" : "", project.usable ? "" : "its $path folders do not exist"].filter((text) => text).join(", "),
+		path: project.path,
+	}));
+	const picked = await vscode.window.showQuickPick(items, {
+		title: "Lunaut: Rojo project",
+		placeHolder: "The project the sourcemap is built from",
+	});
+
+	if (picked && picked.path !== folder.setting) {
+		await updateSetting("rojo.projectFile", picked.path);
+	}
+}
+
 function getMenuEntries(context: vscode.ExtensionContext): MenuEntry[] {
 	const version = client?.initializeResult?.serverInfo?.version ?? context.extension.packageJSON.version;
 	const config = vscode.workspace.getConfiguration("lunaut");
@@ -329,6 +360,7 @@ function getMenuEntries(context: vscode.ExtensionContext): MenuEntry[] {
 		{ id: "restart", label: "$(debug-restart) Restart Server", run: () => vscode.commands.executeCommand("lunaut.restart"), slow: "restarting the server" },
 		{ id: "reload", label: "$(refresh) Reload Definitions and FFlags", run: () => runServerCommand("lunaut.server.reloadWorkspace"), slow: "reloading definitions and FFlags, big projects take a few seconds" },
 		{ id: "sourcemap", label: "$(sync) Regenerate Rojo Sourcemap", run: () => vscode.commands.executeCommand("lunaut.regenerateSourcemap"), slow: "regenerating the Rojo sourcemap" },
+		{ id: "project", label: "$(project) Select Rojo Project", description: config.get<string>("rojo.projectFile", "default.project.json"), run: () => selectRojoProject(), modal: true },
 		{ id: "status", label: "$(info) Show Status", run: () => vscode.commands.executeCommand("lunaut.showStatus") },
 		{ id: "fflags", label: "$(symbol-constant) Show FFlags", run: () => vscode.commands.executeCommand("lunaut.showFFlags"), modal: true },
 		{ id: "definitions", label: "$(file-code) Show Loaded Definitions", run: () => vscode.commands.executeCommand("lunaut.showDefinitions") },
@@ -434,6 +466,7 @@ export async function activate(
 			}
 		}),
 		vscode.commands.registerCommand("lunaut.regenerateSourcemap", () => regenerateSourcemap()),
+		vscode.commands.registerCommand("lunaut.selectRojoProject", () => selectRojoProject()),
 		vscode.commands.registerCommand("lunaut.openMenu", () => openMenu(context)),
 		vscode.commands.registerCommand("lunaut.installStudioPlugin", () => installStudioPlugin(context)),
 		vscode.commands.registerCommand("lunaut.showReferences", (uri: string, position: { line: number; character: number }, locations: { uri: string; range: object }[]) => {

@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Select Rojo Project** in the Lunaut menu and `Lunaut: Select Rojo Project`: lists every `*.project.json` in the workspace, marks the ones whose `$path` folders are missing and saves the choice in `lunaut.rojo.projectFile`
+
+### Fixed
+
+- A Rojo project in a subfolder, such as `bin/build.project.json`, gives a sourcemap whose paths start at the workspace root (`bin/core/init.luau`), not at the folder of the project
+- Without `lunaut.rojo.projectFile` in the root, a project in the root wins over a `default.project.json` deeper down, and projects whose `$path` folders do not exist come last
+- A project whose `$path` points nowhere, like `"$path": "src"` inside `src/default.project.json` (that is `src/src`), is reported with the path Rojo looked at instead of producing an empty sourcemap
+- VS Code no longer runs `rojo sourcemap --watch` for a project in a subfolder, since it would write paths relative to that folder; the server regenerates the sourcemap instead
+
 ## [0.1.7] - 2026-11-22
 
 ### Added

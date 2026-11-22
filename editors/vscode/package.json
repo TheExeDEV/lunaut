@@ -116,6 +116,11 @@
         "category": "Lunaut"
       },
       {
+        "command": "lunaut.selectRojoProject",
+        "title": "Select Rojo Project",
+        "category": "Lunaut"
+      },
+      {
         "command": "lunaut.installStudioPlugin",
         "title": "Install Roblox Studio Plugin",
         "category": "Lunaut"
