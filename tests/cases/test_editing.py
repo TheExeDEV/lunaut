@@ -103,6 +103,62 @@ class EditingTests(unittest.TestCase):
 		broken = client.wait_for("textDocument/publishDiagnostics", lambda params: params["uri"].lower() == uri.lower() and any("second_value" in item["message"] for item in params["diagnostics"]), timeout=60)
 		self.assertTrue(broken["diagnostics"])
 
+	def labels(self, client, uri, line, character):
+		result = client.request("textDocument/completion", {"textDocument": {"uri": uri}, "position": {"line": line, "character": character}})
+		return {item["label"] for item in (result["items"] if isinstance(result, dict) else result)}
+
+	def test_show_as_module_types_complete_and_need_the_module_name(self):
+		write(self.folder, "types/base.d.luau", "export type Vehicle = { speed: number }\nexport type Wheel = { size: number }\ndeclare function make_vehicle(): Vehicle\n")
+		write(self.folder, "types/later.d.luau", "declare function make_wheel(): base.Wheel\n")
+		write(self.folder, "main.luau", "--!strict\nlocal car: base.Vehicle = make_vehicle()\nlocal plain: Vehicle = make_vehicle()\nlocal wheel: base.Wheel = make_wheel()\nlocal pick: b = nil\nreturn { car, plain, wheel, pick }\n")
+		definitions = [{"path": "types/base.d.luau", "name": "@base", "show_as_module": True, "priority": 10}, "types/later.d.luau"]
+		client = self.start({"lunaut.definitions": definitions, "lunaut.discoverDefinitions": False})
+		uri, diagnostics = client.open("main.luau")
+
+		messages = [diagnostic["message"] for diagnostic in diagnostics]
+		self.assertIn("Unknown type 'Vehicle'", messages)
+		self.assertIn("Unknown type 'b'", messages)
+		self.assertEqual(len(messages), 2, messages)
+		self.assertTrue(all(item["success"] for item in client.request("lunaut/definitions", {})[0]["definitions"]))
+
+		in_type = self.labels(client, uri, 4, 13)
+		self.assertIn("base", in_type)
+		self.assertNotIn("Vehicle", in_type)
+		self.assertEqual(self.labels(client, uri, 1, 17) & {"Vehicle", "Wheel", "base"}, {"Vehicle", "Wheel"})
+
+		hover = client.request("textDocument/hover", {"textDocument": {"uri": uri}, "position": {"line": 1, "character": 17}})
+		self.assertIn("type base.Vehicle", hover["contents"]["value"])
+
+	def test_show_as_module_directive_in_the_file(self):
+		write(self.folder, "types/base.d.luau", "--!lunaut_show_as_module true\nexport type Vehicle = { speed: number }\n")
+		write(self.folder, "types/flat.d.luau", "--!lunaut_show_as_module true\nexport type Flat = { size: number }\n")
+		write(self.folder, "main.luau", "--!strict\nlocal a: base.Vehicle = { speed = 1 }\nlocal b: Vehicle = { speed = 1 }\nlocal c: Flat = { size = 1 }\nreturn { a, b, c }\n")
+		definitions = ["types/base.d.luau", {"path": "types/flat.d.luau", "show_as_module": False}]
+		client = self.start({"lunaut.definitions": definitions, "lunaut.discoverDefinitions": False})
+		_, diagnostics = client.open("main.luau")
+
+		self.assertEqual([diagnostic["message"] for diagnostic in diagnostics], ["Unknown type 'Vehicle'"])
+		listed = {item["name"]: item["show_as_module"] for item in client.request("lunaut/definitions", {})[0]["definitions"]}
+		self.assertEqual(listed, {"@base": True, "@flat": False})
+
+	def test_saving_definitions_can_skip_the_reload(self):
+		first = write(self.folder, "types/first.d.luau", "declare first_value: number\n")
+		write(self.folder, "main.luau", "--!strict\nlocal a: number = first_value\nreturn a\n")
+		settings = {"lunaut.definitions": ["types/first.d.luau"], "lunaut.discoverDefinitions": False, "lunaut.restartOnDefinitionChanges": False}
+		client = self.start(settings)
+		uri, diagnostics = client.open("main.luau")
+		self.assertEqual(diagnostics, [])
+
+		first.write_text("declare other_value: number\n", encoding="utf-8")
+		client.notify("workspace/didChangeWatchedFiles", {"changes": [{"uri": to_uri(first), "type": 2}]})
+		client.request("lunaut/status", {})
+		hover = client.request("textDocument/hover", {"textDocument": {"uri": uri}, "position": {"line": 1, "character": 20}})
+		self.assertIn("number", hover["contents"]["value"])
+
+		client.request("workspace/executeCommand", {"command": "lunaut.server.reloadWorkspace", "arguments": []})
+		broken = client.wait_for("textDocument/publishDiagnostics", lambda params: params["uri"].lower() == uri.lower() and any("first_value" in item["message"] for item in params["diagnostics"]), timeout=60)
+		self.assertTrue(broken["diagnostics"])
+
 	def test_fflags_reload_without_restart(self):
 		client = self.start({"lunaut.fflags.override": {"LuauTypeMaximumStringifierLength": "123"}})
 		flags = {flag["name"]: flag["value"] for flag in client.request("lunaut/fflags", {"filter": "LuauTypeMaximumStringifierLength"})}

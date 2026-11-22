@@ -15,6 +15,7 @@ namespace priv
 {
 
 constexpr std::string_view priority_directive = "--!priority";
+constexpr std::string_view show_as_module_directive = "--!lunaut_show_as_module";
 constexpr std::string_view discovery_pattern = "**/*.d.luau";
 constexpr size_t directive_lines = 32;
 
@@ -28,6 +29,7 @@ struct collector
 
 std::pair<std::filesystem::path, std::string> split_pattern(const std::filesystem::path& root, const std::string& pattern);
 std::filesystem::path resolve_path(const std::filesystem::path& root, const std::string& path);
+std::optional<std::string> get_directive(const std::string& source, std::string_view directive);
 
 }
 }
@@ -85,7 +87,8 @@ std::vector<definitioninfo> definitionloader::collect(
 	{
 		for (const std::filesystem::path& file : stdx::find_files(root, priv::discovery_pattern, settings.ignore_globs))
 		{
-			collected.add(definitioninfo{file.generic_string(), "", std::nullopt, false, enumitem_definition_source::Discovered}, file);
+			collected.add(
+				definitioninfo{file.generic_string(), "", std::nullopt, std::nullopt, enumitem_definition_source::Discovered}, file);
 		}
 	}
 #endif
@@ -100,36 +103,40 @@ std::vector<definitioninfo> definitionloader::collect(
 
 std::optional<int> definitionloader::get_directive_priority(const std::string& source)
 {
-	std::vector<std::string> lines = stdx::split(source, '\n');
-	size_t limit = std::min(lines.size(), priv::directive_lines);
+	std::optional<std::string> value = priv::get_directive(source, priv::priority_directive);
 
-	for (size_t i = 0; i < limit; ++i)
+	if (!value)
 	{
-		std::string line = stdx::trim(lines[i]);
+		return std::nullopt;
+	}
 
-		if (line.empty())
-		{
-			continue;
-		}
+	try
+	{
+		return std::stoi(*value);
+	}
+	catch (const std::exception&)
+	{
+		return std::nullopt;
+	}
+}
 
-		if (!stdx::starts_with(line, "--"))
-		{
-			break;
-		}
+std::optional<bool> definitionloader::get_directive_show_as_module(const std::string& source)
+{
+	std::optional<std::string> value = priv::get_directive(source, priv::show_as_module_directive);
 
-		if (!stdx::starts_with(line, priv::priority_directive))
-		{
-			continue;
-		}
+	if (!value)
+	{
+		return std::nullopt;
+	}
 
-		try
-		{
-			return std::stoi(stdx::trim(line.substr(priv::priority_directive.size())));
-		}
-		catch (const std::exception&)
-		{
-			return std::nullopt;
-		}
+	if (value->empty() || *value == "true")
+	{
+		return true;
+	}
+
+	if (*value == "false")
+	{
+		return false;
 	}
 
 	return std::nullopt;
@@ -179,11 +186,19 @@ void collector::add(definitioninfo info, const std::filesystem::path& file)
 
 	info.path = normalized;
 
-	if (!info.priority)
+	if (!info.priority || !info.show_as_module)
 	{
 		if (std::optional<std::string> contents = stdx::read_file(file))
 		{
-			info.priority = definitionloader::get_directive_priority(*contents);
+			if (!info.priority)
+			{
+				info.priority = definitionloader::get_directive_priority(*contents);
+			}
+
+			if (!info.show_as_module)
+			{
+				info.show_as_module = definitionloader::get_directive_show_as_module(*contents);
+			}
 		}
 	}
 
@@ -221,6 +236,43 @@ std::filesystem::path resolve_path(const std::filesystem::path& root, const std:
 	}
 
 	return root / candidate;
+}
+
+std::optional<std::string> get_directive(const std::string& source, std::string_view directive)
+{
+	std::vector<std::string> lines = stdx::split(source, '\n');
+	size_t limit = std::min(lines.size(), directive_lines);
+
+	for (size_t i = 0; i < limit; ++i)
+	{
+		std::string line = stdx::trim(lines[i]);
+
+		if (line.empty())
+		{
+			continue;
+		}
+
+		if (!stdx::starts_with(line, "--"))
+		{
+			break;
+		}
+
+		if (!stdx::starts_with(line, directive))
+		{
+			continue;
+		}
+
+		std::string rest = line.substr(directive.size());
+
+		if (!rest.empty() && rest.front() != ' ' && rest.front() != '\t')
+		{
+			continue;
+		}
+
+		return stdx::trim(rest);
+	}
+
+	return std::nullopt;
 }
 
 }

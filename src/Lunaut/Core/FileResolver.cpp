@@ -283,6 +283,11 @@ void fileresolver::set_show_as_modules(std::set<std::string> modules)
 	show_as_modules = std::move(modules);
 }
 
+const std::set<std::string>& fileresolver::get_show_as_modules() const
+{
+	return show_as_modules;
+}
+
 void fileresolver::clear_config_cache()
 {
 	configs.clear();

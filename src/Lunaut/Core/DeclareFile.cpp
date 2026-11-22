@@ -26,7 +26,8 @@ const std::vector<std::pair<std::string_view, int>> relevant_features = {
 	{"fflags", 1},
 	{"rojo", 1},
 	{"settings", 1},
-	{"show_as_module", 1},
+	{"restart_on_definition_changes", 1},
+	{"show_as_module", 2},
 };
 
 const std::vector<std::pair<std::string_view, int>> relevant_json_output = {
@@ -178,6 +179,10 @@ json make_definitions()
 		{"priority_directive", {{"text", "--!priority"}, {"lines", 32}}},
 		{"duplicates", "first"},
 		{"show_as_module_name", {{"strip", "first @"}, {"pattern", "^[A-Za-z_][A-Za-z0-9_]*$"}}},
+		{"show_as_module_sources", json::array({"settings", "directive", "default"})},
+		{"show_as_module_directive", {{"text", "--!lunaut_show_as_module"}, {"values", json::array({"true", "false"})}, {"lines", 32}}},
+		{"show_as_module_access", "only through the module name, such as base.Vehicle"},
+		{"restart_on_definition_changes_setting", "lunaut.restartOnDefinitionChanges"},
 		{"reserved_names", json::array({"@roblox"})},
 		{"roblox_priority_setting", "lunaut.roblox.typesPriority"},
 	};
