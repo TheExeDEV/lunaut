@@ -14,6 +14,19 @@ class CliTests(unittest.TestCase):
 		self.assertEqual(result.returncode, 0)
 		self.assertIn("lunaut analyze", result.stdout)
 		self.assertIn("--definition=", result.stdout)
+		self.assertIn("lunaut update", result.stdout)
+		self.assertIn("--dry-run", result.stdout)
+
+	def test_update_dry_run(self):
+		result = run_cli("update", "--dry-run")
+		self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+		self.assertIn("https://raw.githubusercontent.com/TheExeDEV/lunaut/main/installers/install", result.stdout)
+		self.assertIn("LUNAUT_EDITORS", result.stdout)
+
+	def test_update_offline(self):
+		result = run_cli("update")
+		self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+		self.assertIn("offline mode", result.stderr)
 
 	def test_unknown_option(self):
 		result = run_cli("--what")

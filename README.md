@@ -123,6 +123,12 @@ Options, set before the command: `LUNAUT_VERSION=0.1.0` installs a specific vers
 
 **Manually:** download `lunaut-<platform>` from the latest release, rename it to `lunaut` (or `lunaut.exe`) and put it on your `PATH`. Install `lunaut.vsix` with `code --install-extension lunaut.vsix`, or install [Lunaut (`theexe.lunaut-luau`) from the VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=theexe.lunaut-luau).
 
+### Updating
+
+Run `lunaut update`. It picks the right command for your system (PowerShell on Windows, `curl` and `sh` on Linux, macOS and Git Bash) and runs the same installer with `LUNAUT_EDITORS=path`, so it updates only the `lunaut` command on your `PATH` and does not touch editor extensions. `lunaut update --dry-run` prints the command without running it.
+
+On Windows, run this from a copy outside `%LOCALAPPDATA%\lunaut\bin` and stop running lunaut processes first: an executable that is in use cannot be replaced, so the installer cannot write over a binary that an editor's language server still holds.
+
 ### Uninstall
 
 Also one script for every system:
@@ -780,6 +786,7 @@ Requires into those folders keep working; only their own diagnostics are hidden.
 | `lunaut flags` | lists every Luau FFlag with its value and source |
 | `lunaut init [folders]` | writes [`.lunaut-declare`](#lunaut-declare) into each folder (default `.`), or adds the missing keys to an existing one |
 | `lunaut declare [--json]` | prints the `.lunaut-declare` content of this lunaut |
+| `lunaut update [--dry-run]` | silently update the `lunaut` command on `PATH`, or just print the command |
 | `lunaut version` | version, Luau version and compiler |
 | `lunaut help` | usage |
 
@@ -793,6 +800,7 @@ Options for every command:
 | `--settings=file` | extra settings in `.vscode/settings.json` format, applied last |
 | `--verbose` | print the server log to stderr |
 | `--json` | print `flags`, `stats` or `declare` as JSON |
+| `--dry-run` | print the `update` command without running it |
 
 ---
 

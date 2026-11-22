@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- `lunaut update` runs the official installer silently for the current platform and updates only the `lunaut` command on `PATH`; `--dry-run` prints the chosen command without running it
+
 ## [0.1.8] - 2026-11-22
 
 ### Added

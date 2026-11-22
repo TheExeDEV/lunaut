@@ -1160,4 +1160,11 @@ private:
 	size_t warnings = 0;
 };
 
+class updater final
+{
+public:
+	std::string make_command() const;
+	result<int> invoke(bool dry_run) const;
+};
+
 }
