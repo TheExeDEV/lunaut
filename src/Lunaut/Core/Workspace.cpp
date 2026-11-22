@@ -32,6 +32,8 @@ void collect_declarations(
 	std::unordered_map<std::string, declarationinfo>& globals,
 	std::unordered_map<std::string, declarationinfo>& types);
 void run_parallel_tasks(std::vector<std::function<void()>> tasks);
+std::optional<std::string> get_module_alias(const std::string& name);
+void move_into_module(Luau::GlobalTypes& globals, const std::string& alias, const std::unordered_map<Luau::Name, Luau::TypeFun>& exported);
 
 }
 }
@@ -612,6 +614,7 @@ void workspace::load_definitions()
 	definition_show_as_module.clear();
 
 	std::set<std::string> packages;
+	std::set<std::string> show_as_modules;
 	json metadata = json::object();
 
 	for (const definitioninfo& info : definitionloader::collect(root, settings, roblox, owner))
@@ -620,7 +623,7 @@ void workspace::load_definitions()
 		loaded.path = info.path;
 		loaded.priority = info.priority.value_or(0);
 		loaded.source = info.source;
-		loaded.show_as_module = info.show_as_module;
+		loaded.show_as_module = info.show_as_module.value_or(false);
 		loaded.name = definitionloader::get_package_name(info, info.path);
 
 		for (size_t index = 2; !packages.insert(loaded.name).second; ++index)
@@ -696,60 +699,23 @@ void workspace::load_definitions()
 		definition_module_paths[loaded.name] = info.path;
 		definition_sources.emplace(loaded.name, std::move(result.sourceModule));
 
-		if (loaded.show_as_module)
+		std::optional<std::string> alias = loaded.show_as_module ? priv::get_module_alias(loaded.name) : std::nullopt;
+
+		if (alias && result.module)
 		{
 			definition_show_as_module.insert(loaded.name);
+			priv::move_into_module(frontend.globals, *alias, result.module->exportedTypeBindings);
+
+			if (!FFlag::LuauSolverV2)
+			{
+				priv::move_into_module(frontend.globalsForAutocomplete, *alias, result.module->exportedTypeBindings);
+			}
+
+			show_as_modules.insert(*alias);
 		}
 
 		definition_modules.emplace(loaded.name, std::move(result.module));
 		definitions.push_back(loaded);
-	}
-
-	std::set<std::string> show_as_modules;
-
-	for (const auto& [name, module] : definition_modules)
-	{
-		if (!module || definition_show_as_module.count(name) == 0)
-		{
-			continue;
-		}
-
-		std::string alias = name;
-		size_t start = alias.find('@');
-
-		if (start != std::string::npos)
-		{
-			alias.erase(start, 1);
-		}
-
-		if (alias.empty())
-		{
-			continue;
-		}
-
-		auto import_bindings = [](const Luau::ScopePtr& global_scope, const std::unordered_map<Luau::Name, Luau::TypeFun>& exported)
-		{
-			std::unordered_map<Luau::Name, Luau::TypeFun> bindings;
-
-			for (const auto& [name, definition] : exported)
-			{
-				auto known = global_scope->exportedTypeBindings.find(name);
-				bindings.emplace(name, known != global_scope->exportedTypeBindings.end() ? known->second : definition);
-			}
-
-			return bindings;
-		};
-
-		frontend.globals.globalScope->importedTypeBindings[alias] =
-			import_bindings(frontend.globals.globalScope, module->exportedTypeBindings);
-
-		if (!FFlag::LuauSolverV2)
-		{
-			frontend.globalsForAutocomplete.globalScope->importedTypeBindings[alias] =
-				import_bindings(frontend.globalsForAutocomplete.globalScope, module->exportedTypeBindings);
-		}
-
-		show_as_modules.insert(std::move(alias));
 	}
 
 	resolver.set_show_as_modules(std::move(show_as_modules));
@@ -1061,6 +1027,44 @@ void run_parallel_tasks(std::vector<std::function<void()>> tasks)
 	if (failure)
 	{
 		std::rethrow_exception(failure);
+	}
+}
+
+std::optional<std::string> get_module_alias(const std::string& name)
+{
+	std::string alias = name;
+	size_t start = alias.find('@');
+
+	if (start != std::string::npos)
+	{
+		alias.erase(start, 1);
+	}
+
+	if (alias.empty())
+	{
+		return std::nullopt;
+	}
+
+	return alias;
+}
+
+void move_into_module(Luau::GlobalTypes& globals, const std::string& alias, const std::unordered_map<Luau::Name, Luau::TypeFun>& exported)
+{
+	std::unordered_map<Luau::Name, Luau::TypeFun>& global_types = globals.globalScope->exportedTypeBindings;
+	std::unordered_map<Luau::Name, Luau::TypeFun>& module_types = globals.globalScope->importedTypeBindings[alias];
+
+	for (const auto& [name, definition] : exported)
+	{
+		auto known = global_types.find(name);
+
+		if (known == global_types.end())
+		{
+			module_types.insert_or_assign(name, definition);
+			continue;
+		}
+
+		module_types.insert_or_assign(name, known->second);
+		global_types.erase(known);
 	}
 }
 

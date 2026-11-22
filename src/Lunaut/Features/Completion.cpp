@@ -49,6 +49,7 @@ std::optional<Luau::ModuleName> get_property_module(const Luau::Module& module, 
 std::optional<json> get_member_range(const textdocument& document, Luau::Position position);
 bool is_plain_name(const std::string& name);
 std::string quote_name(const std::string& name);
+bool is_qualified_type(const std::vector<Luau::AstNode*>& ancestry);
 
 }
 }
@@ -208,6 +209,24 @@ json workspace::get_completion(const json& params)
 		for (json& item : get_auto_imports(name, *document, taken))
 		{
 			items.push_back(std::move(item));
+		}
+	}
+
+	if (completion.context == Luau::AutocompleteContext::Type && !priv::is_qualified_type(completion.ancestry))
+	{
+		for (const std::string& alias : resolver.get_show_as_modules())
+		{
+			if (completion.entryMap.count(alias) != 0)
+			{
+				continue;
+			}
+
+			items.push_back({
+				{"label", alias},
+				{"kind", static_cast<int>(enumitem_completion_kind::Module)},
+				{"sortText", "2" + alias},
+				{"detail", "definitions @" + alias},
+			});
 		}
 	}
 
@@ -473,6 +492,18 @@ std::optional<json> get_string_range(const textdocument& document, const std::ve
 	}
 
 	return document.to_lsp_range(inner);
+}
+
+bool is_qualified_type(const std::vector<Luau::AstNode*>& ancestry)
+{
+	if (ancestry.empty())
+	{
+		return false;
+	}
+
+	const Luau::AstTypeReference* reference = ancestry.back()->as<Luau::AstTypeReference>();
+
+	return reference != nullptr && reference->prefix.has_value();
 }
 
 }

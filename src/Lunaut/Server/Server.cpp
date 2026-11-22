@@ -916,7 +916,7 @@ void server::on_did_change_watched_files(const json& params)
 			changes.end(),
 			[folder](const json& change) { return folder->is_definition_file(uri::to_path(change.value("uri", ""))); });
 
-		if (definitions)
+		if (definitions && folder->get_settings().restart_on_definition_changes)
 		{
 			reload_workspace(folder, "a definition file changed");
 			continue;

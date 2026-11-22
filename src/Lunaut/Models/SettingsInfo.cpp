@@ -25,6 +25,7 @@ const std::unordered_map<std::string_view, std::string_view> relevant_vscode_key
 	{"lunaut.fflags.override", "/fflags/override"},
 	{"lunaut.definitions", "/definitions"},
 	{"lunaut.discoverDefinitions", "/discover_definitions"},
+	{"lunaut.restartOnDefinitionChanges", "/restart_on_definition_changes"},
 	{"lunaut.roblox.downloadTypes", "/roblox/download_types"},
 	{"lunaut.roblox.securityLevel", "/roblox/security_level"},
 	{"lunaut.roblox.typesPriority", "/roblox/types_priority"},
@@ -157,6 +158,7 @@ settingsinfo settingsinfo::from_json(const json& data, const settingsinfo& base)
 	}
 
 	priv::read(data, "discover_definitions", info.discover_definitions);
+	priv::read(data, "restart_on_definition_changes", info.restart_on_definition_changes);
 
 	if (data.contains("roblox") && data["roblox"].is_object())
 	{
@@ -395,6 +397,12 @@ json settingsinfo::to_json() const
 		{
 			item["priority"] = *definition.priority;
 		}
+
+		if (definition.show_as_module)
+		{
+			item["show_as_module"] = *definition.show_as_module;
+		}
+
 		definition_list.push_back(item);
 	}
 
@@ -407,6 +415,7 @@ json settingsinfo::to_json() const
 		  {"override", fflags.override}}},
 		{"definitions", definition_list},
 		{"discover_definitions", discover_definitions},
+		{"restart_on_definition_changes", restart_on_definition_changes},
 		{"roblox",
 		 {{"download_types", roblox.download_types}, {"security_level", roblox.security_level}, {"types_priority", roblox.types_priority}}},
 		{"rojo",
@@ -521,7 +530,7 @@ void read_definitions(const json& data, std::vector<definitioninfo>& target)
 	if (data.is_string())
 	{
 		target.clear();
-		target.push_back(definitioninfo{data.get<std::string>(), "", std::nullopt, false, enumitem_definition_source::Config});
+		target.push_back(definitioninfo{data.get<std::string>(), "", std::nullopt, std::nullopt, enumitem_definition_source::Config});
 		return;
 	}
 
@@ -532,7 +541,8 @@ void read_definitions(const json& data, std::vector<definitioninfo>& target)
 		{
 			if (path.is_string())
 			{
-				target.push_back(definitioninfo{path.get<std::string>(), name, std::nullopt, false, enumitem_definition_source::Config});
+				target.push_back(
+					definitioninfo{path.get<std::string>(), name, std::nullopt, std::nullopt, enumitem_definition_source::Config});
 			}
 		}
 		return;
@@ -549,7 +559,7 @@ void read_definitions(const json& data, std::vector<definitioninfo>& target)
 	{
 		if (item.is_string())
 		{
-			target.push_back(definitioninfo{item.get<std::string>(), "", std::nullopt, false, enumitem_definition_source::Config});
+			target.push_back(definitioninfo{item.get<std::string>(), "", std::nullopt, std::nullopt, enumitem_definition_source::Config});
 			continue;
 		}
 

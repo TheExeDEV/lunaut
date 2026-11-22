@@ -1431,7 +1431,7 @@
                   "show_as_module": {
                     "type": "boolean",
                     "default": false,
-                    "markdownDescription": "Display types from this file as if they came from a required module, for example `@core.pointer`."
+                    "markdownDescription": "Reach the exported types of this file only through its name, like a required module: `@base` gives `base.Vehicle`. Without this key, a `--!lunaut_show_as_module true` line at the top of the file decides."
                   }
                 }
               }
@@ -1442,6 +1442,11 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Load every `*.d.luau` found in the workspace."
+        },
+        "lunaut.restartOnDefinitionChanges": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Rebuild the workspace when a `.d.luau` file is saved. Turn off to reload yourself with **Reload Definitions and FFlags** in the Lunaut menu."
         },
         "lunaut.roblox.downloadTypes": {
           "type": "boolean",

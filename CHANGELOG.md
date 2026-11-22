@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Added
+
+- `lunaut.restartOnDefinitionChanges` (default `true`): turn it off and saving a `.d.luau` file no longer rebuilds the workspace, so you reload yourself with **Reload Definitions and FFlags** when the definitions are ready
+- `--!lunaut_show_as_module true` or `false` at the top of a definition file does what `show_as_module` in settings does; the setting wins when both are given
+
+### Fixed
+
+- Definition files with `show_as_module` show up in type completion: `local car: b` offers `base`, and `base.` lists its types
+- Types of a `show_as_module` file are reached only as `base.Vehicle`; a plain `Vehicle` is an unknown type instead of slipping past the module name. Definition files loaded after it can use `base.Vehicle` too
+
 ## [0.1.6] - 2026-11-21
 
 ### Fixed

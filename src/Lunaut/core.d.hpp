@@ -230,7 +230,7 @@ struct definitioninfo
 	std::string path;
 	std::string name;
 	std::optional<int> priority;
-	bool show_as_module = false;
+	std::optional<bool> show_as_module;
 	enumitem_definition_source source = enumitem_definition_source::Config;
 };
 
@@ -312,6 +312,7 @@ struct settingsinfo
 	fflaginfo fflags;
 	std::vector<definitioninfo> definitions;
 	bool discover_definitions = true;
+	bool restart_on_definition_changes = true;
 	robloxinfo roblox;
 	rojoinfo rojo;
 	diagnosticsinfo diagnostics;
@@ -660,6 +661,7 @@ class definitionloader
 public:
 	static std::vector<definitioninfo> collect(const std::filesystem::path& root, const settingsinfo& settings, bool roblox, client& owner);
 	static std::optional<int> get_directive_priority(const std::string& source);
+	static std::optional<bool> get_directive_show_as_module(const std::string& source);
 	static std::string get_package_name(const definitioninfo& info, const std::filesystem::path& path);
 };
 
@@ -791,6 +793,7 @@ public:
 	void set_sourcemap(const sourcemap* map);
 	void set_base_config(const std::filesystem::path& path);
 	void set_show_as_modules(std::set<std::string> modules);
+	const std::set<std::string>& get_show_as_modules() const;
 	void clear_config_cache();
 
 	std::optional<std::filesystem::path> get_require_target(const std::string& requirer, const std::string& required) const;

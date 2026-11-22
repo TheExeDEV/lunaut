@@ -256,6 +256,7 @@ All settings live in VS Code settings under `lunaut.*` (luau-lsp settings work t
 | `lunaut.fflags.override` | `{}` | flag values that win over everything except `--flag`; flag names complete as you type |
 | `lunaut.definitions` | `[]` | definition files, see below |
 | `lunaut.discoverDefinitions` | `true` | also load every `*.d.luau` in the workspace |
+| `lunaut.restartOnDefinitionChanges` | `true` | rebuild the workspace when a `.d.luau` file is saved; turn off to reload yourself with **Reload Definitions and FFlags** |
 | `lunaut.roblox.downloadTypes` | `true` | download Roblox API definitions in Roblox mode |
 | `lunaut.roblox.securityLevel` | `PluginSecurity` | `None`, `LocalUserSecurity`, `PluginSecurity`, `RobloxScriptSecurity` |
 | `lunaut.roblox.typesPriority` | `1000` | load priority of the Roblox definitions |
@@ -396,7 +397,32 @@ Where files come from:
 | discovery | every `*.d.luau` in the workspace when `lunaut.discoverDefinitions` is on |
 | Roblox | `globalTypes.<security_level>.d.luau`, priority `lunaut.roblox.typesPriority` |
 
-A file listed twice is loaded once, with the first priority found. Every file gets a package name (`@base`, `@roblox`); set it with `name`. Errors in a definition file show up as diagnostics in that file and in `Lunaut: Show Loaded Definitions`. Changes to definition files need a restart.
+A file listed twice is loaded once, with the first priority found. Every file gets a package name (`@base`, `@roblox`); set it with `name`. Errors in a definition file show up as diagnostics in that file and in `Lunaut: Show Loaded Definitions`.
+
+Saving a definition file rebuilds the workspace without a restart. When you edit definitions bit by bit and want to choose the moment yourself, set `"lunaut.restartOnDefinitionChanges": false` and reload with **Reload Definitions and FFlags** in the Lunaut menu (`Lunaut: Reload Workspace` in `Ctrl+.` elsewhere). Changing `lunaut.definitions` itself still reloads at once.
+
+### Types as a module
+
+With `show_as_module`, the exported types of a file are reached through its package name, like the types of a required module:
+
+```luau
+-- types/base.d.luau, loaded as @base
+export type Vehicle = { speed: number }
+```
+
+```luau
+local car: base.Vehicle = make_vehicle()
+```
+
+`base` is offered in type completion, `base.` lists the types, and hover shows `base.Vehicle`. A plain `Vehicle` is an unknown type, so the name always says where the type comes from. Definition files loaded later can use `base.Vehicle` too.
+
+Turn it on in settings, `{ "path": "types/base.d.luau", "name": "@base", "show_as_module": true }`, or in the file itself, among the comment lines at the top:
+
+```luau
+--!lunaut_show_as_module true
+```
+
+The setting wins over the line in the file; `--!lunaut_show_as_module false` turns it off for a file matched by a glob.
 
 ---
 
@@ -667,7 +693,7 @@ Inside `require("...")` completion lists the aliases and `./`, `../` first, then
 {
   "api_version": 1,
   "lunaut_version": "0.0.9",
-  "features": { "analyzer": 1, "base_luaurc": 1, "crater_packages": 1, "definition_priority": 1, "definitions": 1, "fflags": 1, "rojo": 1, "settings": 1, "show_as_module": 1 },
+  "features": { "analyzer": 1, "base_luaurc": 1, "crater_packages": 1, "definition_priority": 1, "definitions": 1, "fflags": 1, "restart_on_definition_changes": 1, "rojo": 1, "settings": 1, "show_as_module": 2 },
   "settings": {
     "file": ".vscode/settings.json",
     "prefix": "lunaut.",
@@ -692,6 +718,10 @@ Inside `require("...")` completion lists the aliases and `./`, `../` first, then
     "priority_directive": { "text": "--!priority", "lines": 32 },
     "duplicates": "first",
     "show_as_module_name": { "strip": "first @", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+    "show_as_module_sources": ["settings", "directive", "default"],
+    "show_as_module_directive": { "text": "--!lunaut_show_as_module", "values": ["true", "false"], "lines": 32 },
+    "show_as_module_access": "only through the module name, such as base.Vehicle",
+    "restart_on_definition_changes_setting": "lunaut.restartOnDefinitionChanges",
     "reserved_names": ["@roblox"],
     "roblox_priority_setting": "lunaut.roblox.typesPriority"
   },
@@ -715,6 +745,9 @@ Inside `require("...")` completion lists the aliases and `./`, `../` first, then
 | `definitions.duplicates` | A file listed twice is loaded once, with the first priority found. |
 | `definitions.default_name`, `name_prefix` | A file without `name` is called `@` plus its file name; a name always starts with `@`. |
 | `definitions.show_as_module_name` | With `show_as_module`, the first `@` of the name is dropped and the rest has to be an identifier, so `@base` gives `base.Vehicle`. |
+| `definitions.show_as_module_sources`, `show_as_module_directive` | `show_as_module` in settings wins, then the `--!lunaut_show_as_module true` or `false` line in the first 32 lines of the file, then `false`. |
+| `definitions.show_as_module_access` | Types of such a file are reached only as `base.Vehicle`, not as a plain `Vehicle`. |
+| `definitions.restart_on_definition_changes_setting` | The setting that turns off the rebuild when a definition file is saved. |
 | `definitions.reserved_names` | `@roblox` is the downloaded Roblox API. Another file with that name gets `@roblox_2`. |
 | `schemas.settings` | The VS Code extension manifest; `contributes.configuration.properties` is the JSON schema of every setting. |
 | `cli.json_output` | Each command that prints JSON with `--json` and the version of that output. |
