@@ -1,6 +1,6 @@
 id = "lunaut"
 name = "Lunaut"
-version = "0.1.8"
+version = "0.1.9"
 schema_version = 1
 authors = ["TheExeDEV"]
 description = "Luau language support: highlighting and the lunaut language server with Roblox, Rojo, FFlags and prioritized .d.luau definitions"

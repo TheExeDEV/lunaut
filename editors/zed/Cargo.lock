@@ -773,7 +773,7 @@ dependencies = [
 
 [[package]]
 name = "zed_lunaut"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "zed_extension_api",
 ]

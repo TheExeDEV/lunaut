@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-11-23
+
 ### Added
 
 - `lunaut.implicitSelf` (off by default): the implicit `self` of `function X:name() ... end` gets the type alias `X` when one without generics is in scope, as if it were `function X.name(self: X)`, with both solvers and in nested functions too. Only a plain name before `:` and a function closed with `end` count
