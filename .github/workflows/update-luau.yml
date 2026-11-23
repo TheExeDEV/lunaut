@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   sync:
@@ -31,11 +32,20 @@ jobs:
           cmake --build build -j 4
           python tests/run.py
 
-      - name: Commit to main
+      - name: Commit and release
         if: steps.bump.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "TheExeDEV"
           git config user.email "209019560+TheExeDEV@users.noreply.github.com"
           git add luau.version extern/luau CHANGELOG.md
           git commit -m "Sync to upstream Luau ${{ steps.bump.outputs.version }}"
+
+          release="$(python scripts/release.py bump)"
+          git add CHANGELOG.md CMakeLists.txt editors/vscode/package.json editors/zed/Cargo.toml editors/zed/Cargo.lock editors/zed/extension.toml
+          git commit -m "Release $release"
           git push origin HEAD:main
+
+          gh workflow run release.yml --ref main -f ref=main -f version="$release"
+          echo "Released lunaut $release with Luau ${{ steps.bump.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"

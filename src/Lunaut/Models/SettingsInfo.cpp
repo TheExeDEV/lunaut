@@ -57,6 +57,8 @@ const std::unordered_map<std::string_view, std::string_view> relevant_vscode_key
 	{"lunaut.hover.documentation", "/features/documentation"},
 	{"lunaut.completion.autoImports", "/features/auto_imports"},
 	{"lunaut.completion.importKeyword", "/features/import_keyword"},
+	{"lunaut.completion.imports.requireStyle", "/features/require_style"},
+	{"lunaut.completion.imports.aliasPath", "/features/alias_path"},
 	{"lunaut.semanticTokens.enabled", "/features/semantic_tokens"},
 	{"lunaut.colors.enabled", "/features/colors"},
 	{"lunaut.completion.autocompleteEnd", "/features/autocomplete_end"},
@@ -65,6 +67,7 @@ const std::unordered_map<std::string_view, std::string_view> relevant_vscode_key
 	{"lunaut.format.enabled", "/features/formatting"},
 	{"lunaut.format.styluaPath", "/features/stylua"},
 	{"lunaut.codeLens.references", "/features/code_lens"},
+	{"lunaut.implicitSelf", "/features/implicit_self"},
 	{"lunaut.diagnostics.workspace", "/diagnostics/workspace"},
 	{"lunaut.analyzer.enabled", "/analyzer/enabled"},
 	{"lunaut.analyzer.path", "/analyzer/path"},
@@ -105,6 +108,7 @@ const std::unordered_map<std::string_view, std::string_view> relevant_vscode_key
 	{"luau-lsp.inlayHints.typeHintMaxLength", "/inlay_hints/max_length"},
 	{"luau-lsp.inlayHints.makeInsertable", "/inlay_hints/insertable"},
 	{"luau-lsp.completion.imports.enabled", "/features/auto_imports"},
+	{"luau-lsp.completion.imports.requireStyle", "/features/require_style"},
 };
 
 template <typename T>
@@ -230,10 +234,23 @@ settingsinfo settingsinfo::from_json(const json& data, const settingsinfo& base)
 				enum_import_keyword::from_name(features["import_keyword"].get<std::string>()).value_or(info.features.import_keyword);
 		}
 
+		if (features.contains("require_style") && features["require_style"].is_string())
+		{
+			info.features.require_style =
+				enum_require_style::from_name(features["require_style"].get<std::string>()).value_or(info.features.require_style);
+		}
+
+		if (features.contains("alias_path") && features["alias_path"].is_string())
+		{
+			info.features.alias_path =
+				enum_alias_path::from_name(features["alias_path"].get<std::string>()).value_or(info.features.alias_path);
+		}
+
 		priv::read(features, "colors", info.features.colors);
 		priv::read(features, "autocomplete_end", info.features.autocomplete_end);
 		priv::read(features, "convert_quotes", info.features.convert_quotes);
 		priv::read(features, "close_interpolation", info.features.close_interpolation);
+		priv::read(features, "implicit_self", info.features.implicit_self);
 		priv::read(features, "formatting", info.features.formatting);
 		priv::read(features, "code_lens", info.features.code_lens);
 		priv::read(features, "stylua", info.features.stylua);
@@ -403,6 +420,11 @@ json settingsinfo::to_json() const
 			item["show_as_module"] = *definition.show_as_module;
 		}
 
+		if (!definition.description.empty())
+		{
+			item["message"] = definition.description;
+		}
+
 		definition_list.push_back(item);
 	}
 
@@ -454,11 +476,14 @@ json settingsinfo::to_json() const
 			 {"documentation", features.documentation},
 			 {"auto_imports", features.auto_imports},
 			 {"import_keyword", enum_import_keyword::get_name(features.import_keyword)},
+			 {"require_style", enum_require_style::get_name(features.require_style)},
+			 {"alias_path", enum_alias_path::get_name(features.alias_path)},
 			 {"semantic_tokens", features.semantic_tokens},
 			 {"colors", features.colors},
 			 {"autocomplete_end", features.autocomplete_end},
 			 {"convert_quotes", features.convert_quotes},
 			 {"close_interpolation", features.close_interpolation},
+			 {"implicit_self", features.implicit_self},
 			 {"formatting", features.formatting},
 			 {"code_lens", features.code_lens},
 			 {"stylua", features.stylua},
@@ -478,6 +503,7 @@ json loadeddefinitioninfo::to_json() const
 		{"success", success},
 		{"show_as_module", show_as_module},
 		{"message", message},
+		{"description", description},
 		{"source", enum_definition_source::get_name(source)},
 	};
 }
@@ -579,6 +605,11 @@ void read_definitions(const json& data, std::vector<definitioninfo>& target)
 		if (item.contains("show_as_module") && item["show_as_module"].is_boolean())
 		{
 			info.show_as_module = item["show_as_module"].get<bool>();
+		}
+
+		if (item.contains("message") && item["message"].is_string())
+		{
+			info.description = item["message"].get<std::string>();
 		}
 
 		target.push_back(info);

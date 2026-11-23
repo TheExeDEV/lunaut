@@ -4,6 +4,11 @@
   "description": "Luau language server written in C++: FFlags, prioritized .d.luau definitions and Rojo support",
   "version": "0.1.8",
   "publisher": "theexe",
+  "icon": "images/logo.png",
+  "galleryBanner": {
+    "color": "#0d1117",
+    "theme": "dark"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -118,6 +123,11 @@
       {
         "command": "lunaut.selectRojoProject",
         "title": "Select Rojo Project",
+        "category": "Lunaut"
+      },
+      {
+        "command": "lunaut.checkForUpdates",
+        "title": "Check for Server Updates",
         "category": "Lunaut"
       },
       {
@@ -1437,6 +1447,10 @@
                     "type": "boolean",
                     "default": false,
                     "markdownDescription": "Reach the exported types of this file only through its name, like a required module: `@base` gives `base.Vehicle`. Without this key, a `--!lunaut_show_as_module true` line at the top of the file decides."
+                  },
+                  "message": {
+                    "type": "string",
+                    "markdownDescription": "Text shown when the module name of a `show_as_module` file is offered in completion, instead of `definitions @name`."
                   }
                 }
               }
@@ -1635,6 +1649,27 @@
           "default": true,
           "markdownDescription": "Suggest modules and Roblox services that are not required yet and add the `require` or `GetService` line."
         },
+        "lunaut.completion.imports.requireStyle": {
+          "type": "string",
+          "enum": ["auto", "alwaysRelative", "alwaysAbsolute"],
+          "enumDescriptions": [
+            "A path like ./Module for files in the same folder or below it, an alias from .luaurc for everything else",
+            "Always a relative path, even with ../",
+            "Always an alias from .luaurc when one covers the file, a relative path otherwise"
+          ],
+          "default": "auto",
+          "markdownDescription": "How an auto-imported `require` path is written. `luau-lsp.completion.imports.requireStyle` works too."
+        },
+        "lunaut.completion.imports.aliasPath": {
+          "type": "string",
+          "enum": ["shortest", "longest"],
+          "enumDescriptions": [
+            "The shortest path among the aliases that cover the file, usually the most specific alias",
+            "The longest path among them, usually the most general alias"
+          ],
+          "default": "shortest",
+          "markdownDescription": "Which `.luaurc` alias an auto-imported `require` uses when several cover the file."
+        },
         "lunaut.completion.importKeyword": {
           "type": "string",
           "enum": [
@@ -1653,6 +1688,16 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Show a color picker for `Color3.new`, `fromRGB`, `fromHSV` and `fromHex`."
+        },
+        "lunaut.server.autoUpdate": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Download a newer lunaut server from the GitHub releases in the background and use it after the next restart, so a new Luau reaches you before the extension itself is updated. Off, or with `lunaut.path` set, the bundled server is used."
+        },
+        "lunaut.implicitSelf": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Type the implicit `self` of `function X:name() ... end` as the type alias `X` when one with that name and no generics is in scope, as if it were `function X.name(self: X)`. Only a plain name before `:` counts, and only a function closed with `end`."
         },
         "lunaut.codeLens.references": {
           "type": "boolean",

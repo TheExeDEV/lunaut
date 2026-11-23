@@ -15,6 +15,7 @@ endif()
 
 option(LUNAUT_DEBUG "Enable debug diagnostics" OFF)
 option(LUNAUT_STATIC_RUNTIME "Link C++ runtime statically" ON)
+option(LUNAUT_COVERAGE "Build lunaut with gcov coverage counters" OFF)
 
 if(MSVC AND LUNAUT_STATIC_RUNTIME)
 	set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
@@ -61,6 +62,11 @@ else()
 			target_link_options(lunaut PRIVATE -static -static-libgcc -static-libstdc++)
 		endif()
 	endif()
+endif()
+
+if(LUNAUT_COVERAGE AND NOT MSVC)
+	target_compile_options(lunaut PRIVATE --coverage -O0)
+	target_link_options(lunaut PRIVATE --coverage)
 endif()
 
 install(TARGETS lunaut RUNTIME DESTINATION bin)

@@ -28,6 +28,7 @@ std::string get_module_symbol(const Luau::ModuleName& name);
 std::string strip_module_suffix(const std::string& path);
 std::string make_instance_path(const std::string& virtual_path);
 std::vector<std::string> get_services(const json& metadata);
+std::optional<std::string> get_alias_path(const Luau::Config& config, const std::string& target_path, enumitem_alias_path choice);
 
 }
 }
@@ -205,24 +206,16 @@ std::optional<std::string> workspace::get_import_statement(
 	}
 
 	std::string path = stdx::starts_with(relative, "../") ? relative : "./" + relative;
+	bool nearby = !stdx::starts_with(relative, "../");
+	bool use_alias = settings.features.require_style == enumitem_require_style::AlwaysAbsolute ||
+		(settings.features.require_style == enumitem_require_style::Auto && !nearby);
 
-	if (stdx::starts_with(relative, "../"))
+	if (use_alias)
 	{
-		const Luau::Config& config = resolver.get_directory_config(directory);
-
-		for (const auto& [alias, info] : config.aliases)
+		if (std::optional<std::string> aliased =
+				priv::get_alias_path(resolver.get_directory_config(directory), target_path, settings.features.alias_path))
 		{
-			std::filesystem::path location(info.value);
-			std::string alias_root = uri::normalize_path(
-				(location.is_absolute() ? location : std::filesystem::path(std::string(info.configLocation)) / location).generic_string());
-			std::string normalized = uri::normalize_path(target_path);
-
-			if (normalized == alias_root || stdx::starts_with(normalized, alias_root + "/"))
-			{
-				std::string rest = normalized.substr(alias_root.size());
-				path = "@" + (info.originalCase.empty() ? alias : info.originalCase) + rest;
-				break;
-			}
+			path = *aliased;
 		}
 	}
 
@@ -369,6 +362,36 @@ std::string make_instance_path(const std::string& virtual_path)
 	}
 
 	return path;
+}
+
+std::optional<std::string> get_alias_path(const Luau::Config& config, const std::string& target_path, enumitem_alias_path choice)
+{
+	std::string normalized = uri::normalize_path(target_path);
+	std::optional<std::string> chosen;
+
+	for (const auto& [alias, info] : config.aliases)
+	{
+		std::filesystem::path location(info.value);
+		std::string alias_root = uri::normalize_path(
+			(location.is_absolute() ? location : std::filesystem::path(std::string(info.configLocation)) / location).generic_string());
+
+		if (normalized != alias_root && !stdx::starts_with(normalized, alias_root + "/"))
+		{
+			continue;
+		}
+
+		std::string candidate = "@" + (info.originalCase.empty() ? alias : info.originalCase) + normalized.substr(alias_root.size());
+		bool better = !chosen ||
+			(choice == enumitem_alias_path::Shortest ? candidate.size() < chosen->size() : candidate.size() > chosen->size()) ||
+			(candidate.size() == chosen->size() && candidate < *chosen);
+
+		if (better)
+		{
+			chosen = candidate;
+		}
+	}
+
+	return chosen;
 }
 
 std::vector<std::string> get_services(const json& metadata)

@@ -2,6 +2,8 @@
 
 Luau language support powered by [lunaut](https://github.com/TheExeDEV/lunaut), a Luau language server written in C++.
 
+[![CI](https://github.com/TheExeDEV/lunaut/actions/workflows/ci.yml/badge.svg)](https://github.com/TheExeDEV/lunaut/actions/workflows/ci.yml) [![Release](https://github.com/TheExeDEV/lunaut/actions/workflows/release.yml/badge.svg)](https://github.com/TheExeDEV/lunaut/actions/workflows/release.yml) [![Coverage](https://github.com/TheExeDEV/lunaut/actions/workflows/coverage.yml/badge.svg)](https://github.com/TheExeDEV/lunaut/actions/workflows/coverage.yml) [![codecov](https://codecov.io/gh/TheExeDEV/lunaut/graph/badge.svg)](https://codecov.io/gh/TheExeDEV/lunaut)
+
 - Type errors, syntax errors and lint while you type
 - Hover, completion (including `require` paths and `.luaurc` aliases), go to definition, document symbols, signature help
 - Find all references and rename (F2) across files

@@ -27,6 +27,8 @@ struct commandinfo
 	std::vector<std::string> inputs;
 	bool verbose = false;
 	bool json_output = false;
+	bool check_only = false;
+	bool dry_run = false;
 };
 
 using argument_handler = result<nothing> (*)(commandinfo& info, const std::string& value);
@@ -37,6 +39,8 @@ result<nothing> read_no_flags(commandinfo& info, const std::string& value);
 result<nothing> read_verbose(commandinfo& info, const std::string& value);
 result<nothing> read_json(commandinfo& info, const std::string& value);
 result<nothing> read_ignored(commandinfo& info, const std::string& value);
+result<nothing> read_check(commandinfo& info, const std::string& value);
+result<nothing> read_dry_run(commandinfo& info, const std::string& value);
 
 const std::vector<std::pair<std::string_view, argument_handler>> relevant_arguments = {
 	{"--flag:", &read_flag},
@@ -46,6 +50,8 @@ const std::vector<std::pair<std::string_view, argument_handler>> relevant_argume
 	{"--no-flags-enabled", &read_no_flags},
 	{"--verbose", &read_verbose},
 	{"--json", &read_json},
+	{"--check", &read_check},
+	{"--dry-run", &read_dry_run},
 	{"--stdio", &read_ignored},
 	{"--clientProcessId=", &read_ignored},
 };
@@ -59,6 +65,7 @@ int invoke_flags(const commandinfo& info);
 int invoke_init(const commandinfo& info);
 int invoke_declare(const commandinfo& info);
 int invoke_version(const commandinfo& info);
+int invoke_update(const commandinfo& info);
 int invoke_help(const commandinfo& info);
 void print_help();
 
@@ -70,6 +77,7 @@ const std::unordered_map<std::string_view, command_handler> relevant_commands = 
 	{"init", &invoke_init},
 	{"declare", &invoke_declare},
 	{"version", &invoke_version},
+	{"update", &invoke_update},
 	{"help", &invoke_help},
 };
 
@@ -258,6 +266,18 @@ result<nothing> read_ignored(commandinfo& info, const std::string& value)
 	return result<nothing>::ok({});
 }
 
+result<nothing> read_check(commandinfo& info, const std::string& value)
+{
+	info.check_only = true;
+	return result<nothing>::ok({});
+}
+
+result<nothing> read_dry_run(commandinfo& info, const std::string& value)
+{
+	info.dry_run = true;
+	return result<nothing>::ok({});
+}
+
 int invoke_lsp(const commandinfo& info)
 {
 #if LUNAUT_PLATFORM_WINDOWS
@@ -319,6 +339,12 @@ int invoke_version(const commandinfo& info)
 	return 0;
 }
 
+int invoke_update(const commandinfo& info)
+{
+	std::optional<std::string> version = info.inputs.empty() ? std::nullopt : std::optional<std::string>(info.inputs.front());
+	return selfupdate::invoke(version, info.check_only, info.dry_run);
+}
+
 int invoke_help(const commandinfo& info)
 {
 	print_help();
@@ -364,7 +390,8 @@ void print_help()
 			  << "  lunaut flags [options]            list Luau FFlags and their values\n"
 			  << "  lunaut init [folders]             write .lunaut-declare into project folders\n"
 			  << "  lunaut declare [--json]           print the .lunaut-declare of this lunaut\n"
-			  << "  lunaut version                    print the version\n\n"
+			  << "  lunaut version                    print the version\n"
+			  << "  lunaut update [version]           update this lunaut to the latest or the given release\n\n"
 			  << "Options:\n"
 			  << "  --flag:<Name>=<Value>             set a Luau FFlag\n"
 			  << "  --no-flags-enabled                do not enable Luau FFlags by default\n"
@@ -372,7 +399,9 @@ void print_help()
 			  << "                                    load a definitions file (.d.luau)\n"
 			  << "  --settings=<file>                 extra settings file (.vscode/settings.json format)\n"
 			  << "  --verbose                         print server log to stderr\n"
-			  << "  --json                            print flags, statistics or the declaration as JSON\n";
+			  << "  --json                            print flags, statistics or the declaration as JSON\n"
+			  << "  --check                           with update: only say whether a newer release exists\n"
+			  << "  --dry-run                         with update: print what would run without running it\n";
 }
 
 }

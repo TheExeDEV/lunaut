@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://github.com/TheExeDEV/lunaut#readme
+    about: Settings, definition files, Rojo and the Studio plugin are described in the README
+  - name: Changelog
+    url: https://github.com/TheExeDEV/lunaut/blob/main/CHANGELOG.md
+    about: Check whether it was already fixed in a newer release

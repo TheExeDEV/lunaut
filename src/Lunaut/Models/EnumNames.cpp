@@ -36,6 +36,17 @@ const std::map<enumitem_import_keyword, std::string_view> import_keyword_names =
 	{enumitem_import_keyword::Const, "const"},
 };
 
+const std::map<enumitem_require_style, std::string_view> require_style_names = {
+	{enumitem_require_style::Auto, "auto"},
+	{enumitem_require_style::AlwaysRelative, "alwaysRelative"},
+	{enumitem_require_style::AlwaysAbsolute, "alwaysAbsolute"},
+};
+
+const std::map<enumitem_alias_path, std::string_view> alias_path_names = {
+	{enumitem_alias_path::Shortest, "shortest"},
+	{enumitem_alias_path::Longest, "longest"},
+};
+
 const std::map<enumitem_definition_source, std::string_view> definition_source_names = {
 	{enumitem_definition_source::Config, "Config"},
 	{enumitem_definition_source::Cli, "Cli"},
@@ -122,6 +133,48 @@ std::string_view get_name(enumitem_import_keyword item)
 std::optional<enumitem_import_keyword> from_name(std::string_view name)
 {
 	for (const auto& [item, item_name] : priv::import_keyword_names)
+	{
+		if (item_name == name)
+		{
+			return item;
+		}
+	}
+
+	return std::nullopt;
+}
+}
+
+namespace enum_require_style
+{
+std::string_view get_name(enumitem_require_style item)
+{
+	return priv::get_name_from(priv::require_style_names, item);
+}
+
+std::optional<enumitem_require_style> from_name(std::string_view name)
+{
+	for (const auto& [item, item_name] : priv::require_style_names)
+	{
+		if (item_name == name)
+		{
+			return item;
+		}
+	}
+
+	return std::nullopt;
+}
+}
+
+namespace enum_alias_path
+{
+std::string_view get_name(enumitem_alias_path item)
+{
+	return priv::get_name_from(priv::alias_path_names, item);
+}
+
+std::optional<enumitem_alias_path> from_name(std::string_view name)
+{
+	for (const auto& [item, item_name] : priv::alias_path_names)
 	{
 		if (item_name == name)
 		{

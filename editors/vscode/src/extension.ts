@@ -5,6 +5,7 @@ import * as vscode from "vscode";
 import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } from "vscode-languageclient/node";
 import { isWatching, startWatchers, stopWatchers } from "./rojo";
 import { startStudioServer, stopStudioServer } from "./studio";
+import { checkForServerUpdate, getDownloadedServer } from "./updates";
 
 let client: LanguageClient | undefined;
 let output: vscode.OutputChannel | undefined;
@@ -24,6 +25,14 @@ function getServerPath(context: vscode.ExtensionContext): string {
 
 	if (configured.length > 0) {
 		return configured;
+	}
+
+	const downloaded = vscode.workspace.getConfiguration("lunaut").get<boolean>("server.autoUpdate", true)
+		? getDownloadedServer(context, context.extension.packageJSON.version)
+		: undefined;
+
+	if (downloaded) {
+		return downloaded;
 	}
 
 	const platforms = [`${process.platform}-${process.arch}`];
@@ -358,6 +367,7 @@ function getMenuEntries(context: vscode.ExtensionContext): MenuEntry[] {
 		{ id: "port", label: "$(gear) Change Port", description: `Port ${port}`, run: () => changePort(), modal: true },
 		{ label: "Server", kind: vscode.QuickPickItemKind.Separator },
 		{ id: "restart", label: "$(debug-restart) Restart Server", run: () => vscode.commands.executeCommand("lunaut.restart"), slow: "restarting the server" },
+		{ id: "update", label: "$(cloud-download) Check for Server Updates", run: () => vscode.commands.executeCommand("lunaut.checkForUpdates") },
 		{ id: "reload", label: "$(refresh) Reload Definitions and FFlags", run: () => runServerCommand("lunaut.server.reloadWorkspace"), slow: "reloading definitions and FFlags, big projects take a few seconds" },
 		{ id: "sourcemap", label: "$(sync) Regenerate Rojo Sourcemap", run: () => vscode.commands.executeCommand("lunaut.regenerateSourcemap"), slow: "regenerating the Rojo sourcemap" },
 		{ id: "project", label: "$(project) Select Rojo Project", description: config.get<string>("rojo.projectFile", "default.project.json"), run: () => selectRojoProject(), modal: true },
@@ -467,6 +477,7 @@ export async function activate(
 		}),
 		vscode.commands.registerCommand("lunaut.regenerateSourcemap", () => regenerateSourcemap()),
 		vscode.commands.registerCommand("lunaut.selectRojoProject", () => selectRojoProject()),
+		vscode.commands.registerCommand("lunaut.checkForUpdates", () => updateServer(context, true)),
 		vscode.commands.registerCommand("lunaut.openMenu", () => openMenu(context)),
 		vscode.commands.registerCommand("lunaut.installStudioPlugin", () => installStudioPlugin(context)),
 		vscode.commands.registerCommand("lunaut.showReferences", (uri: string, position: { line: number; character: number }, locations: { uri: string; range: object }[]) => {
@@ -520,7 +531,37 @@ export async function activate(
 		vscode.window.showErrorMessage(`Lunaut failed to start: ${error}. Set "lunaut.path" to the server executable.`);
 	}
 
+	updateServer(context, false);
+
 	return { getClient: () => client, getMenuEntries: () => getMenuEntries(context) };
+}
+
+function updateServer(context: vscode.ExtensionContext, force: boolean): void {
+	const running = client?.initializeResult?.serverInfo?.version ?? context.extension.packageJSON.version;
+
+	checkForServerUpdate(context, running, output!, force)
+		.then(async (version) => {
+			if (!version) {
+				if (force) {
+					vscode.window.showInformationMessage(`Lunaut: the server ${running} is the latest`);
+				}
+
+				return;
+			}
+
+			const choice = await vscode.window.showInformationMessage(`Lunaut ${version} is downloaded. Restart the server to use it?`, "Restart");
+
+			if (choice === "Restart") {
+				await vscode.commands.executeCommand("lunaut.restart");
+			}
+		})
+		.catch((error) => {
+			output?.appendLine(`[update] ${error}`);
+
+			if (force) {
+				vscode.window.showWarningMessage(`Lunaut: could not check for a new server: ${error}`);
+			}
+		});
 }
 
 export async function deactivate(): Promise<void> {

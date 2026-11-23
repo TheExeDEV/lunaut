@@ -120,7 +120,7 @@ json workspace::get_type_definition(const json& params)
 
 				if (reference->prefix)
 				{
-					origin = typelookup::find_imported_module(scope, reference->prefix->value);
+					origin = find_prefix_module(scope, reference->prefix->value);
 				}
 				else if (reference->prefixLocal)
 				{

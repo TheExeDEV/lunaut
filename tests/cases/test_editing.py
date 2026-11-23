@@ -129,6 +129,25 @@ class EditingTests(unittest.TestCase):
 		hover = client.request("textDocument/hover", {"textDocument": {"uri": uri}, "position": {"line": 1, "character": 17}})
 		self.assertIn("type base.Vehicle", hover["contents"]["value"])
 
+	def test_show_as_module_message_in_completion(self):
+		write(self.folder, "db.d.luau", "export type Row = { id: number }\n")
+		write(self.folder, "plain.d.luau", "export type Plain = { id: number }\n")
+		write(self.folder, "main.luau", "--!strict\nlocal row: f = nil\nreturn row\n")
+		definitions = [
+			{"path": "db.d.luau", "name": "@fc_database", "show_as_module": True, "message": "Rows of the funny-core database"},
+			{"path": "plain.d.luau", "name": "@plain", "show_as_module": True},
+		]
+		client = self.start({"lunaut.definitions": definitions, "lunaut.discoverDefinitions": False})
+		uri, _ = client.open("main.luau")
+		result = client.request("textDocument/completion", {"textDocument": {"uri": uri}, "position": {"line": 1, "character": 12}})
+		items = {item["label"]: item for item in (result["items"] if isinstance(result, dict) else result)}
+
+		self.assertEqual(items["fc_database"]["detail"], "Rows of the funny-core database")
+		self.assertIn("Rows of the funny-core database", items["fc_database"]["documentation"]["value"])
+		self.assertEqual(items["plain"]["detail"], "definitions @plain")
+		listed = {item["name"]: item["description"] for item in client.request("lunaut/definitions", {})[0]["definitions"]}
+		self.assertEqual(listed["@fc_database"], "Rows of the funny-core database")
+
 	def test_show_as_module_directive_in_the_file(self):
 		write(self.folder, "types/base.d.luau", "--!lunaut_show_as_module true\nexport type Vehicle = { speed: number }\n")
 		write(self.folder, "types/flat.d.luau", "--!lunaut_show_as_module true\nexport type Flat = { size: number }\n")
@@ -158,6 +177,107 @@ class EditingTests(unittest.TestCase):
 		client.request("workspace/executeCommand", {"command": "lunaut.server.reloadWorkspace", "arguments": []})
 		broken = client.wait_for("textDocument/publishDiagnostics", lambda params: params["uri"].lower() == uri.lower() and any("first_value" in item["message"] for item in params["diagnostics"]), timeout=60)
 		self.assertTrue(broken["diagnostics"])
+
+	def write_account(self):
+		lines = [
+			"--!strict",
+			"export type Account = { balance: number, owner: string }",
+			"local Account = {}",
+			"function Account:deposit(amount: number)",
+			"\tself.balance += amount",
+			"\tlocal wrong: string = self.balance",
+			"\tlocal function inner()",
+			"\t\treturn self.owner",
+			"\tend",
+			"\treturn inner()",
+			"end",
+			"function Account:missing()",
+			"\treturn self.nothing",
+			"end",
+			"local Stack = {}",
+			"type Stack<T> = { items: { T } }",
+			"function Stack:peek()",
+			"\treturn self.anything",
+			"end",
+			"local Nested = { inner = {} }",
+			"type inner = { size: number }",
+			"function Nested.inner:grow()",
+			"\treturn self.anything",
+			"end",
+			"return { Account, Stack, Nested }",
+		]
+		write(self.folder, "account.luau", "\n".join(lines) + "\n")
+		write(self.folder, "on.json", '{"lunaut.implicitSelf": true}')
+
+	def test_implicit_self_is_off_by_default(self):
+		self.write_account()
+
+		for solver in ("false", "true"):
+			output = run_cli("analyze", f"--flag:LuauSolverV2={solver}", "account.luau", cwd=self.folder).stdout
+			self.assertNotIn("Key 'nothing' not found", output)
+
+	def test_implicit_self_types_self_from_the_alias(self):
+		self.write_account()
+
+		for solver in ("false", "true"):
+			output = run_cli("analyze", f"--flag:LuauSolverV2={solver}", "--settings=on.json", "account.luau", cwd=self.folder).stdout
+			self.assertIn("account.luau:6:", output)
+			self.assertIn("Expected this to be 'string', but got 'number'", output)
+			self.assertIn("account.luau:13:9: error [TypeError] Key 'nothing' not found", output)
+			self.assertNotIn("owner", output)
+			self.assertNotIn("anything", output)
+
+	def test_signature_help_skips_the_receiver_of_a_colon_call(self):
+		write(self.folder, "call.luau", "--!strict\nlocal account: { deposit: (any, number) -> () } = nil :: any\naccount:deposit(5)\nreturn account\n")
+		client = self.start()
+		uri, _ = client.open("call.luau")
+		signature = client.request("textDocument/signatureHelp", {"textDocument": {"uri": uri}, "position": {"line": 2, "character": 16}})
+		self.assertEqual([parameter["label"] for parameter in signature["signatures"][0]["parameters"]], ["number"])
+		self.assertIn("(number)", signature["signatures"][0]["label"])
+
+	def test_show_as_module_types_go_to_their_file(self):
+		lines = [
+			"export type base_member<T, U> = {",
+			"\t--[[",
+			"\t\tDescribes the purpose of this member.",
+			"\t]]",
+			"\tread kind: T,",
+			"\tread value: U,",
+			"}",
+			"",
+			"--[==[",
+			"ReflectedArgument is the only functional member of the runtime type.",
+			"]==]",
+			"export type func_member = base_member<\"func\", number>",
+			"",
+			"--[==[",
+			"The members of a reflected class.",
+			"]==]",
+			"export type library = {",
+			"\tread more: () -> func_member,",
+			"}",
+		]
+		write(self.folder, "reflection.d.luau", "\n".join(lines) + "\n")
+		write(self.folder, "main.luau", "--!strict\nlocal x: fc_reflection.func_member = nil :: any\nlocal lib: fc_reflection.library = nil :: any\nreturn { x, lib }\n")
+		definitions = [{"path": "reflection.d.luau", "name": "@fc_reflection", "show_as_module": True}]
+		client = self.start({"lunaut.definitions": definitions, "lunaut.discoverDefinitions": False})
+		uri, _ = client.open("main.luau")
+
+		def at(method, line, character):
+			return client.request(method, {"textDocument": {"uri": uri}, "position": {"line": line, "character": character}})
+
+		for line, character, target in ((1, 25, 11), (2, 27, 16)):
+			location = at("textDocument/definition", line, character)
+			self.assertTrue(location["uri"].endswith("reflection.d.luau"), location)
+			self.assertEqual(location["range"]["start"]["line"], target)
+
+		hover = at("textDocument/hover", 1, 25)["contents"]["value"]
+		self.assertIn("ReflectedArgument is the only functional member", hover)
+		self.assertNotIn("main.luau#", hover)
+
+		library = at("textDocument/hover", 2, 6)["contents"]["value"]
+		self.assertNotIn("main.luau#", library)
+		self.assertNotIn("]==]", library)
 
 	def test_fflags_reload_without_restart(self):
 		client = self.start({"lunaut.fflags.override": {"LuauTypeMaximumStringifierLength": "123"}})

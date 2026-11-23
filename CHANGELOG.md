@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### Added
+
+- `lunaut.implicitSelf` (off by default): the implicit `self` of `function X:name() ... end` gets the type alias `X` when one without generics is in scope, as if it were `function X.name(self: X)`, with both solvers and in nested functions too. Only a plain name before `:` and a function closed with `end` count
+- `lunaut.completion.imports.requireStyle` (`auto`, `alwaysRelative`, `alwaysAbsolute`, and `luau-lsp.completion.imports.requireStyle` works too) and `lunaut.completion.imports.aliasPath` (`shortest`, `longest`) decide how auto-imported `require` paths are written. Before, a file outside the folder got whichever `.luaurc` alias came first
+- The Studio plugin can send only part of the place: **Settings** opens `ServerStorage.Lunaut_Settings`, a module with `include` and `exclude` lists of instances. Only included subtrees are sent and watched, excluded ones are skipped, and a broken module warns once and falls back to sending everything
+- `lunaut update`: checks the latest release and installs it for this lunaut only, in its own folder, without touching editors or `PATH`. On Windows it moves the running `lunaut.exe` aside first, so a running language server does not block it. `--check` only reports, `--dry-run` prints what would run, `lunaut update 0.1.7` installs a given release, and copies that came with an editor extension are left to the extension
+- The VS Code extension downloads a newer server from the GitHub releases in the background and offers to restart it (`lunaut.server.autoUpdate`, on by default; **Check for Server Updates** in the Lunaut menu), so a new Luau no longer waits for a Marketplace update
+- A new Luau release becomes a lunaut release by itself: once the daily update builds and passes every test, it raises the version and starts the Release workflow
+- Pull requests get a check for formatting, comments in C++, version changes, line endings, the installers and both editor extensions, and a coverage report on Codecov
+- Issue templates for bug reports and feature requests, a security policy in `SECURITY.md`, and the lunaut logo in the README and as the VS Code extension icon
+- `message` on a `lunaut.definitions` entry with `show_as_module`: completion shows it next to the module name instead of `definitions @name`, for example `{ "path": "types/database.d.luau", "name": "@fc_database", "show_as_module": true, "message": "Rows and tables of the funny-core database" }`
+
+### Fixed
+
+- Go to definition, the **Definitions** links in hover and the comment shown for a type such as `fc_reflection.func_member` from a `show_as_module` definition file point into that file, not into the file being edited, which also showed unrelated comments from the wrong file
+- Signature help for a call with `:` skips the receiver even when the function type has no `self`, such as a field typed `(Account, number) -> ()`: `account:deposit(` now shows and highlights `number`
+
 ## [0.1.8] - 2026-11-22
 
 ### Added

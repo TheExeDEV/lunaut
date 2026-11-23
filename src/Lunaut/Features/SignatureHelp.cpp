@@ -69,7 +69,9 @@ json workspace::get_signature_help(const json& params)
 	options.functionTypeArguments = true;
 	options.hideFunctionSelfArgument = call->self;
 
-	std::string signature = Luau::toStringNamedFunction("", *function, options);
+	Luau::FunctionType shown = *function;
+	shown.hasSelf = function->hasSelf || call->self;
+	std::string signature = Luau::toStringNamedFunction("", shown, options);
 
 	for (size_t found = signature.find("_: "); found != std::string::npos; found = signature.find("_: ", found))
 	{
@@ -82,7 +84,7 @@ json workspace::get_signature_help(const json& params)
 	std::optional<std::string> symbol =
 		settings.features.documentation ? Luau::getDocumentationSymbolAtPosition(*source, *module, anchor) : std::nullopt;
 	auto [arguments, tail] = Luau::flatten(function->argTypes);
-	size_t skip = call->self && function->hasSelf ? 1 : 0;
+	size_t skip = call->self ? 1 : 0;
 	json parameters = json::array();
 
 	std::optional<std::pair<Luau::ModuleName, Luau::Location>> definition;

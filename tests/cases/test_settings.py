@@ -250,6 +250,46 @@ class SettingsTests(unittest.TestCase):
 			self.assertEqual(bool(imported), enabled)
 			client.close()
 
+	def test_require_style_settings(self):
+		folder = self.folder
+		package = "src/static/system/reflection/src/package"
+		write(folder, "src/.luaurc", json.dumps({"aliases": {"static": "static", "reflection": "static/system/reflection/src"}}))
+		write(folder, package + "/members/BaseMember.luau", "return { base = 1 }\n")
+		write(folder, package + "/ReflectedOutput.luau", "return { output = 1 }\n")
+		write(folder, package + "/members/User.luau", "local a = BaseMem\nlocal b = ReflectedOut\nreturn { a, b }\n")
+
+		def imports(settings):
+			client = self.start(folder, settings)
+			client.open(package + "/members/BaseMember.luau")
+			client.open(package + "/ReflectedOutput.luau")
+			uri, _ = client.open(package + "/members/User.luau")
+			found = {}
+
+			for line, character, label in ((0, 17, "BaseMember"), (1, 22, "ReflectedOutput")):
+				completion = client.request("textDocument/completion", {"textDocument": {"uri": uri}, "position": {"line": line, "character": character}})
+				items = completion["items"] if isinstance(completion, dict) else completion
+				item = next(item for item in items if item["label"] == label and item.get("additionalTextEdits"))
+				found[label] = item["additionalTextEdits"][0]["newText"]
+
+			client.close()
+			return found
+
+		default = imports({})
+		self.assertIn('require("./BaseMember")', default["BaseMember"])
+		self.assertIn('require("@reflection/package/ReflectedOutput")', default["ReflectedOutput"])
+
+		longest = imports({"lunaut.completion.imports.aliasPath": "longest"})
+		self.assertIn('require("@static/system/reflection/src/package/ReflectedOutput")', longest["ReflectedOutput"])
+
+		relative = imports({"lunaut.completion.imports.requireStyle": "alwaysRelative"})
+		self.assertIn('require("../ReflectedOutput")', relative["ReflectedOutput"])
+
+		absolute = imports({"lunaut.completion.imports.requireStyle": "alwaysAbsolute"})
+		self.assertIn('require("@reflection/package/members/BaseMember")', absolute["BaseMember"])
+
+		compatible = imports({"luau-lsp.completion.imports.requireStyle": "alwaysRelative"})
+		self.assertIn('require("../ReflectedOutput")', compatible["ReflectedOutput"])
+
 	def test_lint_setting(self):
 		folder = self.folder
 		write(folder, "lint.luau", "local unused = 1\nreturn nil\n")

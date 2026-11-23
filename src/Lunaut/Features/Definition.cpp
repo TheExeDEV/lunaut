@@ -118,7 +118,7 @@ json workspace::get_definition(const json& params)
 
 				if (reference->prefix)
 				{
-					origin = priv::find_imported_module(scope, alias).value_or(name);
+					origin = find_prefix_module(scope, alias).value_or(name);
 				}
 				else if (std::optional<Luau::ModuleName> owner = find_definition_module(*definition->definitionLocation))
 				{

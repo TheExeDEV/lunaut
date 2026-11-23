@@ -108,7 +108,7 @@ json workspace::get_hover(const json& params)
 			std::string imported =
 				reference->prefix ? std::string(reference->prefix->value) : std::string(reference->prefixLocal->name.value);
 
-			if (std::optional<Luau::ModuleName> required = typelookup::find_imported_module(scope, imported))
+			if (std::optional<Luau::ModuleName> required = find_prefix_module(scope, imported))
 			{
 				if (definition->definitionLocation)
 				{

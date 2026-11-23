@@ -1,8 +1,12 @@
-# lunaut
+<p align="center"><img src="assets/logo.png" width="128" height="128" alt="lunaut logo"></p>
+
+<h1 align="center">lunaut</h1>
 
 > **If you can support author:** [Place](https://www.roblox.com/games/104318394065422/donating)
 
 [![VS Code Marketplace](https://vsmarketplacebadges.dev/version-short/theexe.lunaut-luau.svg?label=VS%20Code%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=theexe.lunaut-luau) [![Installs](https://vsmarketplacebadges.dev/installs-short/theexe.lunaut-luau.svg)](https://marketplace.visualstudio.com/items?itemName=theexe.lunaut-luau) [![Release](https://img.shields.io/github/v/release/TheExeDEV/lunaut)](https://github.com/TheExeDEV/lunaut/releases/latest)
+
+[![CI](https://github.com/TheExeDEV/lunaut/actions/workflows/ci.yml/badge.svg)](https://github.com/TheExeDEV/lunaut/actions/workflows/ci.yml) [![Release](https://github.com/TheExeDEV/lunaut/actions/workflows/release.yml/badge.svg)](https://github.com/TheExeDEV/lunaut/actions/workflows/release.yml) [![Coverage](https://github.com/TheExeDEV/lunaut/actions/workflows/coverage.yml/badge.svg)](https://github.com/TheExeDEV/lunaut/actions/workflows/coverage.yml) [![codecov](https://codecov.io/gh/TheExeDEV/lunaut/graph/badge.svg)](https://codecov.io/gh/TheExeDEV/lunaut)
 
 A language server for Luau and Roblox, written in C++ on top of the official Luau analysis library.
 
@@ -122,6 +126,19 @@ Without a terminal to ask in (CI, scripts), it installs into everything it found
 Options, set before the command: `LUNAUT_VERSION=0.1.0` installs a specific version, `LUNAUT_INSTALL_DIR` changes the folder, `LUNAUT_NO_PATH=1` leaves `PATH` alone, `LUNAUT_NO_EXTENSION=1` skips the VS Code family, `LUNAUT_EDITORS=code,zed,nvim,helix,path` picks the targets without asking (`cursor`, `windsurf`, `codium`, `code-insiders` and `all` work too). In PowerShell: `$env:LUNAUT_VERSION = "0.1.0"`.
 
 **Manually:** download `lunaut-<platform>` from the latest release, rename it to `lunaut` (or `lunaut.exe`) and put it on your `PATH`. Install `lunaut.vsix` with `code --install-extension lunaut.vsix`, or install [Lunaut (`theexe.lunaut-luau`) from the VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=theexe.lunaut-luau).
+
+### Update
+
+`lunaut update` checks the latest release and, when it is newer, runs the same installer for this lunaut only: it replaces the binary in its own folder and does not touch your editors or `PATH`. On Windows the running `lunaut.exe` is moved aside to `lunaut.exe.old` first, so an editor that is running the language server does not block the update; the old file goes away with the next update.
+
+```bash
+lunaut update --check   # only say whether a newer release exists
+lunaut update           # install the latest release
+lunaut update 0.1.7     # install a given release
+lunaut update --dry-run # print what would run
+```
+
+A lunaut that came with an editor extension is updated by the extension, so `lunaut update` leaves it alone. The VS Code extension downloads a newer server from the releases on its own (`lunaut.server.autoUpdate`, on by default) and asks to restart the server, and the Zed extension always starts the latest release. A new Luau therefore reaches both editors without waiting for an extension update.
 
 ### Uninstall
 
@@ -285,9 +302,12 @@ All settings live in VS Code settings under `lunaut.*` (luau-lsp settings work t
 | `lunaut.disabledGlobals` | `[]` | globals to remove, like `table` or `table.clone` |
 | `lunaut.completion.autoImports` | `true` | suggest modules and services that are not required yet |
 | `lunaut.completion.importKeyword` | `local` | keyword of inserted auto-imports: `local` or `const` |
+| `lunaut.completion.imports.requireStyle` | `auto` | `auto`, `alwaysRelative` or `alwaysAbsolute`: how auto-imported `require` paths are written |
+| `lunaut.completion.imports.aliasPath` | `shortest` | `shortest` or `longest`: which `.luaurc` alias wins when several cover the file |
 | `lunaut.semanticTokens.enabled` | `true` | semantic highlighting |
 | `lunaut.colors.enabled` | `true` | color picker for `Color3` |
 | `lunaut.codeLens.references` | `true` | `N references` above every function |
+| `lunaut.implicitSelf` | `false` | type the implicit `self` of `function X:name()` as the type alias `X`, see [Typed self](#typed-self) |
 | `lunaut.completion.autocompleteEnd` | `true` | insert `end` or `until` after Enter on a block opener, adding a missing `then` or `do` |
 | `lunaut.format.convertQuotes` | `true` | typing `{` in a `"string"` turns it into an interpolated string |
 | `lunaut.format.closeInterpolation` | `true` | with `convertQuotes`, also add the closing `}` and keep the cursor inside `{}` |
@@ -424,6 +444,14 @@ Turn it on in settings, `{ "path": "types/base.d.luau", "name": "@base", "show_a
 
 The setting wins over the line in the file; `--!lunaut_show_as_module false` turns it off for a file matched by a glob.
 
+Give the module a description with `message`; completion shows it next to the module name instead of `definitions @base`:
+
+```json
+"lunaut.definitions": [
+  { "path": "types/database.d.luau", "name": "@fc_database", "show_as_module": true, "message": "Rows and tables of the funny-core database" }
+]
+```
+
 ---
 
 ## Analyzer plugins
@@ -500,9 +528,30 @@ The Lunaut plugin sends the instance tree of the open place from Studio to the e
 | **Open on Start** | opens the window when Studio starts |
 | **Send Once** | sends the tree once |
 | **Clear Editor** | removes the instances the plugin sent from the editor |
+| **Settings** | opens `ServerStorage.Lunaut_Settings`, and creates it on the first click, to choose what is sent |
 | **Port** | the same number as `lunaut.studioPlugin.port`; in VS Code change it with *Lunaut menu > Change Port* |
 
 The first time it sends, Studio asks whether the plugin may make HTTP requests to `localhost`; allow it. The plugin sends the services that hold game content (Workspace, ReplicatedStorage, ServerScriptService, StarterPlayer, Lighting and the like), up to 200 000 instances, and only names and classes, never scripts or properties. It runs in edit mode only, not during play tests.
+
+**Choosing what is sent.** In a big place, send only the parts your code uses. **Settings** creates a ModuleScript `Lunaut_Settings` in ServerStorage; it lives in the place, so everyone who opens it shares the same choice:
+
+```luau
+--!strict
+return {
+	include = {
+		game:GetService("ReplicatedStorage").Assets,
+		workspace.Map,
+	},
+	exclude = {
+		workspace.Map.Decorations,
+	},
+}
+```
+
+- `include`: when it lists anything, only these instances, their descendants and the path to them from `game` are sent, and only changes inside them send the tree again
+- `exclude`: subtrees left out, even under an included instance
+- without the module, or with an empty `include`, the plugin sends the content services as before
+- saving the module sends the tree again; if it fails to run or holds something that is not an instance, the plugin warns once in the Output window (unless Silent Mode is on) and sends everything until it is fixed
 
 The [luau-lsp Studio Companion plugin](https://create.roblox.com/store/asset/10913122509) speaks the same protocol and works too. Run luau-lsp or lunaut, not both: they use the same port.
 
@@ -525,6 +574,26 @@ In Roblox mode the Roblox API definitions get the same extra typing as in luau-l
 The lists of creatable classes and services come from the metadata line at the top of the downloaded definitions.
 
 ---
+
+### Typed self
+
+Luau does not type the implicit `self` of a method: the old solver gives it the type of the method table, the new solver guesses it from how `self` is used. With `"lunaut.implicitSelf": true`, lunaut types it from the name before `:`:
+
+```luau
+export type Account = { balance: number, owner: string }
+local Account = {}
+
+function Account:deposit(amount: number)
+	self.balance += amount -- self: Account
+end
+```
+
+`function Account:deposit(amount: number)` is checked as if it were `function Account.deposit(self: Account, amount: number)`, with both solvers, and nested functions see the same `self`. The rules are strict on purpose:
+
+- only `function X:name() ... end` with a plain name before `:`; `function a.b:name()` and anything else keep Luau's own `self`
+- only a function closed with `end`
+- only when a type alias `X` without generics is in scope there: declared in the same block or an outer one, or a global type from the definition files
+- off by default; turning it on or off rechecks the open files
 
 ## Editor features
 
@@ -574,6 +643,16 @@ Functions show their parameters next to the name and fill the call with placehol
 | a Roblox service | `local Players = game:GetService("Players")` |
 
 `lunaut.completion.importKeyword` switches the inserted keyword from `local` to `const`.
+
+How the path is written is up to `lunaut.completion.imports.requireStyle` (`luau-lsp.completion.imports.requireStyle` works too):
+
+| Value | Path |
+| --- | --- |
+| `auto` (default) | `./Module` for a file in the same folder or below it, an alias for everything else, `../Module` when no alias covers it |
+| `alwaysRelative` | always relative, `../../Module` included |
+| `alwaysAbsolute` | an alias whenever one covers the file, even next door; relative otherwise |
+
+When several aliases cover the file, `lunaut.completion.imports.aliasPath` picks one: `shortest` (default) gives the shortest path, usually the most specific alias such as `@reflection/package/Output`; `longest` gives the longest, such as `@static/system/reflection/src/package/Output`.
 
 ### Quick fixes
 
@@ -697,7 +776,7 @@ Inside `require("...")` completion lists the aliases and `./`, `../` first, then
 {
   "api_version": 1,
   "lunaut_version": "0.0.9",
-  "features": { "analyzer": 1, "base_luaurc": 1, "crater_packages": 1, "definition_priority": 1, "definitions": 1, "fflags": 1, "restart_on_definition_changes": 1, "rojo": 1, "settings": 1, "show_as_module": 2 },
+  "features": { "analyzer": 1, "base_luaurc": 1, "crater_packages": 1, "definition_message": 1, "definition_priority": 1, "definitions": 1, "fflags": 1, "restart_on_definition_changes": 1, "rojo": 1, "settings": 1, "show_as_module": 2 },
   "settings": {
     "file": ".vscode/settings.json",
     "prefix": "lunaut.",
@@ -714,7 +793,8 @@ Inside `require("...")` completion lists the aliases and `./`, `../` first, then
       "path": { "type": "string", "required": true, "globs": true, "relative_to": "workspace root" },
       "name": { "type": "string", "default": "", "globs": "ignored for wildcard paths" },
       "priority": { "type": "integer", "default": 0, "order": "higher loads first" },
-      "show_as_module": { "type": "boolean", "default": false }
+      "show_as_module": { "type": "boolean", "default": false },
+      "message": { "type": "string", "default": "", "shown": "completion of the module name with show_as_module" }
     },
     "default_name": "@ + file name without .d.luau, .d.lua, .luau or .lua",
     "name_prefix": "@",
@@ -781,6 +861,7 @@ Requires into those folders keep working; only their own diagnostics are hidden.
 | `lunaut init [folders]` | writes [`.lunaut-declare`](#lunaut-declare) into each folder (default `.`), or adds the missing keys to an existing one |
 | `lunaut declare [--json]` | prints the `.lunaut-declare` content of this lunaut |
 | `lunaut version` | version, Luau version and compiler |
+| `lunaut update [version] [--check] [--dry-run]` | updates this lunaut to the latest or the given release, see [Update](#update) |
 | `lunaut help` | usage |
 
 Options for every command:
@@ -857,7 +938,7 @@ Fixtures live in [`tests/fixtures`](tests/fixtures): a plain Luau project, two d
 
 Luau is the git submodule [`extern/luau`](extern/luau), checked out at a release tag, and [`luau.version`](luau.version) holds the same tag for the version string. CI checks that both point at the same Luau.
 
-Every day [`update-luau.yml`](.github/workflows/update-luau.yml) runs [`scripts/update_luau.py`](scripts/update_luau.py): it finds the newest Luau release, moves the submodule to that tag, writes it to `luau.version`, adds `Sync to upstream Luau X` to the changelog, bumps the lunaut version, builds lunaut, runs every test and opens a pull request. Merge it and the release goes out with the new Luau. Run the same thing by hand:
+Every day [`update-luau.yml`](.github/workflows/update-luau.yml) runs [`scripts/update_luau.py`](scripts/update_luau.py): it finds the newest Luau release, moves the submodule to that tag, writes it to `luau.version` and adds `Sync to upstream Luau X` to the changelog. Then it builds lunaut and runs every test. Only when they pass, it commits the new Luau to `main`, raises the lunaut version, commits `Release X` and starts the Release workflow, so a new Luau becomes a lunaut release without anyone stepping in. Everything else already on `main` ships with it. The VS Code extension picks the new server up on its own (`lunaut.server.autoUpdate`) and Zed starts the latest release, so neither needs a Marketplace or registry update for a new Luau. Run the same thing by hand:
 
 ```bash
 python scripts/update_luau.py

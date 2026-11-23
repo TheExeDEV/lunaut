@@ -5,9 +5,19 @@
 
 #include "core.d.hpp"
 
+#include <algorithm>
 #include <array>
-#include <filesystem>
 #include <cstdio>
+#include <cstdlib>
+#include <filesystem>
+
+#if LUNAUT_PLATFORM_WINDOWS
+#include <windows.h>
+#endif
+
+#if defined(__APPLE__)
+#include <mach-o/dyld.h>
+#endif
 
 namespace lunaut
 {
@@ -62,6 +72,76 @@ result<std::string> process::invoke_command(const std::string& command)
 	}
 
 	return result<std::string>::ok(output);
+}
+
+int process::invoke_visible(const std::string& command)
+{
+#if LUNAUT_PLATFORM_WINDOWS
+	int length = MultiByteToWideChar(CP_UTF8, 0, command.c_str(), -1, nullptr, 0);
+	std::wstring line(static_cast<size_t>(std::max(length, 1)), L'\0');
+	MultiByteToWideChar(CP_UTF8, 0, command.c_str(), -1, line.data(), length);
+
+	STARTUPINFOW startup{};
+	startup.cb = sizeof(startup);
+	PROCESS_INFORMATION started{};
+
+	if (!CreateProcessW(nullptr, line.data(), nullptr, nullptr, TRUE, 0, nullptr, nullptr, &startup, &started))
+	{
+		return -1;
+	}
+
+	WaitForSingleObject(started.hProcess, INFINITE);
+	DWORD code = 1;
+	GetExitCodeProcess(started.hProcess, &code);
+	CloseHandle(started.hThread);
+	CloseHandle(started.hProcess);
+	return static_cast<int>(code);
+#else
+	int status = std::system(command.c_str());
+	return WIFEXITED(status) ? WEXITSTATUS(status) : 1;
+#endif
+}
+
+std::optional<std::filesystem::path> process::get_executable_path()
+{
+#if LUNAUT_PLATFORM_WINDOWS
+	std::wstring buffer(32768, L'\0');
+	DWORD size = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+
+	if (size == 0 || size >= buffer.size())
+	{
+		return std::nullopt;
+	}
+
+	buffer.resize(size);
+	return std::filesystem::path(buffer);
+#elif defined(__APPLE__)
+	uint32_t size = 0;
+	_NSGetExecutablePath(nullptr, &size);
+	std::string buffer(size, '\0');
+
+	if (_NSGetExecutablePath(buffer.data(), &size) != 0)
+	{
+		return std::nullopt;
+	}
+
+	std::error_code error;
+	std::filesystem::path resolved = std::filesystem::canonical(buffer.c_str(), error);
+	return error ? std::nullopt : std::optional<std::filesystem::path>(resolved);
+#else
+	std::error_code error;
+	std::filesystem::path resolved = std::filesystem::read_symlink("/proc/self/exe", error);
+	return error ? std::nullopt : std::optional<std::filesystem::path>(resolved);
+#endif
+}
+
+void process::set_environment(const std::string& name, const std::string& value)
+{
+#if LUNAUT_PLATFORM_WINDOWS
+	_putenv_s(name.c_str(), value.c_str());
+#else
+	setenv(name.c_str(), value.c_str(), 1);
+#endif
 }
 
 bool process::has_executable(const std::string& name)

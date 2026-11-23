@@ -182,6 +182,19 @@ enum class enumitem_import_keyword
 	Const,
 };
 
+enum class enumitem_require_style
+{
+	Auto,
+	AlwaysRelative,
+	AlwaysAbsolute,
+};
+
+enum class enumitem_alias_path
+{
+	Shortest,
+	Longest,
+};
+
 enum class enumitem_fflag_source
 {
 	Default,
@@ -220,6 +233,18 @@ std::string_view get_name(enumitem_import_keyword item);
 std::optional<enumitem_import_keyword> from_name(std::string_view name);
 }
 
+namespace enum_require_style
+{
+std::string_view get_name(enumitem_require_style item);
+std::optional<enumitem_require_style> from_name(std::string_view name);
+}
+
+namespace enum_alias_path
+{
+std::string_view get_name(enumitem_alias_path item);
+std::optional<enumitem_alias_path> from_name(std::string_view name);
+}
+
 namespace enum_fflag_source
 {
 std::string_view get_name(enumitem_fflag_source item);
@@ -232,6 +257,7 @@ struct definitioninfo
 	std::optional<int> priority;
 	std::optional<bool> show_as_module;
 	enumitem_definition_source source = enumitem_definition_source::Config;
+	std::string description;
 };
 
 struct fflaginfo
@@ -278,6 +304,8 @@ struct featuresinfo
 	bool documentation = true;
 	bool auto_imports = true;
 	enumitem_import_keyword import_keyword = enumitem_import_keyword::Local;
+	enumitem_require_style require_style = enumitem_require_style::Auto;
+	enumitem_alias_path alias_path = enumitem_alias_path::Shortest;
 	bool semantic_tokens = true;
 	bool colors = true;
 	bool autocomplete_end = true;
@@ -289,6 +317,7 @@ struct featuresinfo
 	bool alias_types = true;
 	bool refine_types = true;
 	bool unknown_error = true;
+	bool implicit_self = false;
 };
 
 struct diagnosticsinfo
@@ -357,6 +386,7 @@ struct loadeddefinitioninfo
 	bool success = false;
 	bool show_as_module = false;
 	std::string message;
+	std::string description;
 	enumitem_definition_source source = enumitem_definition_source::Config;
 
 	json to_json() const;
@@ -508,7 +538,10 @@ class process
 {
 public:
 	static result<std::string> invoke_command(const std::string& command);
+	static int invoke_visible(const std::string& command);
 	static bool has_executable(const std::string& name);
+	static std::optional<std::filesystem::path> get_executable_path();
+	static void set_environment(const std::string& name, const std::string& value);
 };
 
 class http
@@ -632,6 +665,20 @@ public:
 private:
 	json entries = json::object();
 	bool loaded = false;
+};
+
+class implicitself
+{
+public:
+	static size_t apply(Luau::SourceModule& source, const Luau::ScopePtr& globals);
+};
+
+class selfupdate
+{
+public:
+	static int invoke(const std::optional<std::string>& version, bool check_only, bool dry_run);
+	static result<std::string> get_latest_version();
+	static int compare_versions(const std::string& left, const std::string& right);
 };
 
 class robloxmagic
@@ -991,6 +1038,7 @@ private:
 		std::string& name,
 		std::string* display = nullptr) const;
 	std::optional<Luau::ModuleName> find_definition_module(Luau::TypeId type) const;
+	std::optional<Luau::ModuleName> find_prefix_module(const Luau::ScopePtr& scope, const std::string& prefix) const;
 	std::optional<Luau::ModuleName> find_definition_module(const Luau::Location& location, const std::string& name = std::string()) const;
 	std::vector<std::pair<Luau::ModuleName, Luau::Location>> find_references(
 		const Luau::ModuleName& name,
@@ -1002,6 +1050,7 @@ private:
 	void load_analyzer();
 	void apply_disabled_globals(Luau::GlobalTypes& globals);
 	Luau::CheckResult check_module(const Luau::ModuleName& name, bool for_autocomplete);
+	void apply_implicit_self(const std::vector<Luau::ModuleName>& names);
 	Luau::ModulePtr get_module(const Luau::ModuleName& name, bool for_autocomplete) const;
 	bool is_ignored(const std::string& path) const;
 	std::optional<textdocument> get_text_for(const Luau::ModuleName& name) const;
@@ -1029,6 +1078,9 @@ private:
 	std::unordered_map<std::string, std::string> definition_module_paths;
 	std::unordered_map<std::string, Luau::SourceModule> definition_sources;
 	std::set<std::string> definition_show_as_module;
+	std::unordered_map<std::string, std::string> module_descriptions;
+	std::unordered_map<std::string, Luau::ModuleName> show_as_module_names;
+	std::unordered_map<Luau::ModuleName, std::weak_ptr<Luau::Allocator>> implicit_self_modules;
 	std::unordered_map<std::string, Luau::ModulePtr> definition_modules;
 	analyzerplugin analyzer;
 	bool analyzer_reported = false;

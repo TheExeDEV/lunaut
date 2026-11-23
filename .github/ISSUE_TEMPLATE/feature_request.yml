@@ -1,0 +1,46 @@
+name: Feature request
+description: An idea for lunaut, a new setting or a change in how something works
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is hard today
+      description: The situation where lunaut gets in the way or falls short.
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you would like
+      description: How it should work. Code before and after, or a settings example, makes it clear.
+    validations:
+      required: true
+
+  - type: textarea
+    id: example
+    attributes:
+      label: Example
+      render: luau
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Type checking and diagnostics
+        - Completion, hover and inlay hints
+        - Definition files (.d.luau)
+        - Roblox, Rojo and the Studio plugin
+        - VS Code extension
+        - Zed extension
+        - Command line
+        - Other
+
+  - type: checkboxes
+    id: settings
+    attributes:
+      label: Setting
+      options:
+        - label: This should be a setting that is off by default

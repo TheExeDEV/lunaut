@@ -1,0 +1,136 @@
+name: Pull request checks
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pull-request-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  rules:
+    name: project rules
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Formatting matches .clang-format
+        run: |
+          pip install --quiet clang-format==23.1.5
+          find src -name "*.cpp" -o -name "*.hpp" -o -name "*.hpp.in" | xargs clang-format --dry-run --Werror
+
+      - name: No comments in C++ code
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          added="$(git diff --unified=0 "$BASE"...HEAD -- 'src/**.cpp' 'src/**.hpp' | grep -E '^\+[^+]' | grep -E '^\+[[:space:]]*(//|/\*)' || true)"
+
+          if [ -n "$added" ]; then
+            echo "AGENTS.md: no comments in code, names should explain it. Added comment lines:"
+            echo "$added"
+            exit 1
+          fi
+
+      - name: Versions are left to releases
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          changed="$(git diff --unified=0 "$BASE"...HEAD -- CMakeLists.txt editors/vscode/package.json editors/zed/Cargo.toml editors/zed/extension.toml | grep -E '^[+-](project\(lunaut VERSION|  "version":|version = )' || true)"
+
+          if [ -n "$changed" ]; then
+            echo "The version is raised by the release, not by a pull request:"
+            echo "$changed"
+            exit 1
+          fi
+
+      - name: Line endings are LF
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          crlf=""
+
+          for file in $(git diff --name-only --diff-filter=AM "$BASE"...HEAD); do
+            if [ -f "$file" ] && grep -Iq $'\r' "$file"; then
+              crlf="$crlf $file"
+            fi
+          done
+
+          if [ -n "$crlf" ]; then
+            echo "These files have CRLF line endings:$crlf"
+            exit 1
+          fi
+
+      - name: Test scripts compile
+        run: python -m compileall -q tests scripts
+
+  installers:
+    name: installers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell half parses
+        run: |
+          for file in installers/install installers/uninstall; do
+            sed '/^#>$/,$d' "$file" | sh -n
+          done
+
+      - name: PowerShell half parses
+        shell: pwsh
+        run: |
+          $failed = $false
+
+          foreach ($file in "installers/install", "installers/uninstall") {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file), [ref]$null, [ref]$errors) | Out-Null
+
+            foreach ($item in $errors) {
+              Write-Host "${file}:$($item.Extent.StartLineNumber): $($item.Message)"
+              $failed = $true
+            }
+          }
+
+          if ($failed) { exit 1 }
+
+  vscode:
+    name: VS Code extension
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: editors/vscode
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: editors/vscode/package-lock.json
+
+      - name: Compile
+        run: |
+          npm ci
+          npx tsc -p . --noEmit
+
+  zed:
+    name: Zed extension
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: editors/zed
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Check
+        run: cargo check --locked

@@ -10,10 +10,12 @@ CMAKE = ROOT / "CMakeLists.txt"
 PACKAGE = ROOT / "editors" / "vscode" / "package.json"
 ZED_EXTENSION = ROOT / "editors" / "zed" / "extension.toml"
 ZED_CARGO = ROOT / "editors" / "zed" / "Cargo.toml"
+ZED_LOCK = ROOT / "editors" / "zed" / "Cargo.lock"
 CHANGELOG = ROOT / "CHANGELOG.md"
 VERSION_PATTERN = re.compile(r"^(\d+)\.(\d+)\.(\d+)(-[0-9A-Za-z.-]+)?$")
 PROJECT_PATTERN = re.compile(r"(project\(lunaut VERSION )(\d+\.\d+\.\d+)")
 MANIFEST_VERSION_PATTERN = re.compile(r'^(version = ")[^"]*(")', re.M)
+LOCK_VERSION_PATTERN = re.compile(r'(name = "zed_lunaut"\nversion = ")[^"]*(")')
 
 
 def get_version():
@@ -70,6 +72,9 @@ def write_versions(version):
 	for manifest in (ZED_EXTENSION, ZED_CARGO):
 		text = manifest.read_text(encoding="utf-8")
 		manifest.write_text(MANIFEST_VERSION_PATTERN.sub(lambda match: match.group(1) + version + match.group(2), text, count=1), encoding="utf-8", newline="\n")
+
+	text = ZED_LOCK.read_text(encoding="utf-8")
+	ZED_LOCK.write_text(LOCK_VERSION_PATTERN.sub(lambda match: match.group(1) + version + match.group(2), text, count=1), encoding="utf-8", newline="\n")
 
 
 def move_unreleased(version):

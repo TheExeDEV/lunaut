@@ -232,6 +232,7 @@ void workspace::flush_diagnostics()
 	{
 		try
 		{
+			apply_implicit_self(modules);
 			frontend.queueModuleCheck(modules);
 			frontend.checkQueuedModules(priv::make_options(false, settings.diagnostics.lint, retain_types), priv::run_parallel_tasks);
 		}
@@ -447,7 +448,18 @@ void workspace::set_settings(settingsinfo next)
 	bool analyzer_changed = json(next.to_json()["analyzer"]) != json(settings.to_json()["analyzer"]);
 
 	bool base_changed = next.base_luaurc != settings.base_luaurc;
+	bool implicit_self_changed = next.features.implicit_self != settings.features.implicit_self;
 	settings = std::move(next);
+
+	if (implicit_self_changed)
+	{
+		implicit_self_modules.clear();
+
+		for (const auto& [module_name, node] : frontend.sourceNodes)
+		{
+			frontend.markDirty(module_name);
+		}
+	}
 
 	if (base_changed)
 	{
@@ -612,6 +624,8 @@ void workspace::load_definitions()
 	definition_sources.clear();
 	definition_modules.clear();
 	definition_show_as_module.clear();
+	module_descriptions.clear();
+	show_as_module_names.clear();
 
 	std::set<std::string> packages;
 	std::set<std::string> show_as_modules;
@@ -624,6 +638,7 @@ void workspace::load_definitions()
 		loaded.priority = info.priority.value_or(0);
 		loaded.source = info.source;
 		loaded.show_as_module = info.show_as_module.value_or(false);
+		loaded.description = info.description;
 		loaded.name = definitionloader::get_package_name(info, info.path);
 
 		for (size_t index = 2; !packages.insert(loaded.name).second; ++index)
@@ -712,6 +727,12 @@ void workspace::load_definitions()
 			}
 
 			show_as_modules.insert(*alias);
+			show_as_module_names[*alias] = loaded.name;
+
+			if (!loaded.description.empty())
+			{
+				module_descriptions[*alias] = loaded.description;
+			}
 		}
 
 		definition_modules.emplace(loaded.name, std::move(result.module));
@@ -766,12 +787,41 @@ Luau::CheckResult workspace::check_module(const Luau::ModuleName& name, bool for
 
 	try
 	{
+		apply_implicit_self({name});
 		return frontend.check(name, priv::make_options(for_autocomplete, settings.diagnostics.lint, retain_types));
 	}
 	catch (const std::exception& error)
 	{
 		owner.send_log(enumitem_message_type::Error, "typechecking " + name + " failed: " + error.what());
 		return Luau::CheckResult{};
+	}
+}
+
+void workspace::apply_implicit_self(const std::vector<Luau::ModuleName>& names)
+{
+	if (!settings.features.implicit_self)
+	{
+		return;
+	}
+
+	frontend.parseModules(names);
+
+	for (const auto& [module_name, source] : frontend.sourceModules)
+	{
+		if (!source || !source->allocator)
+		{
+			continue;
+		}
+
+		std::weak_ptr<Luau::Allocator>& applied = implicit_self_modules[module_name];
+
+		if (applied.lock() == source->allocator)
+		{
+			continue;
+		}
+
+		implicitself::apply(*source, frontend.globals.globalScope);
+		applied = source->allocator;
 	}
 }
 

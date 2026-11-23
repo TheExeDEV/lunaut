@@ -221,12 +221,20 @@ json workspace::get_completion(const json& params)
 				continue;
 			}
 
-			items.push_back({
+			const auto described = module_descriptions.find(alias);
+			json item = {
 				{"label", alias},
 				{"kind", static_cast<int>(enumitem_completion_kind::Module)},
 				{"sortText", "2" + alias},
-				{"detail", "definitions @" + alias},
-			});
+				{"detail", described == module_descriptions.end() ? "definitions @" + alias : described->second},
+			};
+
+			if (described != module_descriptions.end())
+			{
+				item["documentation"] = protocol::make_markdown(described->second + "\n\n*definitions @" + alias + "*");
+			}
+
+			items.push_back(std::move(item));
 		}
 	}
 

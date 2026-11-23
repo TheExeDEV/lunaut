@@ -1,0 +1,80 @@
+name: Bug report
+description: Something in lunaut does not work as it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! The smaller the example, the faster it gets fixed.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you saw, and what you expected instead. A screenshot helps for hover, completion and inlay hints.
+    validations:
+      required: true
+
+  - type: textarea
+    id: code
+    attributes:
+      label: Code that shows it
+      description: The smallest Luau snippet, `.d.luau` or settings that make it happen.
+      render: luau
+
+  - type: input
+    id: version
+    attributes:
+      label: lunaut version
+      description: "`lunaut version`, or the version in the Lunaut menu of VS Code"
+      placeholder: lunaut 0.1.8 (Luau 0.747, MSVC 19.52)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: editor
+    attributes:
+      label: Editor
+      options:
+        - VS Code
+        - Zed
+        - Neovim
+        - Helix
+        - Command line (lunaut analyze)
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: solver
+    attributes:
+      label: Type solver
+      description: "`lunaut.fflags.enableNewSolver` or `LuauSolverV2`"
+      options:
+        - Old solver (default)
+        - New solver
+        - Both
+        - Not sure
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Project
+      options:
+        - Roblox (Rojo or sourcemap)
+        - Plain Luau
+        - Not sure
+
+  - type: textarea
+    id: settings
+    attributes:
+      label: Settings
+      description: The `lunaut.*` and `luau-lsp.*` entries of your `settings.json`, if they matter.
+      render: json
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Server log
+      description: In VS Code, Output > Lunaut. Paste the lines around the problem.
+      render: text

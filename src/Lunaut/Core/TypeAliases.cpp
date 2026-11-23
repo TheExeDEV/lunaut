@@ -1029,6 +1029,23 @@ std::optional<Luau::ModuleName> workspace::find_definition_module(Luau::TypeId t
 	return module;
 }
 
+std::optional<Luau::ModuleName> workspace::find_prefix_module(const Luau::ScopePtr& scope, const std::string& prefix) const
+{
+	if (std::optional<Luau::ModuleName> required = typelookup::find_imported_module(scope, prefix))
+	{
+		return required;
+	}
+
+	const auto found = show_as_module_names.find(prefix);
+
+	if (found == show_as_module_names.end())
+	{
+		return std::nullopt;
+	}
+
+	return found->second;
+}
+
 std::string workspace::format_alias_display(const Luau::ModuleName& module, const std::string& name) const
 {
 	if (definition_show_as_module.count(module) == 0)

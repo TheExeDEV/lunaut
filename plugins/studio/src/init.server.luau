@@ -8,6 +8,7 @@ if not RunService:IsEdit() then
 end
 
 local Sender = require(script.Sender)
+local Settings = require(script.Settings)
 local Tree = require(script.Tree)
 local Ui = require(script.Ui)
 
@@ -77,15 +78,22 @@ actionLayout.Padding = UDim.new(0, 8)
 actionLayout.Parent = actions
 
 local sendButton = Ui.button(actions, "Send Once", 34, 1)
-sendButton.Size = UDim2.new(0.5, -4, 1, 0)
+sendButton.Size = UDim2.new(1 / 3, -6, 1, 0)
 sendButton:SetAttribute("Role", "Secondary")
 
 local clearButton = Ui.button(actions, "Clear Editor", 34, 2)
-clearButton.Size = UDim2.new(0.5, -4, 1, 0)
+clearButton.Size = UDim2.new(1 / 3, -6, 1, 0)
 clearButton:SetAttribute("Role", "Secondary")
 
-Ui.label(root, "Connection", 20, true, 10)
-Ui.label(root, "Port", 17, false, 11)
+local settingsButton = Ui.button(actions, "Settings", 34, 3)
+settingsButton.Size = UDim2.new(1 / 3, -6, 1, 0)
+settingsButton:SetAttribute("Role", "Secondary")
+
+local filterHint = Ui.label(root, `Settings opens ServerStorage.{Settings.name}: list instances in include to send only those, and in exclude to skip them.`, 15, false, 10)
+filterHint:SetAttribute("Role", "Hint")
+
+Ui.label(root, "Connection", 20, true, 11)
+Ui.label(root, "Port", 17, false, 12)
 
 local portBox = Instance.new("TextBox")
 portBox.Size = UDim2.new(1, 0, 0, 32)
@@ -94,7 +102,7 @@ portBox.Font = Enum.Font.SourceSans
 portBox.TextSize = 18
 portBox.TextXAlignment = Enum.TextXAlignment.Left
 portBox.PlaceholderText = tostring(defaultPort)
-portBox.LayoutOrder = 12
+portBox.LayoutOrder = 13
 portBox:SetAttribute("Role", "Field")
 Ui.corner(portBox, 4)
 portBox.Parent = root
@@ -107,13 +115,16 @@ local portStroke = Instance.new("UIStroke")
 portStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 portStroke.Parent = portBox
 
-local portHint = Ui.label(root, "The same number as lunaut.studioPlugin.port in your editor. Press Enter to save.", 15, false, 13)
+local portHint = Ui.label(root, "The same number as lunaut.studioPlugin.port in your editor. Press Enter to save.", 15, false, 14)
 portHint:SetAttribute("Role", "Hint")
 
 local syncing = false
 local pending = false
 local reachable: boolean? = nil
 local connections: { RBXScriptConnection } = {}
+local filter: Settings.Filter? = nil
+local filterProblem: string? = nil
+local settingsWatch: RBXScriptConnection? = nil
 
 local function getPort(): number
 	return tonumber(plugin:GetSetting(portSetting)) or defaultPort
@@ -129,13 +140,41 @@ local function say(text: string)
 	end
 end
 
+local schedule: () -> ()
+
+local function loadFilter()
+	local loaded, problem = Settings.load()
+	filter = loaded
+
+	if problem and problem ~= filterProblem and plugin:GetSetting(silentSetting) ~= true then
+		warn(`[Lunaut] {problem}. Sending every instance until it is fixed.`)
+	end
+
+	filterProblem = problem
+
+	if settingsWatch then
+		settingsWatch:Disconnect()
+		settingsWatch = nil
+	end
+
+	local module = Settings.find()
+
+	if module and syncing then
+		settingsWatch = module:GetPropertyChangedSignal("Source"):Connect(function()
+			schedule()
+		end)
+	end
+end
+
 local function send(announce: boolean): boolean
 	local port = getPort()
-	local tree, count = Tree.build(game)
+	loadFilter()
+	local tree, count = Tree.build(game, nil, filter)
 	local ok, problem = Sender.post(port, "/full", HttpService:JSONEncode({ tree = tree }))
 
 	if ok then
-		status.Text = `Sent {count} instances to port {port} at {os.date("%H:%M:%S")}`
+		local scope = if filter and filter.include then ", filtered" elseif filter and #filter.exclude > 0 then ", with excludes" else ""
+		status.Text = `Sent {count} instances{scope} to port {port} at {os.date("%H:%M:%S")}`
 
 		if announce or reachable ~= true then
 			say(`sent {count} instances to the editor on port {port}`)
@@ -152,7 +191,7 @@ local function send(announce: boolean): boolean
 	return ok
 end
 
-local function schedule()
+function schedule()
 	if not syncing or pending then
 		return
 	end
@@ -185,13 +224,24 @@ local function setSyncing(enabled: boolean)
 	table.clear(connections)
 
 	if not enabled then
+		if settingsWatch then
+			settingsWatch:Disconnect()
+			settingsWatch = nil
+		end
+
 		status.Text = "Not syncing"
 		say("sync stopped")
 		return
 	end
 
-	table.insert(connections, game.DescendantAdded:Connect(schedule))
-	table.insert(connections, game.DescendantRemoving:Connect(schedule))
+	local function onChange(instance: Instance)
+		if instance.Name == Settings.name or Settings.isWatched(filter, instance) then
+			schedule()
+		end
+	end
+
+	table.insert(connections, game.DescendantAdded:Connect(onChange))
+	table.insert(connections, game.DescendantRemoving:Connect(onChange))
 	reachable = nil
 	send(true)
 end
@@ -214,6 +264,12 @@ clearButton.Activated:Connect(function()
 	else
 		status.Text = `The editor did not answer on port {port}`
 		warn(`[Lunaut] the editor did not answer on port {port} ({problem})`)
+	end
+end)
+
+settingsButton.Activated:Connect(function()
+	if Settings.open(plugin) == nil then
+		warn(`[Lunaut] could not open {Settings.service}.{Settings.name}`)
 	end
 end)
 
@@ -267,6 +323,10 @@ end)
 plugin.Unloading:Connect(function()
 	for _, connection in connections do
 		connection:Disconnect()
+	end
+
+	if settingsWatch then
+		settingsWatch:Disconnect()
 	end
 end)
 
