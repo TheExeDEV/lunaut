@@ -17,6 +17,9 @@ namespace priv
 constexpr std::string_view declare_file = ".crater-declare";
 constexpr std::string_view default_settings_file = "crater.settings.json";
 
+const std::vector<std::string_view> relevant_package_markers = {".crater-package", ".crater-vendor"};
+const std::vector<std::string_view> relevant_root_modules = {"init.luau", "init.lua"};
+
 const std::vector<std::pair<std::string_view, std::string_view>> relevant_realm_folders = {
 	{"client", "Packages"},
 	{"server", "ServerPackages"},
@@ -27,8 +30,38 @@ std::optional<json> read_json(const std::filesystem::path& path);
 std::string get_string(const json& data, const std::string& key, std::string fallback);
 std::string get_realm_folder(const json& settings, std::string_view realm, std::string_view fallback);
 void add_folder(std::vector<std::string>& folders, std::string folder);
+bool is_package_folder(const std::filesystem::path& folder, std::unordered_map<std::string, bool>& packages);
+bool has_root_module(const std::filesystem::path& folder);
 
 }
+}
+
+bool crater::is_package_internal(
+	const std::filesystem::path& root, const std::filesystem::path& file, std::unordered_map<std::string, bool>& packages)
+{
+	std::filesystem::path base = root.lexically_normal();
+	std::filesystem::path folder = file.parent_path().lexically_normal();
+
+	while (!folder.empty() && folder != base && folder != folder.parent_path())
+	{
+		if (priv::is_package_folder(folder, packages))
+		{
+			if (!priv::has_root_module(folder))
+			{
+				return false;
+			}
+
+			bool root_module = file.parent_path().lexically_normal() == folder &&
+				std::find(priv::relevant_root_modules.begin(), priv::relevant_root_modules.end(), file.filename().string()) !=
+					priv::relevant_root_modules.end();
+
+			return !root_module;
+		}
+
+		folder = folder.parent_path();
+	}
+
+	return false;
 }
 
 std::vector<std::string> crater::get_package_folders(const std::filesystem::path& root)
@@ -141,6 +174,36 @@ std::string get_realm_folder(const json& settings, std::string_view realm, std::
 	}
 
 	return get_string(settings, "import_" + key + "_path", std::string(fallback));
+}
+
+bool is_package_folder(const std::filesystem::path& folder, std::unordered_map<std::string, bool>& packages)
+{
+	std::string key = folder.generic_string();
+	const auto found = packages.find(key);
+
+	if (found != packages.end())
+	{
+		return found->second;
+	}
+
+	std::error_code error;
+	bool marked = std::any_of(
+		relevant_package_markers.begin(),
+		relevant_package_markers.end(),
+		[&](std::string_view marker) { return std::filesystem::exists(folder / std::string(marker), error); });
+
+	packages.emplace(key, marked);
+	return marked;
+}
+
+bool has_root_module(const std::filesystem::path& folder)
+{
+	std::error_code error;
+
+	return std::any_of(
+		relevant_root_modules.begin(),
+		relevant_root_modules.end(),
+		[&](std::string_view name) { return std::filesystem::is_regular_file(folder / std::string(name), error); });
 }
 
 void add_folder(std::vector<std::string>& folders, std::string folder)

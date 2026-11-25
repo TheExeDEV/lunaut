@@ -60,6 +60,7 @@ const std::unordered_map<std::string_view, std::string_view> relevant_vscode_key
 	{"lunaut.completion.imports.requireStyle", "/features/require_style"},
 	{"lunaut.completion.imports.aliasPath", "/features/alias_path"},
 	{"lunaut.completion.imports.ignoreGlobs", "/features/import_ignore_globs"},
+	{"lunaut.completion.imports.packageInternals", "/features/import_package_internals"},
 	{"lunaut.semanticTokens.enabled", "/features/semantic_tokens"},
 	{"lunaut.colors.enabled", "/features/colors"},
 	{"lunaut.completion.autocompleteEnd", "/features/autocomplete_end"},
@@ -254,6 +255,8 @@ settingsinfo settingsinfo::from_json(const json& data, const settingsinfo& base)
 				}
 			}
 		}
+
+		priv::read(features, "import_package_internals", info.features.import_package_internals);
 
 		if (features.contains("alias_path") && features["alias_path"].is_string())
 		{
@@ -494,6 +497,7 @@ json settingsinfo::to_json() const
 			 {"require_style", enum_require_style::get_name(features.require_style)},
 			 {"alias_path", enum_alias_path::get_name(features.alias_path)},
 			 {"import_ignore_globs", features.import_ignore_globs},
+			 {"import_package_internals", features.import_package_internals},
 			 {"semantic_tokens", features.semantic_tokens},
 			 {"colors", features.colors},
 			 {"autocomplete_end", features.autocomplete_end},

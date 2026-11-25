@@ -148,6 +148,26 @@ class EditingTests(unittest.TestCase):
 		listed = {item["name"]: item["description"] for item in client.request("lunaut/definitions", {})[0]["definitions"]}
 		self.assertEqual(listed["@fc_database"], "Rows of the funny-core database")
 
+	def test_definition_properties_from_directives(self):
+		lines = [
+			"--!priority 120",
+			'--!show_description_message "Rows of the \\"core\\" database"',
+			'--!show_module_name_message "fc_db"',
+			"--!show_as_module true",
+			"export type Row = { id: number }",
+		]
+		write(self.folder, "types/database.d.luau", "\n".join(lines) + "\n")
+		write(self.folder, "main.luau", "--!strict\nlocal row: fc_db.Row = { id = 1 }\nlocal pick: f = nil\nreturn { row, pick }\n")
+		client = self.start({"lunaut.definitions": ["types/database.d.luau"], "lunaut.discoverDefinitions": False})
+		uri, diagnostics = client.open("main.luau")
+
+		self.assertEqual([diagnostic["message"] for diagnostic in diagnostics], ["Unknown type 'f'"])
+		listed = client.request("lunaut/definitions", {})[0]["definitions"][0]
+		self.assertEqual((listed["name"], listed["priority"], listed["show_as_module"], listed["description"]), ("@fc_db", 120, True, 'Rows of the "core" database'))
+		result = client.request("textDocument/completion", {"textDocument": {"uri": uri}, "position": {"line": 2, "character": 13}})
+		items = {item["label"]: item for item in (result["items"] if isinstance(result, dict) else result)}
+		self.assertEqual(items["fc_db"]["detail"], 'Rows of the "core" database')
+
 	def test_show_as_module_directive_in_the_file(self):
 		write(self.folder, "types/base.d.luau", "--!lunaut_show_as_module true\nexport type Vehicle = { speed: number }\n")
 		write(self.folder, "types/flat.d.luau", "--!lunaut_show_as_module true\nexport type Flat = { size: number }\n")

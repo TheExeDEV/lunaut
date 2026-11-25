@@ -307,6 +307,7 @@ struct featuresinfo
 	enumitem_require_style require_style = enumitem_require_style::Auto;
 	enumitem_alias_path alias_path = enumitem_alias_path::Shortest;
 	std::vector<std::string> import_ignore_globs = {"**/_Index/**"};
+	bool import_package_internals = false;
 	bool semantic_tokens = true;
 	bool colors = true;
 	bool autocomplete_end = true;
@@ -651,6 +652,8 @@ class crater
 public:
 	static std::vector<std::string> get_package_folders(const std::filesystem::path& root);
 	static std::vector<std::string> get_ignore_globs(const std::filesystem::path& root);
+	static bool is_package_internal(
+		const std::filesystem::path& root, const std::filesystem::path& file, std::unordered_map<std::string, bool>& packages);
 };
 
 class documentation
@@ -713,6 +716,8 @@ public:
 	static std::vector<definitioninfo> collect(const std::filesystem::path& root, const settingsinfo& settings, bool roblox, client& owner);
 	static std::optional<int> get_directive_priority(const std::string& source);
 	static std::optional<bool> get_directive_show_as_module(const std::string& source);
+	static std::optional<std::string> get_directive_description(const std::string& source);
+	static std::optional<std::string> get_directive_name(const std::string& source);
 	static std::string get_package_name(const definitioninfo& info, const std::filesystem::path& path);
 };
 

@@ -437,10 +437,10 @@ local car: base.Vehicle = make_vehicle()
 Turn it on in settings, `{ "path": "types/base.d.luau", "name": "@base", "show_as_module": true }`, or in the file itself, among the comment lines at the top:
 
 ```luau
---!lunaut_show_as_module true
+--!show_as_module true
 ```
 
-The setting wins over the line in the file; `--!lunaut_show_as_module false` turns it off for a file matched by a glob.
+The setting wins over the line in the file; `--!show_as_module false` turns it off for a file matched by a glob. The older `--!lunaut_show_as_module` works the same.
 
 Give the module a description with `message`; completion shows it next to the module name instead of `definitions @base`:
 
@@ -449,6 +449,27 @@ Give the module a description with `message`; completion shows it next to the mo
   { "path": "types/database.d.luau", "name": "@fc_database", "show_as_module": true, "message": "Rows and tables of the funny-core database" }
 ]
 ```
+
+### Settings inside the definition file
+
+Every property of a `lunaut.definitions` entry can also live in the file, so a package works the same whatever package manager installed it. Put the lines among the comments at the top, in the first 32 lines:
+
+```luau
+--!priority 120
+--!show_as_module true
+--!show_description_message "Rows and tables of the funny-core database"
+--!show_module_name_message "fc_database"
+export type Row = { id: number }
+```
+
+| Line | Same as |
+| --- | --- |
+| `--!priority N` | `priority` |
+| `--!show_as_module true` or `false` (also `--!lunaut_show_as_module`) | `show_as_module` |
+| `--!show_description_message "text"` | `message` |
+| `--!show_module_name_message "name"` | `name`; the `@` is added for you |
+
+The quotes are optional; `\"` puts a quote inside. A value given in settings always wins over the line in the file.
 
 ---
 
@@ -829,6 +850,7 @@ Inside `require("...")` completion lists the aliases and `./`, `../` first, then
 | `definitions.duplicates` | A file listed twice is loaded once, with the first priority found. |
 | `definitions.default_name`, `name_prefix` | A file without `name` is called `@` plus its file name; a name always starts with `@`. |
 | `definitions.show_as_module_name` | With `show_as_module`, the first `@` of the name is dropped and the rest has to be an identifier, so `@base` gives `base.Vehicle`. |
+| `definitions.directives` | The comment lines a definition file can use instead of settings: `--!priority`, `--!show_as_module` (and `--!lunaut_show_as_module`), `--!show_description_message` and `--!show_module_name_message`, in the first 32 lines; settings win. |
 | `definitions.show_as_module_sources`, `show_as_module_directive` | `show_as_module` in settings wins, then the `--!lunaut_show_as_module true` or `false` line in the first 32 lines of the file, then `false`. |
 | `definitions.show_as_module_access` | Types of such a file are reached only as `base.Vehicle`, not as a plain `Vehicle`. |
 | `definitions.restart_on_definition_changes_setting` | The setting that turns off the rebuild when a definition file is saved. |

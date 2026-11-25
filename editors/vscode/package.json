@@ -1687,6 +1687,11 @@
           ],
           "markdownDescription": "Files that are never offered as auto-imports, relative to the workspace. The default hides the insides of Wally and crater packages, so only `Packages.Name` is offered."
         },
+        "lunaut.completion.imports.packageInternals": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Also offer the modules inside crater packages that have a root module (`init.luau`), such as `vide/action`. Off, only the package itself is offered. Packages without a root module, like a library of modules, always offer their modules."
+        },
         "lunaut.completion.importKeyword": {
           "type": "string",
           "enum": [

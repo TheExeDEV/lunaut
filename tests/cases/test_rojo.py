@@ -165,6 +165,75 @@ class RojoTests(unittest.TestCase):
 		self.assertNotIn("fusion", items(1, 18))
 		self.assertEqual(items(2, 30)["ReplicatedStorage"]["kind"], 7)
 
+	def test_crater_packages_offer_their_root_module(self):
+		folder = tempfile.mkdtemp()
+		self.addCleanup(shutil.rmtree, folder, True)
+		root = pathlib.Path(folder)
+
+		def write(path, text):
+			file = root / path
+			file.parent.mkdir(parents=True, exist_ok=True)
+			file.write_text(text, encoding="utf-8")
+
+		write("default.project.json", json.dumps({"name": "Game", "tree": {"$className": "DataModel", "ReplicatedStorage": {"Packages": {"$path": "Packages"}, "Shared": {"$path": "src"}}}}))
+		write("Packages/vide/.crater-package", "")
+		write("Packages/vide/init.luau", "return { mount = 1 }\n")
+		write("Packages/vide/action.luau", "return 1\n")
+		write("Packages/library/.crater-package", "")
+		write("Packages/library/src/Thing.luau", "return 1\n")
+		write("src/Main.luau", "local a = vid\nlocal b = actio\nlocal c = Thin\nreturn { a, b, c }\n")
+		module = lambda name, path: {"name": name, "className": "ModuleScript", "filePaths": [path]}
+		sourcemap = {
+			"name": "Game",
+			"className": "DataModel",
+			"children": [
+				{
+					"name": "ReplicatedStorage",
+					"className": "ReplicatedStorage",
+					"children": [
+						{
+							"name": "Packages",
+							"className": "Folder",
+							"children": [
+								dict(module("vide", "Packages/vide/init.luau"), children=[module("action", "Packages/vide/action.luau")]),
+								{"name": "library", "className": "Folder", "children": [{"name": "src", "className": "Folder", "children": [module("Thing", "Packages/library/src/Thing.luau")]}]},
+							],
+						},
+						{"name": "Shared", "className": "Folder", "children": [module("Main", "src/Main.luau")]},
+					],
+				}
+			],
+		}
+		write("sourcemap.json", json.dumps(sourcemap))
+		base = {
+			"lunaut.platform": "roblox",
+			"lunaut.fflags.sync": False,
+			"lunaut.roblox.downloadTypes": False,
+			"lunaut.rojo.autogenerate": False,
+			"lunaut.ignoreGlobs": ["Packages/**"],
+		}
+
+		def labels(settings):
+			client = LspClient(root, {"vscode": {**base, **settings}})
+
+			try:
+				uri, _ = client.open("src/Main.luau")
+				found = set()
+
+				for line, character in ((0, 13), (1, 15), (2, 14)):
+					result = client.request("textDocument/completion", {"textDocument": {"uri": uri}, "position": {"line": line, "character": character}})
+					found |= {item["label"] for item in (result["items"] if isinstance(result, dict) else result) if item.get("additionalTextEdits")}
+
+				return found
+			finally:
+				client.close()
+
+		offered = labels({})
+		self.assertIn("vide", offered)
+		self.assertIn("Thing", offered)
+		self.assertNotIn("action", offered)
+		self.assertIn("action", labels({"lunaut.completion.imports.packageInternals": True}))
+
 	def test_references_through_sourcemap(self):
 		line, character = position_of(self.text, "Util.double", 6)
 		references = self.client.at("textDocument/references", self.uri, line, character)

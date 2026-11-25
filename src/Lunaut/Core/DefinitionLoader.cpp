@@ -15,7 +15,10 @@ namespace priv
 {
 
 constexpr std::string_view priority_directive = "--!priority";
-constexpr std::string_view show_as_module_directive = "--!lunaut_show_as_module";
+constexpr std::string_view description_directive = "--!show_description_message";
+constexpr std::string_view name_directive = "--!show_module_name_message";
+
+const std::vector<std::string_view> relevant_show_as_module_directives = {"--!show_as_module", "--!lunaut_show_as_module"};
 constexpr std::string_view discovery_pattern = "**/*.d.luau";
 constexpr size_t directive_lines = 32;
 
@@ -30,6 +33,7 @@ struct collector
 std::pair<std::filesystem::path, std::string> split_pattern(const std::filesystem::path& root, const std::string& pattern);
 std::filesystem::path resolve_path(const std::filesystem::path& root, const std::string& path);
 std::optional<std::string> get_directive(const std::string& source, std::string_view directive);
+std::optional<std::string> get_directive_text(const std::string& source, std::string_view directive);
 
 }
 }
@@ -122,7 +126,17 @@ std::optional<int> definitionloader::get_directive_priority(const std::string& s
 
 std::optional<bool> definitionloader::get_directive_show_as_module(const std::string& source)
 {
-	std::optional<std::string> value = priv::get_directive(source, priv::show_as_module_directive);
+	std::optional<std::string> value;
+
+	for (std::string_view directive : priv::relevant_show_as_module_directives)
+	{
+		value = priv::get_directive(source, directive);
+
+		if (value)
+		{
+			break;
+		}
+	}
 
 	if (!value)
 	{
@@ -140,6 +154,16 @@ std::optional<bool> definitionloader::get_directive_show_as_module(const std::st
 	}
 
 	return std::nullopt;
+}
+
+std::optional<std::string> definitionloader::get_directive_description(const std::string& source)
+{
+	return priv::get_directive_text(source, priv::description_directive);
+}
+
+std::optional<std::string> definitionloader::get_directive_name(const std::string& source)
+{
+	return priv::get_directive_text(source, priv::name_directive);
 }
 
 std::string definitionloader::get_package_name(const definitioninfo& info, const std::filesystem::path& path)
@@ -186,7 +210,7 @@ void collector::add(definitioninfo info, const std::filesystem::path& file)
 
 	info.path = normalized;
 
-	if (!info.priority || !info.show_as_module)
+	if (!info.priority || !info.show_as_module || info.description.empty() || info.name.empty())
 	{
 		if (std::optional<std::string> contents = stdx::read_file(file))
 		{
@@ -198,6 +222,16 @@ void collector::add(definitioninfo info, const std::filesystem::path& file)
 			if (!info.show_as_module)
 			{
 				info.show_as_module = definitionloader::get_directive_show_as_module(*contents);
+			}
+
+			if (info.description.empty())
+			{
+				info.description = definitionloader::get_directive_description(*contents).value_or("");
+			}
+
+			if (info.name.empty())
+			{
+				info.name = definitionloader::get_directive_name(*contents).value_or("");
 			}
 		}
 	}
@@ -236,6 +270,38 @@ std::filesystem::path resolve_path(const std::filesystem::path& root, const std:
 	}
 
 	return root / candidate;
+}
+
+std::optional<std::string> get_directive_text(const std::string& source, std::string_view directive)
+{
+	std::optional<std::string> value = get_directive(source, directive);
+
+	if (!value || value->empty())
+	{
+		return std::nullopt;
+	}
+
+	if (value->size() < 2 || value->front() != '"' || value->back() != '"')
+	{
+		return value;
+	}
+
+	std::string text;
+	bool escaped = false;
+
+	for (char character : value->substr(1, value->size() - 2))
+	{
+		if (escaped || character != '\\')
+		{
+			text.push_back(character);
+			escaped = false;
+			continue;
+		}
+
+		escaped = true;
+	}
+
+	return text;
 }
 
 std::optional<std::string> get_directive(const std::string& source, std::string_view directive)

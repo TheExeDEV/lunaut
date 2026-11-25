@@ -80,6 +80,13 @@ json workspace::get_auto_imports(const Luau::ModuleName& name, const textdocumen
 	index_workspace();
 
 	std::vector<Luau::ModuleName> modules;
+	std::unordered_map<std::string, bool> packages;
+
+	auto is_hidden = [&](const std::string& path)
+	{
+		return is_ignored_for_imports(path) ||
+			(!settings.features.import_package_internals && crater::is_package_internal(root, path, packages));
+	};
 
 	for (const auto& [module_name, node] : frontend.sourceNodes)
 	{
@@ -95,7 +102,7 @@ json workspace::get_auto_imports(const Luau::ModuleName& name, const textdocumen
 		{
 			std::optional<std::string> real = instance->get_script_path();
 
-			if (real && is_ignored_for_imports(*real))
+			if (real && is_hidden(*real))
 			{
 				continue;
 			}
@@ -118,7 +125,7 @@ json workspace::get_auto_imports(const Luau::ModuleName& name, const textdocumen
 
 		std::optional<std::string> real = resolver.get_real_path(module_name);
 
-		if (real && (is_definition_file(*real) || is_ignored_for_imports(*real)))
+		if (real && (is_definition_file(*real) || is_hidden(*real)))
 		{
 			continue;
 		}
