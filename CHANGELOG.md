@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-11-25
+
+### Changed
+
+- Sync to upstream Luau 0.748
+
 ## [0.2.2] - 2026-11-25
 
 ### Added
