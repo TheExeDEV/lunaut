@@ -855,6 +855,16 @@ bool workspace::is_ignored(const std::string& path) const
 	return false;
 }
 
+bool workspace::is_ignored_for_imports(const std::string& path) const
+{
+	std::string relative = uri::get_relative(root, path);
+
+	return std::any_of(
+		settings.features.import_ignore_globs.begin(),
+		settings.features.import_ignore_globs.end(),
+		[&relative](const std::string& glob) { return stdx::glob_match(glob, relative); });
+}
+
 std::optional<textdocument> workspace::get_text_for(const Luau::ModuleName& name) const
 {
 	std::optional<std::string> path;

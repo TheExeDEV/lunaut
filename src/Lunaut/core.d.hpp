@@ -306,6 +306,7 @@ struct featuresinfo
 	enumitem_import_keyword import_keyword = enumitem_import_keyword::Local;
 	enumitem_require_style require_style = enumitem_require_style::Auto;
 	enumitem_alias_path alias_path = enumitem_alias_path::Shortest;
+	std::vector<std::string> import_ignore_globs = {"**/_Index/**"};
 	bool semantic_tokens = true;
 	bool colors = true;
 	bool autocomplete_end = true;
@@ -641,6 +642,7 @@ public:
 	static std::optional<std::string> find_project(const std::filesystem::path& root, const rojoinfo& info);
 	static std::vector<std::string> find_projects(const std::filesystem::path& root);
 	static bool has_existing_paths(const std::filesystem::path& project);
+	static std::vector<std::filesystem::path> get_project_paths(const std::filesystem::path& root, const rojoinfo& info);
 	static result<nothing> generate_sourcemap(const std::filesystem::path& root, const rojoinfo& info);
 };
 
@@ -1053,6 +1055,7 @@ private:
 	void apply_implicit_self(const std::vector<Luau::ModuleName>& names);
 	Luau::ModulePtr get_module(const Luau::ModuleName& name, bool for_autocomplete) const;
 	bool is_ignored(const std::string& path) const;
+	bool is_ignored_for_imports(const std::string& path) const;
 	std::optional<textdocument> get_text_for(const Luau::ModuleName& name) const;
 	json get_location(const Luau::ModuleName& name, const Luau::Location& location) const;
 	json find_symbol_location(const json& params, bool declaration);

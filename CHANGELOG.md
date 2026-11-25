@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### Added
+
+- The installer sets up Zed by itself: each release carries `lunaut-zed.tar.gz`, the built extension with its Luau grammar, and the installer unpacks it into Zed's extensions folder. Before, it only told you to look for Lunaut in Zed's extension list, where it is not listed yet. A dev extension linked there is left alone
+- `lunaut.completion.imports.ignoreGlobs` (default `["**/_Index/**"]`, `luau-lsp.completion.imports.ignoreGlobs` works too): files that are never offered as auto-imports
+
+### Fixed
+
+- Auto-imports offer modules from `Packages`, `DevPackages`, `ServerPackages` and every other folder of the Rojo project, even when `lunaut.ignoreGlobs` excludes them, by reading the `ModuleScript`s of the sourcemap and loading the `$path` folders of `lunaut.rojo.projectFile`. Package internals under `_Index` stay hidden
+- Auto-imported services show the class icon and modules the module icon, as in luau-lsp
+
+### Removed
+
+- Neovim and Helix support: the installer no longer offers them, and `editors/neovim` and `editors/helix` are gone. The uninstaller still removes the Neovim config installed by older versions
+
 ## [0.1.9] - 2026-11-23
 
 ### Added

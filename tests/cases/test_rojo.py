@@ -1,3 +1,4 @@
+import json
 import pathlib
 import shutil
 import tempfile
@@ -92,6 +93,77 @@ class RojoTests(unittest.TestCase):
 			result = run_cli("analyze", f"--definition=@enums={definition}", *flags, str(user), cwd=FIXTURES / "rojo")
 			self.assertNotIn("Unknown type", result.stdout + result.stderr)
 			self.assertIn("0 errors", result.stdout, result.stdout + result.stderr)
+
+	def test_auto_imports_from_rojo_packages(self):
+		folder = tempfile.mkdtemp()
+		self.addCleanup(shutil.rmtree, folder, True)
+		root = pathlib.Path(folder)
+
+		def write(path, text):
+			file = root / path
+			file.parent.mkdir(parents=True, exist_ok=True)
+			file.write_text(text, encoding="utf-8")
+
+		write("default.project.json", json.dumps({"name": "Game", "tree": {"$className": "DataModel", "ReplicatedStorage": {"Packages": {"$path": "Packages"}, "Shared": {"$path": "src"}}}}))
+		write("Packages/Fusion.lua", "return require(script.Parent._Index.fusion.fusion)\n")
+		write("Packages/_Index/fusion/fusion/init.lua", "return { New = 1 }\n")
+		write("src/Main.luau", "local fusion = Fus\nlocal index = fusi\nlocal storage = ReplicatedSt\nreturn { fusion, index, storage }\n")
+		sourcemap = {
+			"name": "Game",
+			"className": "DataModel",
+			"filePaths": ["default.project.json"],
+			"children": [
+				{
+					"name": "ReplicatedStorage",
+					"className": "ReplicatedStorage",
+					"children": [
+						{
+							"name": "Packages",
+							"className": "Folder",
+							"filePaths": ["Packages"],
+							"children": [
+								{"name": "Fusion", "className": "ModuleScript", "filePaths": ["Packages/Fusion.lua"]},
+								{
+									"name": "_Index",
+									"className": "Folder",
+									"filePaths": ["Packages/_Index"],
+									"children": [
+										{
+											"name": "fusion",
+											"className": "Folder",
+											"children": [{"name": "fusion", "className": "ModuleScript", "filePaths": ["Packages/_Index/fusion/fusion/init.lua"]}],
+										}
+									],
+								},
+							],
+						},
+						{"name": "Shared", "className": "Folder", "filePaths": ["src"], "children": [{"name": "Main", "className": "ModuleScript", "filePaths": ["src/Main.luau"]}]},
+					],
+				}
+			],
+		}
+		write("sourcemap.json", json.dumps(sourcemap))
+		settings = {
+			"lunaut.platform": "roblox",
+			"lunaut.fflags.sync": False,
+			"lunaut.roblox.downloadTypes": False,
+			"lunaut.rojo.autogenerate": False,
+			"lunaut.ignoreGlobs": ["Packages/**"],
+			"lunaut.definitions": [{"path": str(FIXTURES / "rojo" / "types" / "roblox.d.luau"), "name": "roblox", "priority": 1000}],
+		}
+		client = LspClient(root, {"vscode": settings})
+		self.addCleanup(client.close)
+		uri, _ = client.open("src/Main.luau")
+
+		def items(line, character):
+			result = client.request("textDocument/completion", {"textDocument": {"uri": uri}, "position": {"line": line, "character": character}})
+			return {item["label"]: item for item in (result["items"] if isinstance(result, dict) else result) if item.get("additionalTextEdits")}
+
+		fusion = items(0, 17)["Fusion"]
+		self.assertEqual(fusion["kind"], 9)
+		self.assertIn('require(game:GetService("ReplicatedStorage").Packages.Fusion)', fusion["additionalTextEdits"][0]["newText"])
+		self.assertNotIn("fusion", items(1, 18))
+		self.assertEqual(items(2, 30)["ReplicatedStorage"]["kind"], 7)
 
 	def test_references_through_sourcemap(self):
 		line, character = position_of(self.text, "Util.double", 6)

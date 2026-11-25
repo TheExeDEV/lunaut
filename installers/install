@@ -29,10 +29,8 @@ asset="lunaut-$system-$architecture"
 
 if [ "$version" = "latest" ]; then
 	base_url="https://github.com/$repository/releases/latest/download"
-	source_url="https://raw.githubusercontent.com/$repository/main"
 else
 	base_url="https://github.com/$repository/releases/download/v${version#v}"
-	source_url="https://raw.githubusercontent.com/$repository/v${version#v}"
 fi
 
 if [ "$system" = "osx" ]; then
@@ -100,14 +98,6 @@ add_code_editor codium "VSCodium" codium "/Applications/VSCodium.app/Contents/Re
 
 if find_command zed zeditor >/dev/null || [ -d "/Applications/Zed.app" ] || [ -d "$zed_data" ]; then
 	add_target zed zed "Zed" ""
-fi
-
-if found="$(find_command nvim)"; then
-	add_target nvim nvim "Neovim" "$found"
-fi
-
-if found="$(find_command hx helix)"; then
-	add_target helix helix "Helix" "$found"
 fi
 
 if [ "$system" = "osx" ] && [ -d "$HOME/Documents/Roblox" ]; then
@@ -224,11 +214,9 @@ fi
 notes=""
 needs_server=0
 
-for kind in nvim helix path; do
-	if has_kind "$kind"; then
-		needs_server=1
-	fi
-done
+if has_kind path; then
+	needs_server=1
+fi
 
 if [ "$needs_server" -eq 1 ]; then
 	mkdir -p "$install_dir"
@@ -265,26 +253,6 @@ EOF
 	rm -f "$extension"
 fi
 
-if has_kind nvim; then
-	plugin_dir="$config_home/nvim/plugin"
-	mkdir -p "$plugin_dir"
-	download "$source_url/editors/neovim/lunaut.lua" "$plugin_dir/lunaut.lua"
-	echo "Installed the Neovim config in $plugin_dir/lunaut.lua"
-fi
-
-if has_kind helix; then
-	helix_config="$config_home/helix/languages.toml"
-
-	if [ -f "$helix_config" ]; then
-		notes="${notes}Helix: $helix_config already exists, merge $source_url/editors/helix/languages.toml into it
-"
-	else
-		mkdir -p "$(dirname "$helix_config")"
-		download "$source_url/editors/helix/languages.toml" "$helix_config"
-		echo "Installed the Helix config in $helix_config"
-	fi
-fi
-
 if has_kind studio; then
 	mkdir -p "$HOME/Documents/Roblox/Plugins"
 	download "$base_url/LunautPlugin.rbxm" "$HOME/Documents/Roblox/Plugins/LunautPlugin.rbxm"
@@ -294,8 +262,23 @@ if has_kind studio; then
 fi
 
 if has_kind zed; then
-	notes="${notes}Zed: open Extensions (zed: extensions), search for Lunaut and install it; it downloads the server itself
+	zed_extension="$zed_data/extensions/installed/lunaut"
+
+	if [ -L "$zed_extension" ]; then
+		notes="${notes}Zed: $zed_extension is a dev extension link, it was left alone
 "
+	else
+		archive="$(mktemp)"
+		echo "Downloading the Zed extension"
+		download "$base_url/lunaut-zed.tar.gz" "$archive"
+		rm -rf "$zed_extension"
+		mkdir -p "$zed_extension"
+		tar -xzf "$archive" -C "$zed_extension"
+		rm -f "$archive"
+		echo "Installed the Zed extension in $zed_extension"
+		notes="${notes}Zed: restart Zed to load Lunaut; it downloads the server itself
+"
+	fi
 fi
 
 path_line="export PATH=\"$install_dir:\$PATH\""
@@ -371,10 +354,8 @@ exit 0
 
 	if ($version -eq "latest") {
 		$baseUrl = "https://github.com/$repository/releases/latest/download"
-		$sourceUrl = "https://raw.githubusercontent.com/$repository/main"
 	} else {
 		$baseUrl = "https://github.com/$repository/releases/download/v$($version.TrimStart('v'))"
-		$sourceUrl = "https://raw.githubusercontent.com/$repository/v$($version.TrimStart('v'))"
 	}
 
 	function Get-File($url, $output) {
@@ -433,18 +414,6 @@ exit 0
 		[void]$targets.Add(@{ Key = "zed"; Kind = "zed"; Name = "Zed"; Command = $null })
 	}
 
-	$nvim = Find-Command @("nvim") @("$env:ProgramFiles\Neovim\bin\nvim.exe")
-
-	if ($nvim) {
-		[void]$targets.Add(@{ Key = "nvim"; Kind = "nvim"; Name = "Neovim"; Command = $nvim })
-	}
-
-	$helix = Find-Command @("hx") @()
-
-	if ($helix) {
-		[void]$targets.Add(@{ Key = "helix"; Kind = "helix"; Name = "Helix"; Command = $helix })
-	}
-
 	if (Test-Path -LiteralPath (Join-Path $env:LOCALAPPDATA "Roblox")) {
 		[void]$targets.Add(@{ Key = "studio"; Kind = "studio"; Name = "Roblox Studio (the Lunaut plugin)"; Command = $null })
 	}
@@ -495,7 +464,7 @@ exit 0
 	}
 
 	$kinds = @($selected | ForEach-Object { $_.Kind })
-	$needsServer = @($kinds | Where-Object { @("nvim", "helix", "path") -contains $_ }).Count -gt 0
+	$needsServer = $kinds -contains "path"
 	$notes = New-Object System.Collections.ArrayList
 	$target = Join-Path $installDir "lunaut.exe"
 
@@ -528,25 +497,6 @@ exit 0
 		Remove-Item -LiteralPath $extension -Force -ErrorAction SilentlyContinue
 	}
 
-	if ($kinds -contains "nvim") {
-		$pluginDir = Join-Path $env:LOCALAPPDATA "nvim\plugin"
-		New-Item -ItemType Directory -Force -Path $pluginDir | Out-Null
-		Get-File "$sourceUrl/editors/neovim/lunaut.lua" (Join-Path $pluginDir "lunaut.lua")
-		Write-Host "Installed the Neovim config in $pluginDir\lunaut.lua"
-	}
-
-	if ($kinds -contains "helix") {
-		$helixConfig = Join-Path $env:APPDATA "helix\languages.toml"
-
-		if (Test-Path -LiteralPath $helixConfig) {
-			[void]$notes.Add("Helix: $helixConfig already exists, merge $sourceUrl/editors/helix/languages.toml into it")
-		} else {
-			New-Item -ItemType Directory -Force -Path (Split-Path $helixConfig) | Out-Null
-			Get-File "$sourceUrl/editors/helix/languages.toml" $helixConfig
-			Write-Host "Installed the Helix config in $helixConfig"
-		}
-	}
-
 	if ($kinds -contains "studio") {
 		$pluginDir = Join-Path $env:LOCALAPPDATA "Roblox\Plugins"
 		New-Item -ItemType Directory -Force -Path $pluginDir | Out-Null
@@ -556,7 +506,32 @@ exit 0
 	}
 
 	if ($kinds -contains "zed") {
-		[void]$notes.Add("Zed: open Extensions (zed: extensions), search for Lunaut and install it; it downloads the server itself")
+		$zedExtension = Join-Path $env:LOCALAPPDATA "Zed\extensions\installed\lunaut"
+		$existing = Get-Item -LiteralPath $zedExtension -Force -ErrorAction SilentlyContinue
+
+		if ($existing -and ($existing.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+			[void]$notes.Add("Zed: $zedExtension is a dev extension link, it was left alone")
+		} else {
+			$archive = Join-Path ([IO.Path]::GetTempPath()) "lunaut-zed.tar.gz"
+
+			Write-Host "Downloading the Zed extension"
+			Get-File "$baseUrl/lunaut-zed.tar.gz" $archive
+
+			if ($existing) {
+				Remove-Item -LiteralPath $zedExtension -Recurse -Force
+			}
+
+			New-Item -ItemType Directory -Force -Path $zedExtension | Out-Null
+			& tar.exe -xzf $archive -C $zedExtension
+
+			if ($LASTEXITCODE -ne 0) {
+				throw "Could not unpack the Zed extension into $zedExtension"
+			}
+
+			Remove-Item -LiteralPath $archive -Force -ErrorAction SilentlyContinue
+			Write-Host "Installed the Zed extension in $zedExtension"
+			[void]$notes.Add("Zed: restart Zed to load Lunaut; it downloads the server itself")
+		}
 	}
 
 	if ($needsServer -and -not $env:LUNAUT_NO_PATH) {

@@ -84,18 +84,47 @@ void workspace::index_workspace()
 		patterns.push_back("**/*.lua");
 	}
 
+	std::set<std::string> seen;
+
+	auto add_file = [&](const std::filesystem::path& file)
+	{
+		std::string path = uri::normalize_path(file.generic_string());
+
+		if (is_definition_file(path) || stdx::ends_with(path, ".d.luau") || !seen.insert(path).second)
+		{
+			return;
+		}
+
+		names.push_back(resolver.get_module_name(uri::from_path(path)));
+	};
+
 	for (std::string_view pattern : patterns)
 	{
 		for (const std::filesystem::path& file : stdx::find_files(root, pattern, settings.ignore_globs))
 		{
-			std::string path = uri::normalize_path(file.generic_string());
+			add_file(file);
+		}
+	}
 
-			if (is_definition_file(path) || stdx::ends_with(path, ".d.luau"))
+	if (roblox && settings.rojo.enabled)
+	{
+		for (const std::filesystem::path& folder : rojo::get_project_paths(root, settings.rojo))
+		{
+			std::error_code error;
+
+			if (std::filesystem::is_regular_file(folder, error))
 			{
+				add_file(folder);
 				continue;
 			}
 
-			names.push_back(resolver.get_module_name(uri::from_path(path)));
+			for (std::string_view pattern : patterns)
+			{
+				for (const std::filesystem::path& file : stdx::find_files(folder, pattern, settings.features.import_ignore_globs))
+				{
+					add_file(file);
+				}
+			}
 		}
 	}
 

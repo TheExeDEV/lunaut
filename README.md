@@ -107,23 +107,20 @@ Both lines run the same file. It lists the editors it finds and asks where to in
 Where should lunaut be installed?
   1) VS Code
   2) Zed
-  3) Neovim
-  4) Terminal (the lunaut command on PATH)
+  3) Terminal (the lunaut command on PATH)
 Type numbers separated by spaces, or press Enter for all:
 ```
 
 | Choice | What it does |
 | --- | --- |
 | VS Code, VS Code Insiders, Cursor, Windsurf, VSCodium | installs `lunaut.vsix`, which carries its own server |
-| Zed | reminds you to install the **Lunaut** extension from Zed's Extensions panel; the extension downloads the newest server itself |
-| Neovim | puts the server on `PATH` and copies [`lunaut.lua`](editors/neovim/lunaut.lua) into `nvim/plugin` |
-| Helix | puts the server on `PATH` and writes [`languages.toml`](editors/helix/languages.toml) when you have none yet |
+| Zed | unpacks the **Lunaut** extension (`lunaut-zed.tar.gz` from the release) into Zed's extensions folder; restart Zed, and the extension downloads the newest server itself. A dev extension linked there is left alone |
 | Roblox Studio | downloads [`LunautPlugin.rbxm`](#lunaut-plugin-for-roblox-studio) into Studio's plugin folder (Windows and macOS) |
 | Terminal | puts the server into `%LOCALAPPDATA%\lunaut\bin` (Windows) or `~/.lunaut/bin` and adds that folder to `PATH` |
 
 Without a terminal to ask in (CI, scripts), it installs into everything it found. Open a new terminal and run `lunaut --version`.
 
-Options, set before the command: `LUNAUT_VERSION=0.1.0` installs a specific version, `LUNAUT_INSTALL_DIR` changes the folder, `LUNAUT_NO_PATH=1` leaves `PATH` alone, `LUNAUT_NO_EXTENSION=1` skips the VS Code family, `LUNAUT_EDITORS=code,zed,nvim,helix,path` picks the targets without asking (`cursor`, `windsurf`, `codium`, `code-insiders` and `all` work too). In PowerShell: `$env:LUNAUT_VERSION = "0.1.0"`.
+Options, set before the command: `LUNAUT_VERSION=0.1.0` installs a specific version, `LUNAUT_INSTALL_DIR` changes the folder, `LUNAUT_NO_PATH=1` leaves `PATH` alone, `LUNAUT_NO_EXTENSION=1` skips the VS Code family, `LUNAUT_EDITORS=code,zed,studio,path` picks the targets without asking (`cursor`, `windsurf`, `codium`, `code-insiders` and `all` work too). In PowerShell: `$env:LUNAUT_VERSION = "0.1.0"`.
 
 **Manually:** download `lunaut-<platform>` from the latest release, rename it to `lunaut` (or `lunaut.exe`) and put it on your `PATH`. Install `lunaut.vsix` with `code --install-extension lunaut.vsix`, or install [Lunaut (`theexe.lunaut-luau`) from the VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=theexe.lunaut-luau).
 
@@ -152,7 +149,7 @@ irm https://raw.githubusercontent.com/TheExeDEV/lunaut/main/installers/uninstall
 curl -fsSL https://raw.githubusercontent.com/TheExeDEV/lunaut/main/installers/uninstall | sh
 ```
 
-It lists what it finds (the extension in each VS Code-like editor, the Zed extension with the servers it downloaded, the Neovim config, the `lunaut` command with its `PATH` entries, the download cache) and asks what to remove. Enter removes everything except the download cache (synced FFlags, Roblox definitions); type `all`, or run it like this, to remove the cache too:
+It lists what it finds (the extension in each VS Code-like editor, the Zed extension with the servers it downloaded, the `lunaut` command with its `PATH` entries, the download cache) and asks what to remove. Enter removes everything except the download cache (synced FFlags, Roblox definitions); type `all`, or run it like this, to remove the cache too:
 
 ```powershell
 $env:LUNAUT_PURGE = 1; irm https://raw.githubusercontent.com/TheExeDEV/lunaut/main/installers/uninstall | iex
@@ -233,7 +230,7 @@ code --install-extension lunaut.vsix
 
 ## Other editors
 
-Any editor with LSP support can run `lunaut lsp`. Ready configs for Neovim, Helix and Zed are in [`editors/`](editors/README.md). The server reads `.vscode/settings.json` itself, so a project configured for VS Code works the same everywhere.
+lunaut supports VS Code and Zed; both are set up by the installer, see [`editors/`](editors/README.md). Any other editor with LSP support can still start `lunaut lsp` on its own, without support from this project. The server reads `.vscode/settings.json` itself, so a project configured for VS Code works the same everywhere.
 
 ---
 
@@ -304,6 +301,7 @@ All settings live in VS Code settings under `lunaut.*` (luau-lsp settings work t
 | `lunaut.completion.importKeyword` | `local` | keyword of inserted auto-imports: `local` or `const` |
 | `lunaut.completion.imports.requireStyle` | `auto` | `auto`, `alwaysRelative` or `alwaysAbsolute`: how auto-imported `require` paths are written |
 | `lunaut.completion.imports.aliasPath` | `shortest` | `shortest` or `longest`: which `.luaurc` alias wins when several cover the file |
+| `lunaut.completion.imports.ignoreGlobs` | `["**/_Index/**"]` | files never offered as auto-imports, such as the insides of Wally and crater packages |
 | `lunaut.semanticTokens.enabled` | `true` | semantic highlighting |
 | `lunaut.colors.enabled` | `true` | color picker for `Color3` |
 | `lunaut.codeLens.references` | `true` | `N references` above every function |
@@ -644,6 +642,8 @@ Functions show their parameters next to the name and fill the call with placehol
 
 `lunaut.completion.importKeyword` switches the inserted keyword from `local` to `const`.
 
+In a Rojo project every `ModuleScript` of the sourcemap is offered, packages included: folders such as `Packages`, `DevPackages` and `ServerPackages` are loaded from the `$path`s of `lunaut.rojo.projectFile` even when `lunaut.ignoreGlobs` keeps their diagnostics quiet. Only `lunaut.completion.imports.ignoreGlobs` (`luau-lsp.completion.imports.ignoreGlobs` works too) hides files, by default the `_Index` folders, so `require(ReplicatedStorage.Packages.Fusion)` is offered and the package internals are not. Modules show the module icon and services the class icon, as in luau-lsp.
+
 How the path is written is up to `lunaut.completion.imports.requireStyle` (`luau-lsp.completion.imports.requireStyle` works too):
 
 | Value | Path |
@@ -901,7 +901,7 @@ Other editors can pass settings in `initializationOptions` and `workspace/didCha
 | `LUNAUT_INSTALL_DIR` | installer, uninstaller | install folder |
 | `LUNAUT_NO_PATH` | installer | do not touch `PATH` |
 | `LUNAUT_NO_EXTENSION` | installer | do not install the VS Code extension |
-| `LUNAUT_EDITORS` | installer | targets to install into without asking: `code`, `code-insiders`, `cursor`, `windsurf`, `codium`, `zed`, `nvim`, `helix`, `path` or `all` |
+| `LUNAUT_EDITORS` | installer | targets to install into without asking: `code`, `code-insiders`, `cursor`, `windsurf`, `codium`, `zed`, `studio`, `path` or `all` |
 | `LUNAUT_PURGE` | uninstaller | also remove the cache |
 | `LUNAUT_REPOSITORY` | installer, uninstaller | GitHub repository to download from |
 | `LUNAUT_BINARY` | tests, extension packaging | path to the server executable |

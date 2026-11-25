@@ -38,8 +38,6 @@ body:
       options:
         - VS Code
         - Zed
-        - Neovim
-        - Helix
         - Command line (lunaut analyze)
         - Other
     validations:

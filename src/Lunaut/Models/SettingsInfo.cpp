@@ -59,6 +59,7 @@ const std::unordered_map<std::string_view, std::string_view> relevant_vscode_key
 	{"lunaut.completion.importKeyword", "/features/import_keyword"},
 	{"lunaut.completion.imports.requireStyle", "/features/require_style"},
 	{"lunaut.completion.imports.aliasPath", "/features/alias_path"},
+	{"lunaut.completion.imports.ignoreGlobs", "/features/import_ignore_globs"},
 	{"lunaut.semanticTokens.enabled", "/features/semantic_tokens"},
 	{"lunaut.colors.enabled", "/features/colors"},
 	{"lunaut.completion.autocompleteEnd", "/features/autocomplete_end"},
@@ -109,6 +110,7 @@ const std::unordered_map<std::string_view, std::string_view> relevant_vscode_key
 	{"luau-lsp.inlayHints.makeInsertable", "/inlay_hints/insertable"},
 	{"luau-lsp.completion.imports.enabled", "/features/auto_imports"},
 	{"luau-lsp.completion.imports.requireStyle", "/features/require_style"},
+	{"luau-lsp.completion.imports.ignoreGlobs", "/features/import_ignore_globs"},
 };
 
 template <typename T>
@@ -238,6 +240,19 @@ settingsinfo settingsinfo::from_json(const json& data, const settingsinfo& base)
 		{
 			info.features.require_style =
 				enum_require_style::from_name(features["require_style"].get<std::string>()).value_or(info.features.require_style);
+		}
+
+		if (features.contains("import_ignore_globs") && features["import_ignore_globs"].is_array())
+		{
+			info.features.import_ignore_globs.clear();
+
+			for (const auto& glob : features["import_ignore_globs"])
+			{
+				if (glob.is_string())
+				{
+					info.features.import_ignore_globs.push_back(glob.get<std::string>());
+				}
+			}
 		}
 
 		if (features.contains("alias_path") && features["alias_path"].is_string())
@@ -478,6 +493,7 @@ json settingsinfo::to_json() const
 			 {"import_keyword", enum_import_keyword::get_name(features.import_keyword)},
 			 {"require_style", enum_require_style::get_name(features.require_style)},
 			 {"alias_path", enum_alias_path::get_name(features.alias_path)},
+			 {"import_ignore_globs", features.import_ignore_globs},
 			 {"semantic_tokens", features.semantic_tokens},
 			 {"colors", features.colors},
 			 {"autocomplete_end", features.autocomplete_end},

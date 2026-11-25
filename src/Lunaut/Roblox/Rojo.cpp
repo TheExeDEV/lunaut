@@ -97,6 +97,32 @@ bool rojo::has_existing_paths(const std::filesystem::path& project)
 	return priv::is_usable(project);
 }
 
+std::vector<std::filesystem::path> rojo::get_project_paths(const std::filesystem::path& root, const rojoinfo& info)
+{
+	std::vector<std::filesystem::path> paths;
+	std::optional<std::string> project = find_project(root, info);
+
+	if (!project)
+	{
+		return paths;
+	}
+
+	std::error_code error;
+	std::filesystem::path project_path = root / *project;
+
+	for (const std::string& path : priv::get_tree_paths(project_path))
+	{
+		std::filesystem::path resolved = (project_path.parent_path() / path).lexically_normal();
+
+		if (std::filesystem::exists(resolved, error) && std::find(paths.begin(), paths.end(), resolved) == paths.end())
+		{
+			paths.push_back(resolved);
+		}
+	}
+
+	return paths;
+}
+
 std::vector<std::string> rojo::find_projects(const std::filesystem::path& root)
 {
 	std::vector<std::filesystem::path> found;

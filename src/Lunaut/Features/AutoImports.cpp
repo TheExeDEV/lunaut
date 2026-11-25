@@ -17,6 +17,8 @@ namespace priv
 {
 
 constexpr int kind_module = 9;
+constexpr int kind_class = 7;
+constexpr std::string_view module_class = "ModuleScript";
 
 const std::vector<std::string_view> module_suffixes = {".luau", ".lua"};
 const std::vector<std::string_view> init_files = {"init.luau", "init.lua"};
@@ -29,6 +31,7 @@ std::string strip_module_suffix(const std::string& path);
 std::string make_instance_path(const std::string& virtual_path);
 std::vector<std::string> get_services(const json& metadata);
 std::optional<std::string> get_alias_path(const Luau::Config& config, const std::string& target_path, enumitem_alias_path choice);
+void collect_modules(const sourcenode* node, std::vector<const sourcenode*>& modules);
 
 }
 }
@@ -45,7 +48,7 @@ json workspace::get_auto_imports(const Luau::ModuleName& name, const textdocumen
 	json at = {{"line", get_import_line(name, document)}, {"character", 0}};
 	std::set<std::string> added = taken;
 
-	auto add = [&](const std::string& label, const std::string& statement, const std::string& detail)
+	auto add = [&](const std::string& label, const std::string& statement, const std::string& detail, int kind)
 	{
 		if (!added.insert(label).second)
 		{
@@ -54,7 +57,7 @@ json workspace::get_auto_imports(const Luau::ModuleName& name, const textdocumen
 
 		items.push_back({
 			{"label", label},
-			{"kind", priv::kind_module},
+			{"kind", kind},
 			{"detail", detail},
 			{"sortText", "8" + label},
 			{"labelDetails", {{"description", "auto-import"}}},
@@ -69,7 +72,8 @@ json workspace::get_auto_imports(const Luau::ModuleName& name, const textdocumen
 		{
 			add(service,
 				priv::get_keyword(settings.features) + service + " = game:GetService(\"" + service + "\")",
-				"Auto-import service " + service);
+				"Auto-import service " + service,
+				priv::kind_class);
 		}
 	}
 
@@ -82,7 +86,26 @@ json workspace::get_auto_imports(const Luau::ModuleName& name, const textdocumen
 		modules.push_back(module_name);
 	}
 
+	if (roblox && map.is_loaded())
+	{
+		std::vector<const sourcenode*> instances;
+		priv::collect_modules(map.get_root(), instances);
+
+		for (const sourcenode* instance : instances)
+		{
+			std::optional<std::string> real = instance->get_script_path();
+
+			if (real && is_ignored_for_imports(*real))
+			{
+				continue;
+			}
+
+			modules.push_back(instance->virtual_path);
+		}
+	}
+
 	std::sort(modules.begin(), modules.end());
+	modules.erase(std::unique(modules.begin(), modules.end()), modules.end());
 
 	for (const Luau::ModuleName& module_name : modules)
 	{
@@ -95,14 +118,14 @@ json workspace::get_auto_imports(const Luau::ModuleName& name, const textdocumen
 
 		std::optional<std::string> real = resolver.get_real_path(module_name);
 
-		if (real && is_definition_file(*real))
+		if (real && (is_definition_file(*real) || is_ignored_for_imports(*real)))
 		{
 			continue;
 		}
 
 		if (std::optional<std::string> statement = get_import_statement(name, module_name))
 		{
-			add(symbol, *statement, "Auto-import " + resolver.getHumanReadableModuleName(module_name));
+			add(symbol, *statement, "Auto-import " + resolver.getHumanReadableModuleName(module_name), priv::kind_module);
 		}
 	}
 
@@ -392,6 +415,24 @@ std::optional<std::string> get_alias_path(const Luau::Config& config, const std:
 	}
 
 	return chosen;
+}
+
+void collect_modules(const sourcenode* node, std::vector<const sourcenode*>& modules)
+{
+	if (node == nullptr)
+	{
+		return;
+	}
+
+	if (node->class_name == module_class)
+	{
+		modules.push_back(node);
+	}
+
+	for (const std::unique_ptr<sourcenode>& child : node->children)
+	{
+		collect_modules(child.get(), modules);
+	}
 }
 
 std::vector<std::string> get_services(const json& metadata)

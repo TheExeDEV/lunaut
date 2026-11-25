@@ -221,8 +221,49 @@ jobs:
           name: LunautPlugin.rbxm
           path: LunautPlugin.rbxm
 
+  zed-extension:
+    needs: [check]
+    if: ${{ needs.check.outputs.release == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.check.outputs.sha }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip2
+
+      - name: Build the Zed extension
+        working-directory: editors/zed
+        run: |
+          cargo build --release --locked --target wasm32-wasip2
+          mkdir -p package/grammars
+          cp extension.toml LICENSE package/
+          cp -r languages package/
+          cp target/wasm32-wasip2/release/zed_lunaut.wasm package/extension.wasm
+
+      - name: Build the Luau grammar
+        run: |
+          read -r repository commit <<EOF
+          $(python3 -c "import tomllib; g = tomllib.load(open('editors/zed/extension.toml', 'rb'))['grammars']['luau']; print(g['repository'], g['commit'])")
+          EOF
+          git clone --quiet "$repository" grammar
+          git -C grammar checkout --quiet "$commit"
+          curl -sSL -o wasi-sdk.tar.gz https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-34/wasi-sdk-34.0-x86_64-linux.tar.gz
+          mkdir wasi-sdk
+          tar -xzf wasi-sdk.tar.gz -C wasi-sdk --strip-components=1
+          wasi-sdk/bin/clang -fPIC -shared -Os -Wl,--export=tree_sitter_luau -Wl,--max-memory=4294967296             -o editors/zed/package/grammars/luau.wasm -I grammar/src grammar/src/parser.c grammar/src/scanner.c
+          tar -czf lunaut-zed.tar.gz -C editors/zed/package .
+          tar -tzf lunaut-zed.tar.gz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lunaut-zed.tar.gz
+          path: lunaut-zed.tar.gz
+
   publish:
-    needs: [check, build, build-macos, extension, studio-plugin]
+    needs: [check, build, build-macos, extension, studio-plugin, zed-extension]
     if: ${{ always() && needs.check.outputs.release == 'true' && needs.build.result == 'success' && needs.extension.result == 'success' }}
     runs-on: ubuntu-latest
     env:
