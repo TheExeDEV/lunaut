@@ -6,16 +6,25 @@ on:
     - cron: "10 0 * * *"
 
 permissions:
-  contents: write
-  actions: write
+  contents: read
 
 jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
+      - name: Check the push token
+        env:
+          LUAU_UPDATE_TOKEN: ${{ secrets.LUAU_UPDATE_TOKEN }}
+        run: |
+          if [ -z "$LUAU_UPDATE_TOKEN" ]; then
+            echo "::error::Add the LUAU_UPDATE_TOKEN secret: a fine-grained token of the repository owner with Contents read and write. main only takes pushes from admins, and the built-in token is not one."
+            exit 1
+          fi
+
       - uses: actions/checkout@v4
         with:
           submodules: true
+          token: ${{ secrets.LUAU_UPDATE_TOKEN }}
 
       - uses: actions/setup-python@v5
         with:
@@ -34,8 +43,6 @@ jobs:
 
       - name: Commit and release
         if: steps.bump.outputs.version != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "TheExeDEV"
           git config user.email "209019560+TheExeDEV@users.noreply.github.com"
@@ -47,5 +54,4 @@ jobs:
           git commit -m "Release $release"
           git push origin HEAD:main
 
-          gh workflow run release.yml --ref main -f ref=main -f version="$release"
           echo "Released lunaut $release with Luau ${{ steps.bump.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"

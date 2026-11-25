@@ -985,7 +985,7 @@ On every push to `main` the [Release](.github/workflows/release.yml) workflow ch
 3. packages `lunaut.vsix` with the same version and the server of every platform inside; the extension starts the one for the machine it runs on,
 4. creates the tag `v<version>` and publishes the release with the changelog section as notes and every binary attached.
 
-Pushes that do not change the version release nothing. To rebuild any commit under a chosen version, run the workflow by hand: Actions → Release → Run workflow, with `ref` (commit, branch or tag), `version` and `latest` (whether it becomes the latest release). The daily Luau update also bumps the patch version, so merging its pull request ships the new Luau on its own. `python scripts/release.py notes 0.2.0` prints what the release notes will be.
+Pushes that do not change the version release nothing. To rebuild any commit under a chosen version, run the workflow by hand: Actions → Release → Run workflow, with `ref` (commit, branch or tag), `version` and `latest` (whether it becomes the latest release). The daily Luau update also raises the version and pushes `Release X` to `main` itself, which starts this workflow. It pushes with the `LUAU_UPDATE_TOKEN` secret, a fine-grained token of the repository owner with Contents read and write: `main` only takes direct pushes from admins, and the built-in Actions token is not one. `python scripts/release.py notes 0.2.0` prints what the release notes will be.
 
 ### Branch and tag rules
 

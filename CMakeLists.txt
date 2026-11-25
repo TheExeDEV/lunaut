@@ -65,7 +65,7 @@ else()
 endif()
 
 if(LUNAUT_COVERAGE AND NOT MSVC)
-	target_compile_options(lunaut PRIVATE --coverage -O0)
+	target_compile_options(lunaut PRIVATE --coverage -O0 -fprofile-update=atomic)
 	target_link_options(lunaut PRIVATE --coverage)
 endif()
 
