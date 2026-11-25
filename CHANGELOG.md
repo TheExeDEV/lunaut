@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-25
+
 ### Added
 
 - Definition files can carry every property of a `lunaut.definitions` entry as a comment line: `--!priority N`, `--!show_as_module true`, `--!show_description_message "text"` (the `message`) and `--!show_module_name_message "name"` (the `name`). Settings still win, and `--!lunaut_show_as_module` keeps working
