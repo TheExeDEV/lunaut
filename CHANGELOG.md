@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-11-25
+
 ### Added
 
 - With `lunaut.inlayHints.parameterTypes`, a `...` without an annotation gets a type hint too. Luau types such a `...` as `any`, so the hint is built from the calls of the function in the same file (`sum(1, 2)` gives `...: number`, mixed calls give a union) and is left out when there are none. Double-clicking it writes the annotation into the signature
