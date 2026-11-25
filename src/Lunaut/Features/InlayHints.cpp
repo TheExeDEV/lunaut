@@ -26,6 +26,18 @@ namespace priv
 constexpr int kind_type = 1;
 constexpr int kind_parameter = 2;
 
+struct call_collector final : Luau::AstVisitor
+{
+	bool visit(Luau::AstStatLocalFunction* node) override;
+	bool visit(Luau::AstStatLocal* node) override;
+	bool visit(Luau::AstExprCall* node) override;
+
+	std::vector<const Luau::AstExprCall*> get_calls(const Luau::AstExprFunction* function) const;
+
+	std::unordered_map<const Luau::AstExprFunction*, const Luau::AstLocal*> functions;
+	std::unordered_map<const Luau::AstLocal*, std::vector<const Luau::AstExprCall*>> calls;
+};
+
 struct hint_collector final : Luau::AstVisitor
 {
 	hint_collector(
@@ -33,6 +45,7 @@ struct hint_collector final : Luau::AstVisitor
 		const Luau::Module& module,
 		const textdocument& document,
 		const inlayhintsinfo& info,
+		const call_collector& calls,
 		unsigned int first,
 		unsigned int last);
 
@@ -46,11 +59,13 @@ struct hint_collector final : Luau::AstVisitor
 	void add_type(Luau::Position position, const Luau::ToStringResult& text, const json& edits = json());
 	bool is_visible(Luau::Position position) const;
 	bool is_annotated(Luau::Position position) const;
+	std::optional<std::string> get_variadic_type(const Luau::AstExprFunction* node, Luau::TypeId element) const;
 
 	workspace& owner;
 	const Luau::Module& module;
 	const textdocument& document;
 	const inlayhintsinfo& info;
+	const call_collector& calls;
 	unsigned int first;
 	unsigned int last;
 	Luau::ToStringOptions options;
@@ -68,6 +83,8 @@ bool raw_annotation_visible(const Luau::ScopePtr& scope, const std::string& text
 std::optional<std::string> find_imported_symbol(const Luau::ScopePtr& scope, const Luau::ModuleName& module);
 std::string replace_error_type(const std::string& text);
 std::string shorten(const std::string& text, size_t limit);
+bool is_unknown_element(Luau::TypeId type);
+std::string get_widened_name(Luau::TypeId type, Luau::ToStringOptions options);
 
 }
 }
@@ -99,7 +116,10 @@ json workspace::get_inlay_hints(const json& params)
 	unsigned int first = params.value("/range/start/line"_json_pointer, 0u);
 	unsigned int last = params.value("/range/end/line"_json_pointer, 0xFFFFFFFFu);
 
-	priv::hint_collector collected(*this, *module, *document, info, first, last);
+	priv::call_collector calls;
+	source->root->visit(&calls);
+
+	priv::hint_collector collected(*this, *module, *document, info, calls, first, last);
 	source->root->visit(&collected);
 	return collected.hints;
 }
@@ -109,17 +129,61 @@ namespace
 namespace priv
 {
 
+bool call_collector::visit(Luau::AstStatLocalFunction* node)
+{
+	functions.emplace(node->func, node->name);
+	return true;
+}
+
+bool call_collector::visit(Luau::AstStatLocal* node)
+{
+	for (size_t index = 0; index < node->vars.size && index < node->values.size; ++index)
+	{
+		if (const Luau::AstExprFunction* function = node->values.data[index]->as<Luau::AstExprFunction>())
+		{
+			functions.emplace(function, node->vars.data[index]);
+		}
+	}
+
+	return true;
+}
+
+bool call_collector::visit(Luau::AstExprCall* node)
+{
+	if (const Luau::AstExprLocal* local = node->func->as<Luau::AstExprLocal>(); local != nullptr && !node->self)
+	{
+		calls[local->local].push_back(node);
+	}
+
+	return true;
+}
+
+std::vector<const Luau::AstExprCall*> call_collector::get_calls(const Luau::AstExprFunction* function) const
+{
+	const auto local = functions.find(function);
+
+	if (local == functions.end())
+	{
+		return {};
+	}
+
+	const auto found = calls.find(local->second);
+	return found == calls.end() ? std::vector<const Luau::AstExprCall*>{} : found->second;
+}
+
 hint_collector::hint_collector(
 	workspace& owner,
 	const Luau::Module& module,
 	const textdocument& document,
 	const inlayhintsinfo& info,
+	const call_collector& calls,
 	unsigned int first,
 	unsigned int last)
 	: owner(owner)
 	, module(module)
 	, document(document)
 	, info(info)
+	, calls(calls)
 	, first(first)
 	, last(last)
 {
@@ -237,6 +301,17 @@ bool hint_collector::visit(Luau::AstExprFunction* node)
 		}
 
 		++index;
+	}
+
+	if (node->vararg && node->varargAnnotation == nullptr && tail && is_visible(node->varargLocation.end))
+	{
+		if (const Luau::VariadicTypePack* variadic = Luau::get<Luau::VariadicTypePack>(Luau::follow(*tail)))
+		{
+			if (std::optional<std::string> element = get_variadic_type(node, variadic->ty))
+			{
+				add_type(node->varargLocation.end, Luau::ToStringResult{*element});
+			}
+		}
 	}
 
 	return true;
@@ -393,6 +468,57 @@ void hint_collector::add_variable(
 	add_type(local->location.end, text, edits);
 }
 
+std::optional<std::string> hint_collector::get_variadic_type(const Luau::AstExprFunction* node, Luau::TypeId element) const
+{
+	if (!is_unknown_element(element))
+	{
+		return get_widened_name(element, options);
+	}
+
+	std::vector<std::string> names;
+
+	for (const Luau::AstExprCall* call : calls.get_calls(node))
+	{
+		for (size_t index = node->args.size; index < call->args.size; ++index)
+		{
+			const Luau::AstExpr* argument = call->args.data[index];
+
+			if (argument->is<Luau::AstExprVarargs>() || argument->is<Luau::AstExprCall>())
+			{
+				return std::nullopt;
+			}
+
+			const Luau::TypeId* type = module.astTypes.find(argument);
+
+			if (type == nullptr || is_unknown_element(*type))
+			{
+				return std::nullopt;
+			}
+
+			std::string name = get_widened_name(*type, options);
+
+			if (std::find(names.begin(), names.end(), name) == names.end())
+			{
+				names.push_back(name);
+			}
+		}
+	}
+
+	if (names.empty())
+	{
+		return std::nullopt;
+	}
+
+	std::string joined = names.front();
+
+	for (size_t index = 1; index < names.size(); ++index)
+	{
+		joined += " | " + names[index];
+	}
+
+	return joined;
+}
+
 void hint_collector::add_type(Luau::Position position, const Luau::ToStringResult& text, const json& edits)
 {
 	if (text.name.empty() || (info.hide_error_types && text.error))
@@ -449,6 +575,27 @@ bool hint_collector::is_annotated(Luau::Position position) const
 	}
 
 	return offset < text.size() && text[offset] == ':';
+}
+
+bool is_unknown_element(Luau::TypeId type)
+{
+	Luau::TypeId followed = Luau::follow(type);
+
+	return Luau::get<Luau::AnyType>(followed) != nullptr || Luau::get<Luau::UnknownType>(followed) != nullptr ||
+		Luau::get<Luau::FreeType>(followed) != nullptr || Luau::get<Luau::GenericType>(followed) != nullptr ||
+		Luau::get<Luau::ErrorType>(followed) != nullptr;
+}
+
+std::string get_widened_name(Luau::TypeId type, Luau::ToStringOptions options)
+{
+	Luau::TypeId followed = Luau::follow(type);
+
+	if (const Luau::SingletonType* singleton = Luau::get<Luau::SingletonType>(followed))
+	{
+		return Luau::get<Luau::StringSingleton>(singleton) != nullptr ? "string" : "boolean";
+	}
+
+	return Luau::toString(followed, options);
 }
 
 std::string shorten(const std::string& text, size_t limit)

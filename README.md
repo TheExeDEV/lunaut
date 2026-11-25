@@ -288,7 +288,7 @@ All settings live in VS Code settings under `lunaut.*` (luau-lsp settings work t
 | `lunaut.baseLuaurc` | `""` | a `.luaurc` applied under every other one, relative to the workspace |
 | `lunaut.inlayHints.variableTypes` | `true` | type hints after locals and loop variables |
 | `lunaut.inlayHints.parameterNames` | `literals` | parameter names before arguments: `none`, `literals` or `all` |
-| `lunaut.inlayHints.parameterTypes` | `false` | type hints after function parameters without annotations |
+| `lunaut.inlayHints.parameterTypes` | `false` | type hints after function parameters without annotations; `...` gets the types it is called with in the same file |
 | `lunaut.inlayHints.functionReturnTypes` | `true` | return type hints after function signatures |
 | `lunaut.inlayHints.hideHintsForErrorTypes` | `true` | skip hints for types that failed to infer |
 | `lunaut.inlayHints.hideHintsForMatchingParameterNames` | `true` | skip `value:` before an argument already named `value` |

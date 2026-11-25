@@ -78,6 +78,44 @@ class FeatureTests(unittest.TestCase):
 		finally:
 			client.close()
 
+	def test_inlay_hints_variadic_type(self):
+		lines = [
+			"--!strict",
+			"local function sum(first: number, ...)",
+			"\treturn first + select(\"#\", ...)",
+			"end",
+			"local function join(...)",
+			"\treturn select(\"#\", ...)",
+			"end",
+			"local function mixed(...)",
+			"\treturn select(\"#\", ...)",
+			"end",
+			"local function unused(...)",
+			"\treturn select(\"#\", ...)",
+			"end",
+			"local function typed(...: string)",
+			"\treturn select(\"#\", ...)",
+			"end",
+			"print(sum(1, 2, 3), join(\"a\", \"b\"), mixed(1, \"x\", true), typed(\"y\"), unused)",
+		]
+
+		for solver in (False, True):
+			client = LspClient(FIXTURES / "basic", {"fflags": {"sync": False, "enable_new_solver": solver}, "inlay_hints": {"parameter_types": True}})
+
+			try:
+				uri, _ = client.open("documented.luau", "\n".join(lines) + "\n")
+				hints = client.request("textDocument/inlayHint", {"textDocument": {"uri": uri}, "range": full_range()})
+				variadic = {
+					hint["position"]["line"]: hint
+					for hint in hints
+					if lines[hint["position"]["line"]][: hint["position"]["character"]].endswith("...")
+				}
+
+				self.assertEqual({line: hint["label"] for line, hint in variadic.items()}, {1: ": number", 4: ": string", 7: ": number | string | boolean"})
+				self.assertEqual(variadic[1]["textEdits"][0]["newText"], ": number")
+			finally:
+				client.close()
+
 	def test_hover_moonwave_documentation(self):
 		line, character = position_of(self.documented, "double(2)", 1)
 		value = self.client.at("textDocument/hover", self.documented_uri, line, character)["contents"]["value"]
