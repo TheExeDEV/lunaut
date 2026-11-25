@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-25
+
 ### Added
 
 - The installer sets up Zed by itself: each release carries `lunaut-zed.tar.gz`, the built extension with its Luau grammar, and the installer unpacks it into Zed's extensions folder. Before, it only told you to look for Lunaut in Zed's extension list, where it is not listed yet. A dev extension linked there is left alone
