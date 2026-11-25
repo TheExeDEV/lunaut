@@ -6,3 +6,6 @@ contact_links:
   - name: Changelog
     url: https://github.com/TheExeDEV/lunaut/blob/main/CHANGELOG.md
     about: Check whether it was already fixed in a newer release
+  - name: Contributing
+    url: https://github.com/TheExeDEV/lunaut/blob/main/CONTRIBUTING.md
+    about: How to build lunaut, run the tests and send a pull request

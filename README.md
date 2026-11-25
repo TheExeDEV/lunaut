@@ -1030,7 +1030,7 @@ cmake --build build
 
 The result is `build/lunaut(.exe)`, statically linked. nlohmann/json is fetched by CMake; point to a local copy with `-DFETCHCONTENT_SOURCE_DIR_JSON=path`. `-DLUNAUT_DEBUG=ON` turns on debug logging.
 
-Code style is in [`AGENTS.md`](AGENTS.md); format with `clang-format -i` and the root `.clang-format`.
+Code style is in [`AGENTS.md`](AGENTS.md); format with `clang-format -i` and the root `.clang-format`. How to test a change and open a pull request is in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ---
 
