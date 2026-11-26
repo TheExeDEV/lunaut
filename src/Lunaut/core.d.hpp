@@ -672,6 +672,15 @@ private:
 	bool loaded = false;
 };
 
+class filedirectives
+{
+public:
+	static void apply(Luau::SourceModule& source, Luau::Mode fallback);
+	static bool is_silenced(const Luau::SourceModule& source);
+	static std::vector<Luau::HotComment> get_unknown_ignores(const Luau::SourceModule& source);
+	static bool is_own_directive(const std::string& name);
+};
+
 class implicitself
 {
 public:
@@ -1057,7 +1066,7 @@ private:
 	void load_analyzer();
 	void apply_disabled_globals(Luau::GlobalTypes& globals);
 	Luau::CheckResult check_module(const Luau::ModuleName& name, bool for_autocomplete);
-	void apply_implicit_self(const std::vector<Luau::ModuleName>& names);
+	void prepare_sources(const std::vector<Luau::ModuleName>& names);
 	Luau::ModulePtr get_module(const Luau::ModuleName& name, bool for_autocomplete) const;
 	bool is_ignored(const std::string& path) const;
 	bool is_ignored_for_imports(const std::string& path) const;
@@ -1088,7 +1097,7 @@ private:
 	std::set<std::string> definition_show_as_module;
 	std::unordered_map<std::string, std::string> module_descriptions;
 	std::unordered_map<std::string, Luau::ModuleName> show_as_module_names;
-	std::unordered_map<Luau::ModuleName, std::weak_ptr<Luau::Allocator>> implicit_self_modules;
+	std::unordered_map<Luau::ModuleName, std::weak_ptr<Luau::Allocator>> prepared_modules;
 	std::unordered_map<std::string, Luau::ModulePtr> definition_modules;
 	analyzerplugin analyzer;
 	bool analyzer_reported = false;

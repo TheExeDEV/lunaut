@@ -7,6 +7,18 @@
 
 namespace lunaut
 {
+namespace
+{
+namespace priv
+{
+
+constexpr std::string_view unknown_directive = "Unknown comment directive '";
+constexpr std::string_view unknown_ignore = "Unknown --!ignore value; use strict, nonstrict, nocheck or nolint";
+
+bool is_own_directive(const Luau::LintWarning& warning);
+
+}
+}
 
 json workspace::get_diagnostics(const std::string& address)
 {
@@ -20,6 +32,12 @@ json workspace::get_diagnostics(const std::string& address)
 	}
 
 	Luau::CheckResult checked = check_module(name, false);
+	const Luau::SourceModule* source = frontend.getSourceModule(name);
+
+	if (source != nullptr && filedirectives::is_silenced(*source))
+	{
+		return diagnostics;
+	}
 
 	std::set<std::pair<unsigned int, unsigned int>> reported;
 
@@ -60,7 +78,21 @@ json workspace::get_diagnostics(const std::string& address)
 
 	for (const Luau::LintWarning& warning : checked.lintResult.warnings)
 	{
+		if (priv::is_own_directive(warning))
+		{
+			continue;
+		}
+
 		diagnostics.push_back(protocol::make_lint_warning(*document, warning, false));
+	}
+
+	if (source != nullptr)
+	{
+		for (const Luau::HotComment& comment : filedirectives::get_unknown_ignores(*source))
+		{
+			Luau::LintWarning warning{Luau::LintWarning::Code_CommentDirective, comment.location, std::string(priv::unknown_ignore)};
+			diagnostics.push_back(protocol::make_lint_warning(*document, warning, false));
+		}
 	}
 
 	if (settings.analyzer.enabled && settings.analyzer.diagnostics && analyzer.is_loaded())
@@ -140,6 +172,27 @@ void workspace::publish_workspace_diagnostics()
 			publish_diagnostics(uri::from_path(*path));
 		}
 	}
+}
+
+namespace
+{
+namespace priv
+{
+
+bool is_own_directive(const Luau::LintWarning& warning)
+{
+	if (warning.code != Luau::LintWarning::Code_CommentDirective || !stdx::starts_with(warning.text, unknown_directive))
+	{
+		return false;
+	}
+
+	std::string rest = warning.text.substr(unknown_directive.size());
+	size_t end = rest.find('\'');
+
+	return end != std::string::npos && filedirectives::is_own_directive(rest.substr(0, end));
+}
+
+}
 }
 
 }

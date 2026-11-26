@@ -787,6 +787,29 @@ return {
 
 Inside `require("...")` completion lists the aliases and `./`, `../` first, then the folders and modules of whatever the typed path points to. `init.luau` files are shown as their folder.
 
+### File directives
+
+The usual Luau lines at the top of a file work as in Luau and win over `.luaurc`: `--!strict`, `--!nonstrict`, `--!nocheck` and `--!nolint`. A module with `--!nocheck` returns `any` to the files that require it, with both solvers.
+
+lunaut adds two lines of its own, which other tools such as Roblox Studio simply skip:
+
+| Line | What lunaut does |
+| --- | --- |
+| `--!ignore strict`, `nonstrict` or `nocheck` | checks the file in that mode, over `--!strict`, `--!nocheck` and `.luaurc` |
+| `--!ignore nolint` | turns the linter off for the file; `--!ignore nolint LocalUnused` turns off one warning |
+| `--!noerror` | shows no errors and warnings for the file at all |
+
+Several `--!ignore` lines add up. A file with neither falls back to the usual lines, then to `.luaurc`.
+
+This keeps the strict checking in your editor while the built place stays quiet: types do nothing at run time, and the `.d.luau` files your project uses are not there in Studio, so a strict file shows hundreds of errors there.
+
+```luau
+--!nocheck
+--!ignore strict
+```
+
+Studio sees `--!nocheck`, lunaut sees `--!ignore strict`.
+
 ---
 
 ## .lunaut-declare

@@ -232,7 +232,7 @@ void workspace::flush_diagnostics()
 	{
 		try
 		{
-			apply_implicit_self(modules);
+			prepare_sources(modules);
 			frontend.queueModuleCheck(modules);
 			frontend.checkQueuedModules(priv::make_options(false, settings.diagnostics.lint, retain_types), priv::run_parallel_tasks);
 		}
@@ -453,7 +453,7 @@ void workspace::set_settings(settingsinfo next)
 
 	if (implicit_self_changed)
 	{
-		implicit_self_modules.clear();
+		prepared_modules.clear();
 
 		for (const auto& [module_name, node] : frontend.sourceNodes)
 		{
@@ -787,7 +787,7 @@ Luau::CheckResult workspace::check_module(const Luau::ModuleName& name, bool for
 
 	try
 	{
-		apply_implicit_self({name});
+		prepare_sources({name});
 		return frontend.check(name, priv::make_options(for_autocomplete, settings.diagnostics.lint, retain_types));
 	}
 	catch (const std::exception& error)
@@ -797,13 +797,8 @@ Luau::CheckResult workspace::check_module(const Luau::ModuleName& name, bool for
 	}
 }
 
-void workspace::apply_implicit_self(const std::vector<Luau::ModuleName>& names)
+void workspace::prepare_sources(const std::vector<Luau::ModuleName>& names)
 {
-	if (!settings.features.implicit_self)
-	{
-		return;
-	}
-
 	frontend.parseModules(names);
 
 	for (const auto& [module_name, source] : frontend.sourceModules)
@@ -813,14 +808,20 @@ void workspace::apply_implicit_self(const std::vector<Luau::ModuleName>& names)
 			continue;
 		}
 
-		std::weak_ptr<Luau::Allocator>& applied = implicit_self_modules[module_name];
+		std::weak_ptr<Luau::Allocator>& applied = prepared_modules[module_name];
 
 		if (applied.lock() == source->allocator)
 		{
 			continue;
 		}
 
-		implicitself::apply(*source, frontend.globals.globalScope);
+		filedirectives::apply(*source, resolver.getConfig(module_name, Luau::TypeCheckLimits{}).mode);
+
+		if (settings.features.implicit_self)
+		{
+			implicitself::apply(*source, frontend.globals.globalScope);
+		}
+
 		applied = source->allocator;
 	}
 }
