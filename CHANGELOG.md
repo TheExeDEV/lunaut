@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-11-26
+
 ### Added
 
 - `--!ignore strict`, `nonstrict`, `nocheck` or `nolint`: a file directive only lunaut reads, so a file can be checked strictly in the editor while Roblox Studio and other tools see a different line such as `--!nocheck`. Several `--!ignore` lines add up, and without them the usual directives and `.luaurc` apply
